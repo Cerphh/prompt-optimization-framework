@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Prompt Optimization Research Framework
 
 A Python-based research benchmarking framework for evaluating and optimizing prompting strategies on large language models (LLMs).
@@ -9,12 +8,10 @@ This framework implements a **comparative experimental design** to evaluate mult
 
 ## Features
 
-### 🎯 Four Prompting Techniques
+### 🎯 Two Prompting Techniques
 
 1. **Zero-shot**: Direct question without examples or context
 2. **Few-shot**: Includes example problems and solutions
-3. **Chain-of-thought**: Encourages step-by-step reasoning
-4. **Instruction-based**: Detailed instructions with constraints
 
 ### 📊 Three Evaluation Metrics
 
@@ -49,7 +46,7 @@ prompt-optimization-framework/
 ├── framework/
 │   ├── __init__.py
 │   ├── dataset.py              # Math problem dataset management
-│   ├── prompt_generator.py     # Four prompting strategies
+│   ├── prompt_generator.py     # Two prompting strategies
 │   ├── model_runner.py         # Ollama LLM interface
 │   ├── accuracy_scorer.py      # Accuracy evaluation
 │   ├── completeness_scorer.py  # Completeness evaluation
@@ -99,7 +96,7 @@ ollama pull llama3
 python test_pipeline.py
 ```
 
-This runs a comprehensive benchmark on a sample problem, evaluating all four prompting techniques and displaying comparative results.
+This runs a comprehensive benchmark on a sample problem, evaluating both prompting techniques and displaying comparative results.
 
 ### API Server
 
@@ -169,16 +166,14 @@ RESULTS COMPARISON
 ======================================================================
 Technique            Accuracy   Complete   Efficiency Overall
 ----------------------------------------------------------------------
-chain_of_thought     1.000      0.900      0.755      0.921
-instruction_based    1.000      0.750      0.835      0.892
-few_shot             1.000      0.250      0.810      0.737
+few_shot             1.000      0.850      0.810      0.892
 zero_shot            1.000      0.150      0.670      0.679
 
 ======================================================================
 OPTIMAL TECHNIQUE SELECTED (GREEDY ALGORITHM)
 ======================================================================
-Best Technique: chain_of_thought
-Overall Score: 0.921
+Best Technique: few_shot
+Overall Score: 0.892
 ```
 
 ## Research Design
@@ -186,7 +181,7 @@ Overall Score: 0.921
 ### Methodology
 
 1. **Comparative Experimental Design**
-   - Each problem evaluated with all four techniques
+   - Each problem evaluated with both techniques
    - Independent execution per prompt
    - Controlled variables (model, temperature, dataset)
 
@@ -197,7 +192,7 @@ Overall Score: 0.921
 
 3. **Evaluation Pipeline**
    ```
-   Input Problem → Generate 4 Prompts → Execute Each → Score → Greedy Select → Return Best
+   Input Problem → Generate 2 Prompts → Execute Each → Score → Greedy Select → Return Best
    ```
 
 4. **Scoring Formula**
@@ -304,7 +299,3 @@ For questions or collaboration: [Your contact information]
 ---
 
 **Built for research clarity, not production complexity.**
-=======
-# prompt-optimization-framework
-A framework for automated prompt optimization and evaluation using iterative refinement with multi-metric scoring (accuracy, completeness, efficiency) for large language models.
->>>>>>> ddda8f6cf9ced2f78a8775a4c7a66452adb05fd7
