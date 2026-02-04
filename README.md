@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Prompt Optimization Research Framework
 
 A Python-based research benchmarking framework for evaluating and optimizing prompting strategies on large language models (LLMs).
@@ -303,3 +304,7 @@ For questions or collaboration: [Your contact information]
 ---
 
 **Built for research clarity, not production complexity.**
+=======
+# prompt-optimization-framework
+A framework for automated prompt optimization and evaluation using iterative refinement with multi-metric scoring (accuracy, completeness, efficiency) for large language models.
+>>>>>>> ddda8f6cf9ced2f78a8775a4c7a66452adb05fd7
