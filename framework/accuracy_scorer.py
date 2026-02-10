@@ -17,6 +17,7 @@ class AccuracyScorer:
     2. Numeric extraction and comparison
     3. Symbolic math evaluation (using SymPy)
     4. Fraction and expression matching
+    5. Auto-solving simple arithmetic problems
     """
     
     def score(self, response: str, expected: Any, problem: str = None) -> float:
@@ -33,6 +34,10 @@ class AccuracyScorer:
         """
         if not response or len(response.strip()) == 0:
             return 0.0
+        
+        # If no ground truth provided, try to auto-solve simple problems
+        if expected is None and problem:
+            expected = self._auto_solve_simple_problem(problem)
         
         if expected is None:
             # Heuristic scoring when no ground truth
@@ -62,6 +67,73 @@ class AccuracyScorer:
                 return 0.5
         
         return 0.0
+    
+    def _auto_solve_simple_problem(self, problem: str) -> Optional[str]:
+        """
+        Automatically solve simple arithmetic problems to get ground truth.
+        
+        Handles:
+        - Basic arithmetic: "1+1=?", "2*3", "10/5"
+        - "What is X+Y" format
+        - Direct expressions without question marks
+        
+        Args:
+            problem: The problem statement
+            
+        Returns:
+            The calculated answer as a string, or None if can't solve
+        """
+        if not problem:
+            return None
+        
+        problem = problem.strip()
+        
+        # Pattern 1: "What is X op Y" format
+        what_is_pattern = r'what\s+is\s+([\d\s+\-*/().]+)[?\s]*$'
+        match = re.match(what_is_pattern, problem, re.IGNORECASE)
+        if match:
+            expression = match.group(1).strip()
+            return self._evaluate_expression(expression)
+        
+        # Pattern 2: Direct arithmetic "X op Y = ?" or "X op Y?"
+        simple_pattern = r'^([\d\s+\-*/().]+)\s*[=?]*\s*$'
+        match = re.match(simple_pattern, problem)
+        if match:
+            expression = match.group(1).strip()
+            # Only solve if it contains an operator
+            if any(op in expression for op in ['+', '-', '*', '/', '×', '÷']):
+                return self._evaluate_expression(expression)
+        
+        return None
+    
+    def _evaluate_expression(self, expression: str) -> Optional[str]:
+        """
+        Safely evaluate a mathematical expression.
+        
+        Args:
+            expression: Mathematical expression like "1+1" or "2*3"
+            
+        Returns:
+            Result as string, or None if can't evaluate
+        """
+        try:
+            # Replace common symbols
+            expression = expression.replace('×', '*').replace('÷', '/')
+            expression = expression.replace('^', '**')
+            
+            # Use SymPy for safe evaluation
+            result = sympify(expression)
+            
+            # Convert to float/int
+            result_float = float(result)
+            
+            # Return as integer if it's a whole number
+            if result_float.is_integer():
+                return str(int(result_float))
+            else:
+                return str(result_float)
+        except (SympifyError, TypeError, ValueError, AttributeError, ZeroDivisionError):
+            return None
     
     def _extract_answers(self, response: str) -> list:
         """

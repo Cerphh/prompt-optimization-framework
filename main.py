@@ -4,6 +4,7 @@ Research Benchmarking API for comparative prompt evaluation.
 """
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
 from framework.pipeline import BenchmarkPipeline
@@ -13,6 +14,15 @@ app = FastAPI(
     title="Prompt Optimization Research Framework",
     description="API for benchmarking and comparing prompting techniques on LLMs",
     version="1.0.0"
+)
+
+# Add CORS middleware to allow frontend access
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],  # Next.js frontend
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Initialize pipeline

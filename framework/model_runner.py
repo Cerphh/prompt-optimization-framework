@@ -42,7 +42,7 @@ class ModelRunner:
                     "prompt": prompt,
                     "stream": False
                 },
-                timeout=120  # Increased timeout for complex problems
+                timeout=300  # Extended timeout for complex prompts (5 minutes)
             )
             response.raise_for_status()
             result = response.json()
