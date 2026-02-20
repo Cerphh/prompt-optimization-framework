@@ -41,6 +41,7 @@ class BenchmarkRequest(BaseModel):
     """Request model for benchmarking."""
     problem: str
     ground_truth: Optional[str] = None
+    subject: Optional[str] = "general"  # algebra, statistics, calculus, or general
 
 
 class WeightsUpdate(BaseModel):
@@ -94,7 +95,8 @@ async def run_benchmark(request: BenchmarkRequest):
     try:
         result = pipeline.benchmark(
             problem=request.problem,
-            ground_truth=request.ground_truth
+            ground_truth=request.ground_truth,
+            subject=request.subject
         )
         
         if not result["best_result"]["success"]:
@@ -116,6 +118,20 @@ async def get_techniques():
         "descriptions": {
             "zero_shot": "Direct question without examples or context",
             "few_shot": "Includes example problems and solutions"
+        }
+    }
+
+
+@app.get("/subjects", tags=["Info"])
+async def get_subjects():
+    """Get list of available subject categories for few-shot examples."""
+    return {
+        "subjects": pipeline.prompt_generator.get_available_subjects(),
+        "descriptions": {
+            "algebra": "Linear equations, quadratic equations, factoring, systems",
+            "statistics": "Mean, median, mode, variance, probability, combinations",
+            "calculus": "Derivatives, integrals, limits",
+            "general": "Basic arithmetic problems"
         }
     }
 

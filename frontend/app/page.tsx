@@ -10,37 +10,41 @@ interface Technique {
   overall: number
 }
 
-interface BenchmarkResult {
-  best_result: {
-    technique: string
-    overall: number
+interface TechniqueResult {
+  technique: string
+  success: boolean
+  prompt: string
+  response: string
+  metrics: {
+    elapsed_time: number
+    total_tokens: number
+    prompt_tokens: number
+    completion_tokens: number
+  }
+  scores: {
     accuracy: number
     completeness: number
     efficiency: number
-    response: string
-    metrics: {
-      latency: number
-      total_tokens: number
-    }
+    overall: number
   }
+}
+
+interface BenchmarkResult {
+  problem: string
+  best_technique: string
+  best_result: TechniqueResult
+  all_results: Record<string, TechniqueResult>
   comparison: Technique[]
   all_responses: Record<string, { response: string; score: number }>
 }
 
 export default function Home() {
   const [problem, setProblem] = useState('')
+  const [subject, setSubject] = useState('general')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<BenchmarkResult | null>(null)
   const [error, setError] = useState('')
-
-  // Get the best technique from comparison array (highest overall score)
-  const getBestTechnique = () => {
-    if (!result?.comparison || result.comparison.length === 0) return null
-    
-    return result.comparison.reduce((best, current) => {
-      return (current.overall > best.overall) ? current : best
-    })
-  }
+  const [expandedTechnique, setExpandedTechnique] = useState<string | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -56,6 +60,7 @@ export default function Home() {
         },
         body: JSON.stringify({
           problem,
+          subject,
         }),
       })
 
@@ -87,6 +92,26 @@ export default function Home() {
           <div className="bg-white rounded-lg shadow-md p-6 h-fit">
             <h2 className="text-xl font-bold text-gray-900 mb-4">Input</h2>
             <form onSubmit={handleSubmit}>
+              <div className="mb-4">
+                <label
+                  htmlFor="subject"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Subject Category
+                </label>
+                <select
+                  id="subject"
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                >
+                  <option value="general">General</option>
+                  <option value="algebra">Algebra</option>
+                  <option value="statistics">Statistics & Probability</option>
+                  <option value="calculus">Calculus</option>
+                </select>
+              </div>
+
               <div className="mb-4">
                 <label
                   htmlFor="problem"
@@ -163,50 +188,66 @@ export default function Home() {
 
                 {result && (
               <>
-                {/* Best Result */}
+                {/* Best Technique Prompt and Response */}
                 <div className="bg-white rounded-lg shadow-md p-6">
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">
-                SOLUTION
-              </h2>
+                  <h2 className="text-2xl font-bold text-gray-900 mb-4">
+                    Best Technique: {result.best_technique?.toUpperCase() || 'N/A'}
+                  </h2>
+                  
+                  {/* Prompt Used */}
+                  <div className="mb-6">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-lg font-semibold text-gray-800">Prompt Used</h3>
+                      <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                        {result.best_technique}
+                      </span>
+                    </div>
+                    <div className="p-4 bg-gray-50 rounded border border-gray-200">
+                      <pre className="text-sm text-gray-700 whitespace-pre-wrap font-mono">
+                        {result.best_result?.prompt || 'No prompt available'}
+                      </pre>
+                    </div>
+                  </div>
 
-              <div className="mt-4 p-4 bg-gray-50 rounded">
-                <p className="text-sm text-gray-600 mb-2">
-                  <strong>Response:</strong>
-                </p>
-                <p className="text-gray-900 whitespace-pre-wrap">
-                  {result.best_result?.response || 'No response'}
-                </p>
-              </div>
-            </div>
+                  {/* Model Response */}
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-800 mb-2">Model Response</h3>
+                    <div className="p-4 bg-green-50 rounded border border-green-200">
+                      <pre className="text-sm text-gray-900 whitespace-pre-wrap">
+                        {result.best_result?.response || 'No response'}
+                      </pre>
+                    </div>
+                  </div>
+                </div>
 
                 {/* Scores */}
                 <div className="bg-white rounded-lg shadow-md p-6">
               <h2 className="text-2xl font-bold text-gray-900 mb-4">
-                Best Technique: {getBestTechnique()?.technique?.toUpperCase() || 'N/A'}
+                Performance Scores
               </h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="bg-blue-50 p-4 rounded">
                   <p className="text-sm text-gray-600 mb-1">Overall Score</p>
                   <p className="text-3xl font-bold text-blue-600">
-                    {getBestTechnique()?.overall?.toFixed(3) || '0.000'}
+                    {result.best_result?.scores?.overall?.toFixed(3) || '0.000'}
                   </p>
                 </div>
                 <div className="bg-green-50 p-4 rounded">
                   <p className="text-sm text-gray-600 mb-1">Accuracy</p>
                   <p className="text-3xl font-bold text-green-600">
-                    {getBestTechnique()?.accuracy?.toFixed(3) || '0.000'}
+                    {result.best_result?.scores?.accuracy?.toFixed(3) || '0.000'}
                   </p>
                 </div>
                 <div className="bg-purple-50 p-4 rounded">
                   <p className="text-sm text-gray-600 mb-1">Completeness</p>
                   <p className="text-3xl font-bold text-purple-600">
-                    {getBestTechnique()?.completeness?.toFixed(3) || '0.000'}
+                    {result.best_result?.scores?.completeness?.toFixed(3) || '0.000'}
                   </p>
                 </div>
                 <div className="bg-orange-50 p-4 rounded">
                   <p className="text-sm text-gray-600 mb-1">Efficiency</p>
                   <p className="text-3xl font-bold text-orange-600">
-                    {getBestTechnique()?.efficiency?.toFixed(3) || '0.000'}
+                    {result.best_result?.scores?.efficiency?.toFixed(3) || '0.000'}
                   </p>
                 </div>
               </div>
@@ -236,36 +277,70 @@ export default function Home() {
                       <th className="text-center py-2 px-4 text-gray-700">
                         Overall
                       </th>
+                      <th className="text-center py-2 px-4 text-gray-700">
+                        Details
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {result.comparison?.map((tech) => {
-                      const bestTech = getBestTechnique()
-                      const isBest = tech.technique === bestTech?.technique
+                      const isBest = tech.technique === result.best_technique
+                      const techResult = result.all_results[tech.technique]
+                      const isExpanded = expandedTechnique === tech.technique
                       return (
-                        <tr
-                          key={tech.technique}
-                          className={`border-b border-gray-100 ${
-                            isBest ? 'bg-blue-50 font-semibold' : 'hover:bg-gray-50'
-                          }`}
-                        >
-                          <td className="py-3 px-4 text-gray-900">
-                            {tech.technique?.toUpperCase() || 'N/A'}
-                            {isBest && ' '}
-                          </td>
-                          <td className="py-3 px-4 text-center text-gray-700">
-                            {tech.accuracy?.toFixed(3) || '0.000'}
-                          </td>
-                          <td className="py-3 px-4 text-center text-gray-700">
-                            {tech.completeness?.toFixed(3) || '0.000'}
-                          </td>
-                          <td className="py-3 px-4 text-center text-gray-700">
-                            {tech.efficiency?.toFixed(3) || '0.000'}
-                          </td>
-                          <td className="py-3 px-4 text-center font-bold text-blue-600">
-                            {tech.overall?.toFixed(3) || '0.000'}
-                          </td>
-                        </tr>
+                        <>
+                          <tr
+                            key={tech.technique}
+                            className={`border-b border-gray-100 ${
+                              isBest ? 'bg-blue-50 font-semibold' : 'hover:bg-gray-50'
+                            }`}
+                          >
+                            <td className="py-3 px-4 text-gray-900">
+                              {tech.technique?.toUpperCase() || 'N/A'}
+                              {isBest && ' ⭐'}
+                            </td>
+                            <td className="py-3 px-4 text-center text-gray-700">
+                              {tech.accuracy?.toFixed(3) || '0.000'}
+                            </td>
+                            <td className="py-3 px-4 text-center text-gray-700">
+                              {tech.completeness?.toFixed(3) || '0.000'}
+                            </td>
+                            <td className="py-3 px-4 text-center text-gray-700">
+                              {tech.efficiency?.toFixed(3) || '0.000'}
+                            </td>
+                            <td className="py-3 px-4 text-center font-bold text-blue-600">
+                              {tech.overall?.toFixed(3) || '0.000'}
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              <button
+                                onClick={() => setExpandedTechnique(isExpanded ? null : tech.technique)}
+                                className="text-blue-600 hover:text-blue-800 text-sm underline"
+                              >
+                                {isExpanded ? 'Hide' : 'View'}
+                              </button>
+                            </td>
+                          </tr>
+                          {isExpanded && techResult && (
+                            <tr className="bg-gray-50">
+                              <td colSpan={6} className="p-4">
+                                <div className="space-y-4">
+                                  <div>
+                                    <h4 className="font-semibold text-gray-800 mb-2">Prompt:</h4>
+                                    <pre className="text-xs text-gray-700 whitespace-pre-wrap bg-white p-3 rounded border border-gray-200 font-mono">
+                                      {techResult.prompt}
+                                    </pre>
+                                  </div>
+                                  <div>
+                                    <h4 className="font-semibold text-gray-800 mb-2">Response:</h4>
+                                    <pre className="text-xs text-gray-900 whitespace-pre-wrap bg-white p-3 rounded border border-gray-200">
+                                      {techResult.response}
+                                    </pre>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </>
                       );
                     })}
                   </tbody>

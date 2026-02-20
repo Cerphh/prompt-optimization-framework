@@ -55,7 +55,7 @@ class BenchmarkPipeline:
         total = sum(self.weights.values())
         self.weights = {k: v/total for k, v in self.weights.items()}
     
-    def benchmark(self, problem: str, ground_truth: str = None) -> Dict[str, Any]:
+    def benchmark(self, problem: str, ground_truth: str = None, subject: str = "general") -> Dict[str, Any]:
         """
         Run comprehensive benchmark on a single problem.
         
@@ -64,12 +64,13 @@ class BenchmarkPipeline:
         Args:
             problem: The math problem to solve
             ground_truth: Expected answer for accuracy evaluation
+            subject: Subject category for few-shot examples (algebra, statistics, calculus, general)
             
         Returns:
             Dictionary with results for all techniques and best selection
         """
         # Step 1: Generate prompts using all techniques
-        prompts = self.prompt_generator.generate_all_techniques(problem)
+        prompts = self.prompt_generator.generate_all_techniques(problem, subject=subject)
         
         # Step 2: Evaluate each technique
         results = {}

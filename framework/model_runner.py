@@ -40,7 +40,11 @@ class ModelRunner:
                 json={
                     "model": self.model_name,
                     "prompt": prompt,
-                    "stream": False
+                    "stream": False,
+                    "options": {
+                        "temperature": 0,  # Deterministic responses
+                        "seed": 42  # Fixed seed for reproducibility
+                    }
                 },
                 timeout=300  # Extended timeout for complex prompts (5 minutes)
             )
