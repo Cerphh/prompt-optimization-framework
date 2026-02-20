@@ -40,11 +40,51 @@ interface BenchmarkResult {
 
 export default function Home() {
   const [problem, setProblem] = useState('')
-  const [subject, setSubject] = useState('general')
+  const [subject, setSubject] = useState('algebra')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<BenchmarkResult | null>(null)
   const [error, setError] = useState('')
   const [expandedTechnique, setExpandedTechnique] = useState<string | null>(null)
+
+  // Auto-detect subject based on keywords in the problem
+  const detectSubject = (text: string): string => {
+    const lowerText = text.toLowerCase()
+    
+    // Keywords for each subject (ordered by specificity)
+    const calculusKeywords = ['derivative', 'integral', 'limit', 'differentiate', 'integrate', 
+                              'tangent line', 'rate of change', 'optimization', 'concave', 'inflection']
+    const statisticsKeywords = ['probability', 'mean', 'median', 'mode', 'variance', 'standard deviation',
+                                'distribution', 'expected value', 'random', 'coin', 'dice', 'sample']
+    const algebraKeywords = ['solve for', 'factor', 'simplify', 'expand', 'quadratic', 'equation',
+                            'polynomial', 'exponential', 'logarithm', 'inequality']
+    
+    // Check calculus first (most specific)
+    if (calculusKeywords.some(keyword => lowerText.includes(keyword))) {
+      return 'calculus'
+    }
+    
+    // Then statistics
+    if (statisticsKeywords.some(keyword => lowerText.includes(keyword))) {
+      return 'statistics'
+    }
+    
+    // Then algebra
+    if (algebraKeywords.some(keyword => lowerText.includes(keyword))) {
+      return 'algebra'
+    }
+    
+    // Default to algebra for general math problems
+    return 'algebra'
+  }
+
+  const handleProblemChange = (text: string) => {
+    setProblem(text)
+    // Auto-detect and update subject if text is long enough
+    if (text.length > 5) {
+      const detectedSubject = detectSubject(text)
+      setSubject(detectedSubject)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -97,7 +137,7 @@ export default function Home() {
                   htmlFor="subject"
                   className="block text-sm font-medium text-gray-700 mb-2"
                 >
-                  Subject Category
+                  Subject Category <span className="text-xs text-gray-500">(auto-detected)</span>
                 </label>
                 <select
                   id="subject"
@@ -105,7 +145,6 @@ export default function Home() {
                   onChange={(e) => setSubject(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
                 >
-                  <option value="general">General</option>
                   <option value="algebra">Algebra</option>
                   <option value="statistics">Statistics & Probability</option>
                   <option value="calculus">Calculus</option>
@@ -122,7 +161,7 @@ export default function Home() {
                 <textarea
                   id="problem"
                   value={problem}
-                  onChange={(e) => setProblem(e.target.value)}
+                  onChange={(e) => handleProblemChange(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
                   rows={8}
                   placeholder="Enter your problem here (e.g., Solve for x: 2x + 5 = 15)"

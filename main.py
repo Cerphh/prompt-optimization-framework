@@ -41,7 +41,7 @@ class BenchmarkRequest(BaseModel):
     """Request model for benchmarking."""
     problem: str
     ground_truth: Optional[str] = None
-    subject: Optional[str] = "general"  # algebra, statistics, calculus, or general
+    subject: Optional[str] = "algebra"  # algebra, statistics, or calculus
 
 
 class WeightsUpdate(BaseModel):

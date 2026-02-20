@@ -68,10 +68,118 @@ class PromptGenerator:
         """
         return f"{problem}"
     
+    def _detect_problem_keywords(self, problem: str) -> set:
+        """
+        Extract keywords from a problem to help match relevant examples.
+        
+        Args:
+            problem: The math problem text
+            
+        Returns:
+            Set of relevant keywords found
+        """
+        problem_lower = problem.lower()
+        
+        # Define keyword categories
+        keywords = {
+            # Algebra - solving
+            'solve', 'find', 'calculate', 'determine', 'equation', 'equals', '=',
+            # Algebra - operations
+            'factor', 'expand', 'simplify', 'system',
+            # Calculus
+            'derivative', 'differentiate', 'integrate', 'integral', 'limit', 'lim',
+            'd/dx', 'dy/dx', '∫', '∂',
+            # Statistics
+            'mean', 'median', 'mode', 'average', 'variance', 'standard deviation',
+            'probability', 'p(', 'combinations', 'permutations', 'c(', 'p(',
+            'random', 'distribution', 'range'
+        }
+        
+        # Find matching keywords
+        found_keywords = set()
+        for keyword in keywords:
+            if keyword in problem_lower:
+                found_keywords.add(keyword)
+        
+        return found_keywords
+    
+    def _score_example_relevance(self, example: dict, problem: str, problem_keywords: set) -> float:
+        """
+        Score how relevant an example is to the given problem.
+        
+        Args:
+            example: Example dict with 'problem' and 'solution'
+            problem: The user's problem
+            problem_keywords: Keywords extracted from user's problem
+            
+        Returns:
+            Relevance score (0.0 to 1.0)
+        """
+        score = 0.0
+        example_text = (example['problem'] + ' ' + example['solution']).lower()
+        
+        # Check keyword overlap
+        keyword_matches = sum(1 for kw in problem_keywords if kw in example_text)
+        if problem_keywords:
+            score += (keyword_matches / len(problem_keywords)) * 0.7
+        
+        # Bonus for similar operation words
+        problem_lower = problem.lower()
+        example_lower = example['problem'].lower()
+        
+        operation_words = ['solve', 'find', 'calculate', 'factor', 'expand', 'simplify',
+                          'derivative', 'integrate', 'limit', 'mean', 'median', 'probability']
+        
+        for word in operation_words:
+            if word in problem_lower and word in example_lower:
+                score += 0.3
+                break
+        
+        return min(score, 1.0)  # Cap at 1.0
+    
+    def _select_relevant_examples(self, available_examples: list, problem: str, 
+                                  num_examples: int, seed: int) -> list:
+        """
+        Select the most relevant examples for the given problem.
+        
+        Args:
+            available_examples: List of available examples
+            problem: The user's problem
+            num_examples: Number of examples to select
+            seed: Random seed for deterministic fallback
+            
+        Returns:
+            List of selected examples
+        """
+        # Extract keywords from the problem
+        problem_keywords = self._detect_problem_keywords(problem)
+        
+        # Score all examples
+        scored_examples = []
+        for example in available_examples:
+            relevance = self._score_example_relevance(example, problem, problem_keywords)
+            scored_examples.append((relevance, example))
+        
+        # Sort by relevance (highest first)
+        scored_examples.sort(key=lambda x: x[0], reverse=True)
+        
+        # If we have highly relevant examples (score > 0.3), use them
+        highly_relevant = [ex for score, ex in scored_examples if score > 0.3]
+        
+        if len(highly_relevant) >= num_examples:
+            # Use a seeded random selection from highly relevant examples
+            # This maintains some determinism while preferring relevant ones
+            rng = random.Random(seed)
+            return rng.sample(highly_relevant[:min(len(highly_relevant), num_examples * 3)], 
+                            num_examples)
+        else:
+            # Fall back to top-ranked examples by relevance
+            return [ex for _, ex in scored_examples[:num_examples]]
+    
     def generate_few_shot(self, problem: str, subject: str = "general", num_examples: int = 2) -> str:
         """
         Generate few-shot prompt: includes examples from the specified subject.
-        Uses problem text as seed for deterministic example selection.
+        Uses semantic matching to select the most relevant examples.
         
         Args:
             problem: The math problem
@@ -79,7 +187,7 @@ class PromptGenerator:
             num_examples: Number of examples to include (default: 2)
             
         Returns:
-            Few-shot prompt with subject-specific examples
+            Few-shot prompt with subject-specific, relevant examples
         """
         # Get examples from the specified subject, default to general if not found
         if subject not in self.example_dataset:
@@ -96,11 +204,12 @@ class PromptGenerator:
         # Use problem text as seed for deterministic selection
         # Same problem always gets same examples
         seed = hash(problem) % (2**32)
-        rng = random.Random(seed)
         
-        # Select random examples (or first N if fewer examples available)
+        # Select relevant examples (smart selection based on problem content)
         num_to_select = min(num_examples, len(available_examples))
-        selected_examples = rng.sample(available_examples, num_to_select)
+        selected_examples = self._select_relevant_examples(
+            available_examples, problem, num_to_select, seed
+        )
         
         # Format examples
         examples_text = "\n\n".join([
