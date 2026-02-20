@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 interface Technique {
   technique: string
@@ -45,6 +45,29 @@ export default function Home() {
   const [result, setResult] = useState<BenchmarkResult | null>(null)
   const [error, setError] = useState('')
   const [expandedTechnique, setExpandedTechnique] = useState<string | null>(null)
+  const [healthStatus, setHealthStatus] = useState<'checking' | 'healthy' | 'unhealthy'>('checking')
+  const [validationError, setValidationError] = useState('')
+
+  // Check API and Ollama health
+  useEffect(() => {
+    const checkHealth = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/health', { timeout: 3000 } as any)
+        if (response.ok) {
+          const data = await response.json()
+          setHealthStatus(data.model_connected ? 'healthy' : 'unhealthy')
+        } else {
+          setHealthStatus('unhealthy')
+        }
+      } catch {
+        setHealthStatus('unhealthy')
+      }
+    }
+    
+    checkHealth()
+    const interval = setInterval(checkHealth, 10000) // Check every 10s
+    return () => clearInterval(interval)
+  }, [])
 
   // Auto-detect subject based on keywords in the problem
   const detectSubject = (text: string): string => {
@@ -79,6 +102,14 @@ export default function Home() {
 
   const handleProblemChange = (text: string) => {
     setProblem(text)
+    
+    // Input validation
+    if (text.length > 0 && text.length < 10) {
+      setValidationError('Problem must be at least 10 characters')
+    } else {
+      setValidationError('')
+    }
+    
     // Auto-detect and update subject if text is long enough
     if (text.length > 5) {
       const detectedSubject = detectSubject(text)
@@ -86,13 +117,38 @@ export default function Home() {
     }
   }
 
+  // Export results as JSON
+  const exportResults = () => {
+    if (!result) return
+    const dataStr = JSON.stringify(result, null, 2)
+    const dataBlob = new Blob([dataStr], { type: 'application/json' })
+    const url = URL.createObjectURL(dataBlob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `benchmark-${Date.now()}.json`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // Validate before submitting
+    if (problem.length < 10) {
+      setValidationError('Problem must be at least 10 characters')
+      return
+    }
+    
     setLoading(true)
     setError('')
     setResult(null)
 
     try {
+      // Check connection first
+      if (healthStatus === 'unhealthy') {
+        throw new Error('⚠️ System offline: Make sure Ollama is running (ollama serve) and the backend API is started')
+      }
+
       const response = await fetch('http://localhost:8000/benchmark', {
         method: 'POST',
         headers: {
@@ -105,13 +161,26 @@ export default function Home() {
       })
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
+        const errorData = await response.json().catch(() => ({}))
+        const detail = errorData.detail || 'Unknown error'
+        
+        if (response.status === 500) {
+          throw new Error(`🔴 Server Error: ${detail}`)
+        } else if (response.status === 404) {
+          throw new Error('🔴 API endpoint not found. Is the backend running?')
+        } else {
+          throw new Error(`🔴 HTTP ${response.status}: ${detail}`)
+        }
       }
 
       const data = await response.json()
       setResult(data)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
+      if (err instanceof TypeError && err.message.includes('fetch')) {
+        setError('🔴 Cannot connect to API. Make sure backend is running on port 8000')
+      } else {
+        setError(err instanceof Error ? err.message : 'An error occurred')
+      }
     } finally {
       setLoading(false)
     }
@@ -120,9 +189,17 @@ export default function Home() {
   return (
     <main className="h-screen overflow-hidden p-8 bg-gradient-to-br from-gray-50 to-gray-100">
       <div className="max-w-7xl mx-auto h-full flex flex-col">
-        <h1 className="text-4xl font-bold text-gray-900 mb-2">
-          Prompt Optimization Framework
-        </h1>
+        <div className="flex items-center justify-between mb-2">
+          <h1 className="text-4xl font-bold text-gray-900">
+            Prompt Optimization Framework
+          </h1>
+          <div className="flex items-center gap-2">
+            <div className={`w-3 h-3 rounded-full ${healthStatus === 'healthy' ? 'bg-green-500' : healthStatus === 'unhealthy' ? 'bg-red-500' : 'bg-yellow-500'}`}></div>
+            <span className="text-sm text-gray-600">
+              {healthStatus === 'healthy' ? '🟢 Online' : healthStatus === 'unhealthy' ? '🔴 Offline' : '🟡 Checking...'}
+            </span>
+          </div>
+        </div>
         <p className="text-gray-600 mb-6">
           Compare different prompting techniques and find the optimal approach
         </p>
@@ -162,16 +239,21 @@ export default function Home() {
                   id="problem"
                   value={problem}
                   onChange={(e) => handleProblemChange(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 text-gray-900 ${
+                    validationError ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'
+                  }`}
                   rows={8}
                   placeholder="Enter your problem here (e.g., Solve for x: 2x + 5 = 15)"
                   required
                 />
+                {validationError && (
+                  <p className="mt-1 text-sm text-red-600">{validationError}</p>
+                )}
               </div>
 
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || !!validationError || problem.length < 10}
                 className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
               >
                 {loading ? 'Running Benchmark...' : 'Run Benchmark'}
@@ -180,11 +262,8 @@ export default function Home() {
 
             {error && (
               <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-md">
-                <p className="text-red-800 text-sm">
-                  <strong>Error:</strong> {error}
-                </p>
-                <p className="text-red-600 text-xs mt-1">
-                  Make sure the API server is running: uvicorn main:app --reload
+                <p className="text-red-800 text-sm whitespace-pre-wrap">
+                  {error}
                 </p>
               </div>
             )}
@@ -229,9 +308,20 @@ export default function Home() {
               <>
                 {/* Best Technique Prompt and Response */}
                 <div className="bg-white rounded-lg shadow-md p-6">
-                  <h2 className="text-2xl font-bold text-gray-900 mb-4">
-                    Best Technique: {result.best_technique?.toUpperCase() || 'N/A'}
-                  </h2>
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-2xl font-bold text-gray-900">
+                      Best Technique: {result.best_technique?.toUpperCase() || 'N/A'}
+                    </h2>
+                    <button
+                      onClick={exportResults}
+                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      Export JSON
+                    </button>
+                  </div>
                   
                   {/* Prompt Used */}
                   <div className="mb-6">

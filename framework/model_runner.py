@@ -43,10 +43,15 @@ class ModelRunner:
                     "stream": False,
                     "options": {
                         "temperature": 0,  # Deterministic responses
-                        "seed": 42  # Fixed seed for reproducibility
+                        "seed": 42,  # Fixed seed for reproducibility
+                        "num_predict": 512,  # Limit max tokens (faster generation)
+                        "num_ctx": 2048,  # Reduce context window (faster processing)
+                        "top_k": 10,  # Reduce sampling options (faster)
+                        "top_p": 0.9,  # Nucleus sampling
+                        "repeat_penalty": 1.1  # Prevent repetition
                     }
                 },
-                timeout=300  # Extended timeout for complex prompts (5 minutes)
+                timeout=120  # Increased timeout for model loading + parallel execution
             )
             response.raise_for_status()
             result = response.json()
@@ -67,7 +72,7 @@ class ModelRunner:
             prompt_eval_duration = result.get("prompt_eval_duration", 0) / 1e9
             eval_duration = result.get("eval_duration", 0) / 1e9
             
-            return {
+            result_dict = {
                 "response": response_text,
                 "model": self.model_name,
                 "success": True,
@@ -81,6 +86,8 @@ class ModelRunner:
                     "eval_time": eval_duration
                 }
             }
+            
+            return result_dict
         except Exception as e:
             end_time = time.time()
             return {

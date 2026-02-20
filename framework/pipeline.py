@@ -11,6 +11,7 @@ Implements:
 """
 
 from typing import Dict, List, Any, Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from .prompt_generator import PromptGenerator
 from .model_runner import ModelRunner
 from .accuracy_scorer import AccuracyScorer
@@ -59,7 +60,7 @@ class BenchmarkPipeline:
         """
         Run comprehensive benchmark on a single problem.
         
-        Evaluates all prompting techniques and selects the best one.
+        Evaluates all prompting techniques IN PARALLEL for faster results.
         
         Args:
             problem: The math problem to solve
@@ -72,19 +73,44 @@ class BenchmarkPipeline:
         # Step 1: Generate prompts using all techniques
         prompts = self.prompt_generator.generate_all_techniques(problem, subject=subject)
         
-        # Step 2: Evaluate each technique
+        # Step 2: Evaluate each technique IN PARALLEL
         results = {}
-        for technique_name, prompt in prompts.items():
-            result = self._evaluate_single_prompt(
-                technique_name=technique_name,
-                prompt=prompt,
-                problem=problem,
-                ground_truth=ground_truth
-            )
-            results[technique_name] = result
+        with ThreadPoolExecutor(max_workers=len(prompts)) as executor:
+            # Submit all tasks
+            future_to_technique = {
+                executor.submit(
+                    self._evaluate_single_prompt,
+                    technique_name=technique_name,
+                    prompt=prompt,
+                    problem=problem,
+                    ground_truth=ground_truth
+                ): technique_name
+                for technique_name, prompt in prompts.items()
+            }
+            
+            # Collect results as they complete
+            for future in as_completed(future_to_technique):
+                technique_name = future_to_technique[future]
+                try:
+                    result = future.result()
+                    results[technique_name] = result
+                except Exception as e:
+                    # Handle individual technique failure
+                    results[technique_name] = {
+                        "technique": technique_name,
+                        "success": False,
+                        "error": str(e),
+                        "prompt": prompts[technique_name],
+                        "scores": {
+                            "accuracy": 0.0,
+                            "completeness": 0.0,
+                            "efficiency": 0.0,
+                            "overall": 0.0
+                        }
+                    }
         
         # Step 3: Greedy selection - pick best performing technique
-        best_technique = self._greedy_select(results)
+        best_technique = self._greedy_select(results, problem)
         
         # Step 4: Compile comprehensive results
         return {
@@ -157,51 +183,44 @@ class BenchmarkPipeline:
             }
         }
     
-    def _greedy_select(self, results: Dict[str, Dict]) -> str:
+    def _greedy_select(self, results: Dict[str, Dict], problem: str) -> str:
         """
         Greedy algorithm to select best performing technique.
         
         Selects the technique with the highest overall score.
-        In case of tie, prioritizes accuracy, then completeness, then efficiency.
+        Deterministic tie-breaking ensures same problem always picks same technique.
         
         Args:
             results: Dictionary of technique results
+            problem: The problem text (for deterministic tie-breaking)
             
         Returns:
             Name of the best technique
         """
+        # Sort techniques deterministically by name for consistent iteration
+        sorted_techniques = sorted(results.items(), key=lambda x: x[0])
+        
         best_technique = None
         best_score = -1
-        best_accuracy = -1
-        best_completeness = -1
         
-        for technique_name, result in results.items():
+        for technique_name, result in sorted_techniques:
             if not result.get("success", False):
                 continue
             
             scores = result["scores"]
             overall = scores["overall"]
-            accuracy = scores["accuracy"]
-            completeness = scores["completeness"]
             
-            # Greedy selection with tie-breaking
-            is_better = False
+            # Pick the technique with highest score
             if overall > best_score:
-                is_better = True
-            elif overall == best_score:
-                # Tie-break by accuracy
-                if accuracy > best_accuracy:
-                    is_better = True
-                elif accuracy == best_accuracy:
-                    # Tie-break by completeness
-                    if completeness > best_completeness:
-                        is_better = True
-            
-            if is_better:
                 best_technique = technique_name
                 best_score = overall
-                best_accuracy = accuracy
-                best_completeness = completeness
+            elif overall == best_score:
+                # Exact tie - use problem hash for deterministic selection
+                problem_hash = hash(problem + technique_name) % 100
+                current_hash = hash(problem + best_technique) % 100
+                # Higher hash wins (deterministic)
+                if problem_hash > current_hash:
+                    best_technique = technique_name
         
         return best_technique if best_technique else list(results.keys())[0]
     

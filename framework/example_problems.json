@@ -97,6 +97,14 @@
     {
       "problem": "Find the mean of: 10, 20, 30, 40",
       "solution": "Mean = (10 + 20 + 30 + 40)/4\n= 100/4\n= 25"
+    },
+    {
+      "problem": "In a group of 100 people: 60 like coffee, 40 like tea, 25 like both. What is the probability someone likes coffee given that they like tea?",
+      "solution": "P(coffee|tea) = P(coffee AND tea) / P(tea)\nP(coffee AND tea) = 25/100\nP(tea) = 40/100\nP(coffee|tea) = (25/100) / (40/100)\n= 25/40\n= 5/8"
+    },
+    {
+      "problem": "In a class of 80 students: 50 play soccer, 30 play basketball, 15 play both. What is the probability a student plays soccer given that they play basketball?",
+      "solution": "P(soccer|basketball) = P(both sports) / P(basketball)\nP(both) = 15/80\nP(basketball) = 30/80\nP(soccer|basketball) = (15/80) / (30/80)\n= 15/30\n= 1/2"
     }
   ],
   "calculus": [

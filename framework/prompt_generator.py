@@ -66,7 +66,43 @@ class PromptGenerator:
         Returns:
             Zero-shot prompt
         """
-        return f"{problem}"
+        return f"Solve step-by-step, be concise.\n\n{problem}"
+
+    def _normalize_problem_text(self, problem: str) -> str:
+        """Normalize user input to avoid duplicated Q:/A: wrappers in prompts."""
+        normalized = problem.strip()
+        if normalized.lower().startswith("q:"):
+            normalized = normalized[2:].lstrip()
+
+        lines = normalized.splitlines()
+        while lines and lines[-1].strip().lower() == "a:":
+            lines.pop()
+
+        return "\n".join(lines).strip()
+
+    def _is_conditional_probability_problem(self, problem: str) -> bool:
+        """Detect conditional probability phrasing to prioritize matching examples."""
+        text = problem.lower()
+        conditional_markers = [
+            "given that",
+            "given ",
+            "|",
+            "conditional",
+            "p("
+        ]
+        probability_markers = ["probability", "random", "chance", "odds"]
+
+        has_conditional = any(marker in text for marker in conditional_markers)
+        has_probability = any(marker in text for marker in probability_markers)
+        return has_conditional and has_probability
+
+    def _is_conditional_probability_example(self, example: dict) -> bool:
+        """Identify examples that teach conditional probability patterns."""
+        example_text = (example["problem"] + " " + example["solution"]).lower()
+        return (
+            "given that" in example_text
+            or "|" in example_text
+        )
     
     def _detect_problem_keywords(self, problem: str) -> set:
         """
@@ -89,10 +125,23 @@ class PromptGenerator:
             # Calculus
             'derivative', 'differentiate', 'integrate', 'integral', 'limit', 'lim',
             'd/dx', 'dy/dx', '∫', '∂',
-            # Statistics
-            'mean', 'median', 'mode', 'average', 'variance', 'standard deviation',
-            'probability', 'p(', 'combinations', 'permutations', 'c(', 'p(',
-            'random', 'distribution', 'range'
+            # Statistics - central tendency
+            'mean', 'median', 'mode', 'average',
+            # Statistics - spread
+            'variance', 'standard deviation', 'range', 'deviation',
+            # Probability - general
+            'probability', 'p(', 'chance', 'odds', 'likely',
+            # Probability - conditional
+            'given that', 'given', '|', 'conditional',
+            # Probability - objects
+            'coin', 'coins', 'dice', 'die', 'card', 'ball', 'balls', 'bag',
+            # Probability - concepts
+            'flip', 'flipped', 'roll', 'rolled', 'draw', 'drawn',
+            'heads', 'tails', 'outcome', 'outcomes', 'event', 'favorable',
+            # Combinatorics
+            'combinations', 'permutations', 'c(', 'p(', 'factorial',
+            # Distributions
+            'random', 'distribution', 'expected value', 'sample'
         }
         
         # Find matching keywords
@@ -117,22 +166,33 @@ class PromptGenerator:
         """
         score = 0.0
         example_text = (example['problem'] + ' ' + example['solution']).lower()
+        problem_lower = problem.lower()
         
-        # Check keyword overlap
+        # Check keyword overlap (weighted by relevance)
         keyword_matches = sum(1 for kw in problem_keywords if kw in example_text)
         if problem_keywords:
-            score += (keyword_matches / len(problem_keywords)) * 0.7
+            score += (keyword_matches / len(problem_keywords)) * 0.6
         
-        # Bonus for similar operation words
-        problem_lower = problem.lower()
+        # Bonus for similar operation words in problem statement
         example_lower = example['problem'].lower()
         
-        operation_words = ['solve', 'find', 'calculate', 'factor', 'expand', 'simplify',
-                          'derivative', 'integrate', 'limit', 'mean', 'median', 'probability']
+        operation_words = {
+            'solve', 'find', 'calculate', 'factor', 'expand', 'simplify',
+            'derivative', 'integrate', 'limit', 
+            'mean', 'median', 'mode', 'probability', 'variance',
+            'roll', 'flip', 'draw', 'combinations', 'permutations'
+        }
         
         for word in operation_words:
             if word in problem_lower and word in example_lower:
                 score += 0.3
+                break
+        
+        # Extra bonus for matching specific objects (dice, coins, balls, etc.)
+        specific_objects = ['dice', 'die', 'coin', 'ball', 'card', 'bag']
+        for obj in specific_objects:
+            if obj in problem_lower and obj in example_lower:
+                score += 0.2
                 break
         
         return min(score, 1.0)  # Cap at 1.0
@@ -151,6 +211,15 @@ class PromptGenerator:
         Returns:
             List of selected examples
         """
+        # Explicitly prioritize conditional probability examples when detected
+        if self._is_conditional_probability_problem(problem):
+            conditional_examples = [
+                ex for ex in available_examples
+                if isinstance(ex, dict) and self._is_conditional_probability_example(ex)
+            ]
+            if len(conditional_examples) >= num_examples:
+                return conditional_examples[:num_examples]
+
         # Extract keywords from the problem
         problem_keywords = self._detect_problem_keywords(problem)
         
@@ -163,12 +232,12 @@ class PromptGenerator:
         # Sort by relevance (highest first)
         scored_examples.sort(key=lambda x: x[0], reverse=True)
         
-        # If we have highly relevant examples (score > 0.3), use them
-        highly_relevant = [ex for score, ex in scored_examples if score > 0.3]
+        # If we have highly relevant examples (score > 0.4), prioritize them
+        highly_relevant = [ex for score, ex in scored_examples if score > 0.4]
         
         if len(highly_relevant) >= num_examples:
             # Use a seeded random selection from highly relevant examples
-            # This maintains some determinism while preferring relevant ones
+            # This maintains determinism while preferring relevant ones
             rng = random.Random(seed)
             return rng.sample(highly_relevant[:min(len(highly_relevant), num_examples * 3)], 
                             num_examples)
@@ -176,7 +245,7 @@ class PromptGenerator:
             # Fall back to top-ranked examples by relevance
             return [ex for _, ex in scored_examples[:num_examples]]
     
-    def generate_few_shot(self, problem: str, subject: str = "general", num_examples: int = 2) -> str:
+    def generate_few_shot(self, problem: str, subject: str = "general", num_examples: int = None) -> str:
         """
         Generate few-shot prompt: includes examples from the specified subject.
         Uses semantic matching to select the most relevant examples.
@@ -184,15 +253,23 @@ class PromptGenerator:
         Args:
             problem: The math problem
             subject: Subject category (algebra, statistics, calculus, general)
-            num_examples: Number of examples to include (default: 2)
+            num_examples: Number of examples to include (auto-determined by subject if None)
             
         Returns:
             Few-shot prompt with subject-specific, relevant examples
         """
+        # Normalize user problem text (e.g., remove leading Q: and trailing A:)
+        normalized_problem = self._normalize_problem_text(problem)
+
+        # Auto-determine number of examples based on subject if not specified
+        if num_examples is None:
+            # Statistics and calculus benefit more from multiple examples
+            num_examples = 2 if subject in ['statistics', 'calculus'] else 1
+        
         # Get examples from the specified subject, default to general if not found
         if subject not in self.example_dataset:
-            print(f"⚠ Warning: Subject '{subject}' not found in dataset, using 'general'")
-            subject = "general"
+            print(f"⚠ Warning: Subject '{subject}' not found in dataset, using 'algebra'")
+            subject = "algebra"
         
         available_examples = self.example_dataset.get(subject, [])
         
@@ -203,27 +280,26 @@ class PromptGenerator:
         
         # Use problem text as seed for deterministic selection
         # Same problem always gets same examples
-        seed = hash(problem) % (2**32)
+        seed = hash(normalized_problem) % (2**32)
         
         # Select relevant examples (smart selection based on problem content)
         num_to_select = min(num_examples, len(available_examples))
         selected_examples = self._select_relevant_examples(
-            available_examples, problem, num_to_select, seed
+            available_examples, normalized_problem, num_to_select, seed
         )
         
-        # Format examples
+        # Format examples (concise format for speed)
         examples_text = "\n\n".join([
-            f"Problem: {ex['problem']}\nSolution: {ex['solution']}"
+            f"Q: {ex['problem']}\nA: {ex['solution']}"
             for ex in selected_examples
         ])
         
-        return f"""Here are some {subject} examples:
-
-{examples_text}
-
-Now solve this problem:
-Problem: {problem}
-Solution:"""
+        return (
+            "Solve step-by-step, be concise.\n\n"
+            f"{examples_text}\n\n"
+            f"Q: {normalized_problem}\n"
+            "A:"
+        )
     
     def generate_all_techniques(self, problem: str, subject: str = "general") -> Dict[str, str]:
         """

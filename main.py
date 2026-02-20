@@ -27,7 +27,7 @@ app.add_middleware(
 
 # Initialize pipeline
 pipeline = BenchmarkPipeline(
-    model_name="llama3",
+    model_name="llama3.2",  # Smaller, faster model for GPU
     accuracy_weight=0.5,
     completeness_weight=0.3,
     efficiency_weight=0.2
