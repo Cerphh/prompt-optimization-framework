@@ -41,3 +41,4 @@ Thumbs.db
 results/
 *.log
 .env
+*-firebase-adminsdk-*.json

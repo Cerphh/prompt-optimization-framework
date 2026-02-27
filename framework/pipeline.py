@@ -26,7 +26,8 @@ class BenchmarkPipeline:
     and selects the optimal approach using a greedy algorithm.
     """
     
-    def __init__(self, model_name: str = "llama3", 
+    def __init__(self, model_name: str = "llama3",
+                 base_url: str = "http://localhost:11434",
                  accuracy_weight: float = 0.5,
                  completeness_weight: float = 0.3,
                  efficiency_weight: float = 0.2):
@@ -35,12 +36,13 @@ class BenchmarkPipeline:
         
         Args:
             model_name: Name of the LLM to use
+            base_url: Base URL for Ollama API
             accuracy_weight: Weight for accuracy score (0-1)
             completeness_weight: Weight for completeness score (0-1)
             efficiency_weight: Weight for efficiency score (0-1)
         """
         self.prompt_generator = PromptGenerator()
-        self.model_runner = ModelRunner(model_name=model_name)
+        self.model_runner = ModelRunner(model_name=model_name, base_url=base_url)
         self.accuracy_scorer = AccuracyScorer()
         self.completeness_scorer = CompletenessScorer()
         self.efficiency_scorer = EfficiencyScorer()

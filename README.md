@@ -81,6 +81,66 @@ source venv/bin/activate  # Linux/Mac
 pip install -r requirements.txt
 ```
 
+### 3.1 Configure Firebase Firestore (for result storage)
+
+You can store these settings in a `.env` file at the project root (recommended):
+
+```env
+FIREBASE_PROJECT_ID=prompt-optimization-db
+FIREBASE_SERVICE_ACCOUNT_KEY=C:/Users/nheileduria/Downloads/serviceAccountKey.json
+FIRESTORE_COLLECTION=benchmark_results
+ENABLE_FIRESTORE=true
+FIRESTORE_REQUIRED=false
+```
+
+Create a Firebase project and enable Firestore, then set one of the credential options.
+
+Git Bash:
+
+```bash
+# Option A: Path to service account JSON file
+export FIREBASE_SERVICE_ACCOUNT_KEY=/absolute/path/to/serviceAccountKey.json
+
+# Option B: Raw JSON content in env var
+export FIREBASE_SERVICE_ACCOUNT_JSON='{"type":"service_account", ...}'
+```
+
+PowerShell:
+
+```powershell
+# Option A: Path to service account JSON file
+$env:FIREBASE_SERVICE_ACCOUNT_KEY="C:\path\to\serviceAccountKey.json"
+
+# Option B: Raw JSON content in env var
+$env:FIREBASE_SERVICE_ACCOUNT_JSON='{"type":"service_account", ...}'
+```
+
+Optional settings:
+
+```bash
+export FIREBASE_PROJECT_ID=your-firebase-project-id
+export FIRESTORE_COLLECTION=benchmark_results
+export ENABLE_FIRESTORE=true
+export FIRESTORE_REQUIRED=false
+```
+
+Using your Firebase config:
+
+```bash
+export FIREBASE_PROJECT_ID=prompt-optimization-db
+```
+
+Important:
+- The Firebase Web SDK config (`apiKey`, `authDomain`, `projectId`, etc.) identifies your project but does not grant server write permissions.
+- For this backend API, you still need Admin credentials via one of:
+   - `FIREBASE_SERVICE_ACCOUNT_KEY`
+   - `FIREBASE_SERVICE_ACCOUNT_JSON`
+   - `GOOGLE_APPLICATION_CREDENTIALS`
+
+Notes:
+- `ENABLE_FIRESTORE=true` (default) enables writes.
+- `FIRESTORE_REQUIRED=true` makes benchmark requests fail if Firestore write fails.
+
 ### 4. Install Ollama & Model
 
 ```bash
@@ -105,6 +165,8 @@ uvicorn main:app --reload
 ```
 
 Visit: http://127.0.0.1:8000/docs
+
+Each benchmark response now includes a `storage` object with Firestore write status and document ID.
 
 ### Programmatic Usage
 

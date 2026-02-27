@@ -36,6 +36,11 @@ interface BenchmarkResult {
   all_results: Record<string, TechniqueResult>
   comparison: Technique[]
   all_responses: Record<string, { response: string; score: number }>
+  storage?: {
+    success: boolean
+    document_id?: string
+    error?: string
+  }
 }
 
 export default function Home() {
@@ -47,15 +52,16 @@ export default function Home() {
   const [expandedTechnique, setExpandedTechnique] = useState<string | null>(null)
   const [healthStatus, setHealthStatus] = useState<'checking' | 'healthy' | 'unhealthy'>('checking')
   const [validationError, setValidationError] = useState('')
+  const [savingToDb, setSavingToDb] = useState(false)
+  const [saveStatus, setSaveStatus] = useState('')
 
-  // Check API and Ollama health
+  // Check API health
   useEffect(() => {
     const checkHealth = async () => {
       try {
         const response = await fetch('http://localhost:8000/health', { timeout: 3000 } as any)
         if (response.ok) {
-          const data = await response.json()
-          setHealthStatus(data.model_connected ? 'healthy' : 'unhealthy')
+          setHealthStatus('healthy')
         } else {
           setHealthStatus('unhealthy')
         }
@@ -141,6 +147,7 @@ export default function Home() {
     
     setLoading(true)
     setError('')
+    setSaveStatus('')
     setResult(null)
 
     try {
@@ -175,6 +182,7 @@ export default function Home() {
 
       const data = await response.json()
       setResult(data)
+      setSaveStatus('Not saved yet. Click Save to DB.')
     } catch (err) {
       if (err instanceof TypeError && err.message.includes('fetch')) {
         setError('🔴 Cannot connect to API. Make sure backend is running on port 8000')
@@ -183,6 +191,53 @@ export default function Home() {
       }
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleSaveToDb = async () => {
+    if (!result) return
+
+    setSavingToDb(true)
+    setSaveStatus('')
+
+    try {
+      const response = await fetch('http://localhost:8000/results/save', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          result,
+          source: 'frontend_manual_save',
+          metadata: {
+            subject,
+          },
+        }),
+      })
+
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok || !data?.storage) {
+        throw new Error(data?.detail || data?.storage?.error || 'Failed to save result to DB')
+      }
+
+      setResult((prev) => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          storage: data.storage,
+        }
+      })
+
+      setSaveStatus(
+        data.storage.success
+          ? `Saved to DB${data.storage.document_id ? ` (ID: ${data.storage.document_id})` : ''}`
+          : `Save failed: ${data.storage.error || 'Unknown error'}`
+      )
+    } catch (err) {
+      setSaveStatus(err instanceof Error ? err.message : 'Failed to save result to DB')
+    } finally {
+      setSavingToDb(false)
     }
   }
 
@@ -312,16 +367,30 @@ export default function Home() {
                     <h2 className="text-2xl font-bold text-gray-900">
                       Best Technique: {result.best_technique?.toUpperCase() || 'N/A'}
                     </h2>
-                    <button
-                      onClick={exportResults}
-                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                      Export JSON
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleSaveToDb}
+                        disabled={savingToDb}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-xs font-medium transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                      >
+                        {savingToDb ? 'Saving...' : 'Save to DB'}
+                      </button>
+                      <button
+                        onClick={exportResults}
+                        className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        Export JSON
+                      </button>
+                    </div>
                   </div>
+                  {saveStatus && (
+                    <p className={`mb-3 text-xs ${saveStatus.startsWith('Saved') ? 'text-green-700' : 'text-red-700'}`}>
+                      {saveStatus}
+                    </p>
+                  )}
                   
                   {/* Prompt Used */}
                   <div className="mb-6">

@@ -88,6 +88,47 @@ class ModelRunner:
             }
             
             return result_dict
+        except requests.HTTPError as e:
+            end_time = time.time()
+            status_code = e.response.status_code if e.response is not None else None
+            response_text = ""
+            response_error = ""
+
+            if e.response is not None:
+                response_text = (e.response.text or "").strip()
+                try:
+                    response_error = (e.response.json() or {}).get("error", "")
+                except Exception:
+                    response_error = ""
+
+            if status_code == 404:
+                combined_error = (response_error or response_text).lower()
+                if "model" in combined_error and "not found" in combined_error:
+                    error_message = (
+                        f"Model '{self.model_name}' not found in Ollama. "
+                        f"Run: ollama pull {self.model_name}"
+                    )
+                else:
+                    error_message = (
+                        f"Ollama endpoint '/api/generate' not found at {self.base_url}. "
+                        "Verify Ollama is running on this URL and supports the Ollama API."
+                    )
+            else:
+                detail = response_error or response_text or str(e)
+                error_message = f"Ollama request failed ({status_code}): {detail}"
+
+            return {
+                "response": "",
+                "model": self.model_name,
+                "success": False,
+                "error": error_message,
+                "metrics": {
+                    "elapsed_time": end_time - start_time,
+                    "prompt_tokens": 0,
+                    "completion_tokens": 0,
+                    "total_tokens": 0
+                }
+            }
         except Exception as e:
             end_time = time.time()
             return {

@@ -3,12 +3,21 @@ FastAPI application for the Prompt Optimization Framework.
 Research Benchmarking API for comparative prompt evaluation.
 """
 
+import os
+from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Any, Dict
 from framework.pipeline import BenchmarkPipeline
 from framework.dataset import MathDataset, get_sample_dataset
+from framework.firestore_store import FirestoreStore
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv(dotenv_path=Path(__file__).resolve().parent / ".env")
+except ImportError:
+    pass
 
 app = FastAPI(
     title="Prompt Optimization Research Framework",
@@ -27,7 +36,8 @@ app.add_middleware(
 
 # Initialize pipeline
 pipeline = BenchmarkPipeline(
-    model_name="llama3.2",  # Smaller, faster model for GPU
+    model_name=os.getenv("MODEL_NAME", "llama3"),
+    base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
     accuracy_weight=0.5,
     completeness_weight=0.3,
     efficiency_weight=0.2
@@ -35,6 +45,40 @@ pipeline = BenchmarkPipeline(
 
 # Initialize dataset
 dataset = get_sample_dataset()
+
+# Initialize Firestore persistence
+firestore_store = FirestoreStore(
+    collection_name=os.getenv("FIRESTORE_COLLECTION", "benchmark_results"),
+    enabled=os.getenv("ENABLE_FIRESTORE", "true").lower() == "true",
+    required=os.getenv("FIRESTORE_REQUIRED", "false").lower() == "true"
+)
+
+
+def _apply_db_based_selection(result: Dict[str, Any], domain: str) -> Dict[str, Any]:
+    """Apply DB-based greedy selection from historical Firestore results."""
+    successful_techniques = [
+        technique
+        for technique, technique_result in result.get("all_results", {}).items()
+        if technique_result.get("success", False)
+    ]
+
+    selection = firestore_store.get_best_technique_by_domain(
+        domain=domain,
+        available_techniques=successful_techniques,
+    )
+
+    if selection.get("success"):
+        best_technique = selection["best_technique"]
+        if best_technique in result.get("all_results", {}):
+            result["best_technique"] = best_technique
+            result["best_result"] = result["all_results"][best_technique]
+            result["selection_source"] = "db_history"
+            result["selection_details"] = selection
+            return result
+
+    result["selection_source"] = "runtime_scores"
+    result["selection_details"] = selection
+    return result
 
 
 class BenchmarkRequest(BaseModel):
@@ -58,6 +102,13 @@ class ProblemAdd(BaseModel):
     category: str = "general"
 
 
+class SaveResultRequest(BaseModel):
+    """Model for manually saving benchmark results to Firestore."""
+    result: Dict[str, Any]
+    source: Optional[str] = "manual_save"
+    metadata: Optional[Dict[str, Any]] = None
+
+
 @app.get("/", tags=["Info"])
 async def root():
     """Root endpoint."""
@@ -77,7 +128,8 @@ async def health_check():
         "status": "healthy" if model_connected else "degraded",
         "model_connected": model_connected,
         "dataset_size": dataset.size(),
-        "weights": pipeline.weights
+        "weights": pipeline.weights,
+        "firestore": firestore_store.get_status()
     }
 
 
@@ -98,6 +150,11 @@ async def run_benchmark(request: BenchmarkRequest):
             ground_truth=request.ground_truth,
             subject=request.subject
         )
+
+        result = _apply_db_based_selection(
+            result=result,
+            domain=request.subject or "general",
+        )
         
         if not result["best_result"]["success"]:
             raise HTTPException(
@@ -106,6 +163,8 @@ async def run_benchmark(request: BenchmarkRequest):
             )
         
         return result
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -217,6 +276,11 @@ async def benchmark_dataset_problem(problem_id: int):
             problem=problem_data["problem"],
             ground_truth=problem_data["answer"]
         )
+
+        result = _apply_db_based_selection(
+            result=result,
+            domain=problem_data.get("category", "general"),
+        )
         
         if not result["best_result"]["success"]:
             raise HTTPException(
@@ -225,6 +289,34 @@ async def benchmark_dataset_problem(problem_id: int):
             )
         
         return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/results/save", tags=["Benchmarking"])
+async def save_result(request: SaveResultRequest):
+    """Manually save an existing benchmark result to Firestore."""
+    try:
+        storage = firestore_store.save_benchmark_result(
+            benchmark_result=request.result,
+            source=request.source or "manual_save",
+            metadata=request.metadata or {}
+        )
+
+        if firestore_store.required and not storage.get("success", False):
+            raise HTTPException(
+                status_code=500,
+                detail=f"Firestore write failed: {storage.get('error', 'Unknown error')}"
+            )
+
+        return {
+            "message": "Result saved" if storage.get("success") else "Save failed",
+            "storage": storage
+        }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
