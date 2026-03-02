@@ -112,17 +112,28 @@ class FirestoreStore:
             }
 
         try:
+            metadata = metadata or {}
+            domain = self._resolve_domain(benchmark_result=benchmark_result, metadata=metadata)
+            difficulty = self._resolve_difficulty(benchmark_result=benchmark_result, metadata=metadata)
+
             payload = self._build_storage_document(
                 benchmark_result=benchmark_result,
-                metadata=metadata or {},
+                metadata=metadata,
             )
 
-            doc_ref = self.db.collection(self.collection_name).document()
+            doc_ref = (
+                self.db.collection(self.collection_name)
+                .document(domain)
+                .collection(difficulty)
+                .document()
+            )
             doc_ref.set(payload)
 
             return {
                 "success": True,
                 "collection": self.collection_name,
+                "domain": domain,
+                "difficulty": difficulty,
                 "document_id": doc_ref.id,
             }
         except Exception as exc:
@@ -141,6 +152,26 @@ class FirestoreStore:
         best_result = benchmark_result.get("best_result", {})
         scores = best_result.get("scores", {})
 
+        domain = self._resolve_domain(benchmark_result=benchmark_result, metadata=metadata)
+        difficulty = self._resolve_difficulty(benchmark_result=benchmark_result, metadata=metadata)
+
+        return {
+            "domain": domain,
+            "difficulty": difficulty,
+            "prompt_used": best_result.get("prompt"),
+            "model_response": best_result.get("response"),
+            "performance_score": scores.get("overall"),
+            "technique_comparison": benchmark_result.get("comparison", []),
+        }
+
+    @staticmethod
+    def _normalize_key(value: Any, default: str) -> str:
+        if not value:
+            return default
+        normalized = str(value).strip().lower().replace(" ", "_")
+        return normalized or default
+
+    def _resolve_domain(self, benchmark_result: Dict[str, Any], metadata: Dict[str, Any]) -> str:
         domain = (
             metadata.get("domain")
             or metadata.get("subject")
@@ -148,18 +179,20 @@ class FirestoreStore:
             or benchmark_result.get("domain")
             or "general"
         )
+        return self._normalize_key(domain, default="general")
 
-        return {
-            "domain": domain,
-            "prompt_used": best_result.get("prompt"),
-            "model_response": best_result.get("response"),
-            "performance_score": scores.get("overall"),
-            "technique_comparison": benchmark_result.get("comparison", []),
-        }
+    def _resolve_difficulty(self, benchmark_result: Dict[str, Any], metadata: Dict[str, Any]) -> str:
+        difficulty = (
+            metadata.get("difficulty")
+            or benchmark_result.get("difficulty")
+            or "basic"
+        )
+        return self._normalize_key(difficulty, default="basic")
 
     def get_best_technique_by_domain(
         self,
         domain: str,
+        difficulty: str = "basic",
         available_techniques: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """Get best technique for a domain based on historical Firestore results."""
@@ -181,8 +214,14 @@ class FirestoreStore:
             totals: Dict[str, float] = {}
             counts: Dict[str, int] = {}
             allowed = set(available_techniques or [])
+            normalized_domain = self._normalize_key(domain, default="general")
+            normalized_difficulty = self._normalize_key(difficulty, default="basic")
 
-            query = self.db.collection(self.collection_name).where("domain", "==", domain)
+            query = (
+                self.db.collection(self.collection_name)
+                .document(normalized_domain)
+                .collection(normalized_difficulty)
+            )
             for doc in query.stream():
                 data = doc.to_dict() or {}
                 comparisons = data.get("technique_comparison", [])
@@ -209,7 +248,10 @@ class FirestoreStore:
                 return {
                     "success": False,
                     "reason": "no_data",
-                    "error": f"No historical technique data found for domain '{domain}'.",
+                    "error": (
+                        f"No historical technique data found for domain '{normalized_domain}' "
+                        f"and difficulty '{normalized_difficulty}'."
+                    ),
                 }
 
             ranking = []
@@ -226,7 +268,8 @@ class FirestoreStore:
 
             return {
                 "success": True,
-                "domain": domain,
+                "domain": normalized_domain,
+                "difficulty": normalized_difficulty,
                 "best_technique": best["technique"],
                 "ranking": ranking,
             }
