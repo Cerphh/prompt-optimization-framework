@@ -244,6 +244,7 @@ async def run_benchmark_stream(request: BenchmarkRequest):
                     result = _apply_db_based_selection(
                         result=result,
                         domain=request.subject or "general",
+                        difficulty=request.difficulty or "basic",
                     )
                     event["result"] = result
                 yield json.dumps(event) + "\n"

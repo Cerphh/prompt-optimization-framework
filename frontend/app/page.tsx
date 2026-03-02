@@ -249,6 +249,8 @@ export default function Home() {
       const decoder = new TextDecoder()
       let buffer = ''
       let finalResult: BenchmarkResult | null = null
+      let streamedText = ''
+      let lastStreamingUiUpdate = 0
 
       while (true) {
         const { done, value } = await reader.read()
@@ -274,16 +276,22 @@ export default function Home() {
             }
             setStreamingStatus(event.message || 'Running benchmark...')
           } else if (event.type === 'token') {
-            if (event.technique) {
-              setStreamingTechnique(event.technique)
+            streamedText += event.content || ''
+            const now = Date.now()
+            if (now - lastStreamingUiUpdate >= 500) {
+              setStreamingResponse(streamedText)
+              lastStreamingUiUpdate = now
             }
-            setStreamingResponse((prev) => prev + (event.content || ''))
           } else if (event.type === 'complete') {
             finalResult = event.result
           } else if (event.type === 'error') {
             throw new Error(`🔴 Server Error: ${event.error || 'Unknown streaming error'}`)
           }
         }
+      }
+
+      if (streamedText) {
+        setStreamingResponse(streamedText)
       }
 
       if (!finalResult) {
@@ -385,7 +393,8 @@ export default function Home() {
                   id="subject"
                   value={subject}
                   onChange={(e) => setSubject(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                  disabled={loading}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 disabled:bg-gray-100 disabled:cursor-not-allowed"
                 >
                   <option value="algebra">Algebra</option>
                   <option value="statistics">Statistics & Probability</option>
@@ -407,7 +416,8 @@ export default function Home() {
                     setDifficulty(e.target.value)
                     setDifficultyManualOverride(true)
                   }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                  disabled={loading}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 disabled:bg-gray-100 disabled:cursor-not-allowed"
                 >
                   <option value="basic">Basic</option>
                   <option value="intermediate">Intermediate</option>
