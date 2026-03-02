@@ -72,7 +72,7 @@ class PromptGenerator:
         Returns:
             Zero-shot prompt
         """
-        return f"Solve step-by-step, be concise.\n\n{problem}"
+        return f"{problem}"
 
     def _normalize_problem_text(self, problem: str) -> str:
         """Normalize user input to avoid duplicated Q:/A: wrappers in prompts."""

@@ -1,19 +1,40 @@
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@300;400;500&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
+  --bg: #f6f5f2;
+  --surface: #ffffff;
+  --border: #e4e2dc;
+  --border-strong: #c9c6bc;
+  --text: #1c1b18;
+  --text-muted: #8a8880;
+  --text-subtle: #b5b3ae;
+  --accent: #1c1b18;
+  --accent-hover: #383632;
+  --green: #16a34a;
+  --amber: #d97706;
+  --blue: #2563eb;
 }
 
 body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+  font-family: 'Geist', system-ui, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-subtle); }
+
+/* Focus */
+select:focus,
+textarea:focus { outline: 2px solid var(--text); outline-offset: 1px; }
+button:focus-visible { outline: 2px solid var(--text); outline-offset: 1px; }

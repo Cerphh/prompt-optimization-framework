@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Fragment } from 'react'
+import { useState, useEffect } from 'react'
 
 interface Technique {
   technique: string
@@ -47,6 +47,14 @@ interface BenchmarkResult {
   }
 }
 
+/* Score color mapping */
+const scoreColor = (v: number): string => {
+  if (v >= 0.95) return 'var(--green)'
+  if (v >= 0.80) return 'var(--blue)'
+  if (v >= 0.65) return 'var(--amber)'
+  return 'var(--text)'
+}
+
 export default function Home() {
   const [problem, setProblem] = useState('')
   const [subject, setSubject] = useState('algebra')
@@ -60,6 +68,8 @@ export default function Home() {
   const [validationError, setValidationError] = useState('')
   const [savingToDb, setSavingToDb] = useState(false)
   const [saveStatus, setSaveStatus] = useState('')
+  const [didSaveToDb, setDidSaveToDb] = useState(false)
+  const [didExportJson, setDidExportJson] = useState(false)
   const [streamingResponse, setStreamingResponse] = useState('')
   const [streamingTechnique, setStreamingTechnique] = useState('')
   const [streamingStatus, setStreamingStatus] = useState('')
@@ -191,6 +201,12 @@ export default function Home() {
     link.download = `benchmark-${Date.now()}.json`
     link.click()
     URL.revokeObjectURL(url)
+    setDidExportJson(true)
+    if (didSaveToDb) {
+      setSaveStatus('Exported as JSON and saved to DB.')
+    } else {
+      setSaveStatus('Exported as JSON. Don\u2019t forget to Save to DB as well.')
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -205,6 +221,8 @@ export default function Home() {
     setLoading(true)
     setError('')
     setSaveStatus('')
+    setDidSaveToDb(false)
+    setDidExportJson(false)
     setResult(null)
     setStreamingResponse('')
     setStreamingTechnique('')
@@ -299,7 +317,7 @@ export default function Home() {
       }
 
       setResult(finalResult)
-      setSaveStatus('Not saved yet. Click Save to DB.')
+      setSaveStatus('Not saved yet. Click Save to DB to save this result.')
     } catch (err) {
       if (err instanceof TypeError && err.message.includes('fetch')) {
         setError('🔴 Cannot connect to API. Make sure backend is running on port 8000')
@@ -347,11 +365,16 @@ export default function Home() {
         }
       })
 
-      setSaveStatus(
-        data.storage.success
-          ? `Saved to DB${data.storage.document_id ? ` (ID: ${data.storage.document_id})` : ''}`
-          : `Save failed: ${data.storage.error || 'Unknown error'}`
-      )
+      if (data.storage.success) {
+        setDidSaveToDb(true)
+        if (didExportJson) {
+          setSaveStatus('Exported as JSON and saved to DB.')
+        } else {
+          setSaveStatus('Saved to DB successfully.')
+        }
+      } else {
+        setSaveStatus(`Save failed: ${data.storage.error || 'Unknown error'}`)
+      }
     } catch (err) {
       setSaveStatus(err instanceof Error ? err.message : 'Failed to save result to DB')
     } finally {
@@ -359,55 +382,227 @@ export default function Home() {
     }
   }
 
-  return (
-    <main className="h-screen overflow-hidden p-8 bg-gradient-to-br from-gray-50 to-gray-100">
-      <div className="max-w-7xl mx-auto h-full flex flex-col">
-        <div className="flex items-center justify-between mb-2">
-          <h1 className="text-4xl font-bold text-gray-900">
-            Prompt Optimization Framework
-          </h1>
-          <div className="flex items-center gap-2">
-            <div className={`w-3 h-3 rounded-full ${healthStatus === 'healthy' ? 'bg-green-500' : healthStatus === 'unhealthy' ? 'bg-red-500' : 'bg-yellow-500'}`}></div>
-            <span className="text-sm text-gray-600">
-              {healthStatus === 'healthy' ? '🟢 Online' : healthStatus === 'unhealthy' ? '🔴 Offline' : '🟡 Checking...'}
-            </span>
-          </div>
-        </div>
-        <p className="text-gray-600 mb-6">
-          Compare different prompting techniques and find the optimal approach
-        </p>
+  /* Derived data for the technique-details modal */
+  const expandedResult = expandedTechnique ? result?.all_results[expandedTechnique] : null
+  const isDisabled = loading || !!validationError || problem.length < 10
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 flex-1 overflow-hidden">
-          {/* Left Side - Input Form */}
-          <div className="bg-white rounded-lg shadow-md p-6 h-fit">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Input</h2>
+  /* Whether we're in "results" mode (sidebar + right panel) */
+  const hasStarted = loading || !!result
+
+  return (
+    <div className="h-screen flex flex-col" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
+      {/* ═══ Header ═══ */}
+      <header
+        className="flex items-center justify-between px-8 h-14 shrink-0"
+        style={{ borderBottom: '1px solid var(--border)' }}
+      >
+        <h1 className="text-base font-semibold tracking-tight">Prompt Optimization Framework</h1>
+        <div className="flex items-center gap-4">
+          {result && (
+            <span className="text-sm font-mono" style={{ color: 'var(--text-muted)' }}>
+              Best:{' '}
+              <strong className="font-medium" style={{ color: 'var(--text)' }}>
+                {result.best_technique?.toUpperCase()}
+              </strong>
+              {' \u00b7 '}
+              <strong className="font-medium" style={{ color: 'var(--text)' }}>
+                {result.best_result?.scores?.overall?.toFixed(3)}
+              </strong>
+            </span>
+          )}
+          <span
+            className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-0.5 rounded-full"
+            style={{
+              border: `1px solid ${
+                healthStatus === 'healthy'
+                  ? 'var(--green)'
+                  : healthStatus === 'unhealthy'
+                  ? '#ef4444'
+                  : 'var(--amber)'
+              }`,
+              color:
+                healthStatus === 'healthy'
+                  ? 'var(--green)'
+                  : healthStatus === 'unhealthy'
+                  ? '#ef4444'
+                  : 'var(--amber)',
+            }}
+          >
+            <span
+              className="w-1.5 h-1.5 rounded-full"
+              style={{
+                background:
+                  healthStatus === 'healthy'
+                    ? 'var(--green)'
+                    : healthStatus === 'unhealthy'
+                    ? '#ef4444'
+                    : 'var(--amber)',
+              }}
+            />
+            {healthStatus === 'healthy' ? 'online' : healthStatus === 'unhealthy' ? 'offline' : 'checking\u2026'}
+          </span>
+        </div>
+      </header>
+
+      {/* ═══ LANDING (before run) ═══ */}
+      {!hasStarted && (
+        <div className="flex-1 flex flex-col items-center justify-center px-4">
+          <h2 className="text-3xl font-semibold mb-2 text-center">What would you like to benchmark?</h2>
+          <p className="text-sm mb-8 text-center" style={{ color: 'var(--text-muted)' }}>
+            Enter a problem below and compare how different prompting techniques perform.
+          </p>
+
+          <div
+            className="w-full max-w-[920px] rounded-xl p-6"
+            style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+          >
             <form onSubmit={handleSubmit}>
-              <div className="mb-4">
-                <label
-                  htmlFor="subject"
-                  className="block text-sm font-medium text-gray-700 mb-2"
+              {/* Top row: Subject + Difficulty */}
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label htmlFor="subject-landing" className="flex items-center gap-2 text-sm font-medium mb-1.5">
+                    Subject Category
+                    <span
+                      className="text-[10px] font-mono leading-none px-1.5 py-[3px] rounded"
+                      style={{ color: 'var(--text-subtle)', border: '1px solid var(--border)' }}
+                    >
+                      auto-detected
+                    </span>
+                  </label>
+                  <select
+                    id="subject-landing"
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                    className="w-full px-3 py-2 rounded-md text-sm outline-none"
+                    style={{ border: '1px solid var(--border)', color: 'var(--text)', background: 'var(--surface)' }}
+                  >
+                    <option value="algebra">Algebra</option>
+                    <option value="statistics">Statistics &amp; Probability</option>
+                    <option value="calculus">Calculus</option>
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="difficulty-landing" className="flex items-center gap-2 text-sm font-medium mb-1.5">
+                    Difficulty
+                    <span
+                      className="text-[10px] font-mono leading-none px-1.5 py-[3px] rounded"
+                      style={{ color: 'var(--text-subtle)', border: '1px solid var(--border)' }}
+                    >
+                      override allowed
+                    </span>
+                  </label>
+                  <select
+                    id="difficulty-landing"
+                    value={difficulty}
+                    onChange={(e) => { setDifficulty(e.target.value); setDifficultyManualOverride(true) }}
+                    className="w-full px-3 py-2 rounded-md text-sm outline-none"
+                    style={{ border: '1px solid var(--border)', color: 'var(--text)', background: 'var(--surface)' }}
+                  >
+                    <option value="basic">Basic</option>
+                    <option value="intermediate">Intermediate</option>
+                    <option value="advanced">Advanced</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Textarea */}
+              <textarea
+                value={problem}
+                onChange={(e) => handleProblemChange(e.target.value)}
+                rows={5}
+                placeholder="Enter your problem here (e.g., Solve for x: 2x + 5 = 15)"
+                className="w-full px-3 py-2 rounded-md text-sm font-mono outline-none resize-y"
+                style={{
+                  border: `1px solid ${validationError ? '#ef4444' : 'var(--border)'}`,
+                  color: 'var(--text)',
+                  background: 'var(--surface)',
+                }}
+                required
+              />
+              {validationError && (
+                <p className="mt-1 text-xs" style={{ color: '#ef4444' }}>{validationError}</p>
+              )}
+
+              {/* Footer: techniques hint + button */}
+              <div className="flex items-center justify-between mt-4">
+                <span className="text-xs font-mono" style={{ color: 'var(--text-subtle)' }}>
+                  Techniques: FEW_SHOT &middot; ZERO_SHOT
+                </span>
+                <button
+                  type="submit"
+                  disabled={isDisabled}
+                  className="px-6 py-2.5 rounded-md text-sm font-medium transition-colors"
+                  style={{
+                    background: isDisabled ? 'var(--border-strong)' : 'var(--accent)',
+                    color: isDisabled ? 'var(--text-muted)' : '#fff',
+                    cursor: isDisabled ? 'not-allowed' : 'pointer',
+                  }}
                 >
-                  Subject Category <span className="text-xs text-gray-500">(auto-detected)</span>
+                  Run Benchmark &rarr;
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {error && (
+            <div
+              className="mt-5 w-full max-w-[920px] p-3 rounded-md text-xs leading-relaxed whitespace-pre-wrap"
+              style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b' }}
+            >
+              {error}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ═══ RESULTS MODE (sidebar + main) ═══ */}
+      {hasStarted && (
+        <div className="flex flex-1 overflow-hidden">
+          {/* ─── Sidebar ─── */}
+          <aside
+            className="w-[320px] shrink-0 overflow-y-auto p-6"
+            style={{ borderRight: '1px solid var(--border)' }}
+          >
+            <form onSubmit={handleSubmit} className="space-y-5">
+              {/* Subject */}
+              <div>
+                <label htmlFor="subject" className="flex items-center gap-2 text-sm font-medium mb-1.5">
+                  Subject Category
+                  <span
+                    className="text-[10px] font-mono leading-none px-1.5 py-[3px] rounded"
+                    style={{ color: 'var(--text-subtle)', border: '1px solid var(--border)' }}
+                  >
+                    auto-detected
+                  </span>
                 </label>
                 <select
                   id="subject"
                   value={subject}
                   onChange={(e) => setSubject(e.target.value)}
                   disabled={loading}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  className="w-full px-3 py-2 rounded-md text-sm outline-none transition disabled:cursor-not-allowed"
+                  style={{
+                    border: '1px solid var(--border)',
+                    color: 'var(--text)',
+                    background: loading ? 'var(--bg)' : 'var(--surface)',
+                  }}
                 >
                   <option value="algebra">Algebra</option>
-                  <option value="statistics">Statistics & Probability</option>
+                  <option value="statistics">Statistics &amp; Probability</option>
                   <option value="calculus">Calculus</option>
                 </select>
               </div>
 
-              <div className="mb-4">
-                <label
-                  htmlFor="difficulty"
-                  className="block text-sm font-medium text-gray-700 mb-2"
-                >
-                  Difficulty Level <span className="text-xs text-gray-500">(auto-detected, override allowed)</span>
+              {/* Difficulty */}
+              <div>
+                <label htmlFor="difficulty" className="flex items-center gap-2 text-sm font-medium mb-1.5">
+                  Difficulty Level
+                  <span
+                    className="text-[10px] font-mono leading-none px-1.5 py-[3px] rounded"
+                    style={{ color: 'var(--text-subtle)', border: '1px solid var(--border)' }}
+                  >
+                    override allowed
+                  </span>
                 </label>
                 <select
                   id="difficulty"
@@ -417,7 +612,12 @@ export default function Home() {
                     setDifficultyManualOverride(true)
                   }}
                   disabled={loading}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  className="w-full px-3 py-2 rounded-md text-sm outline-none transition disabled:cursor-not-allowed"
+                  style={{
+                    border: '1px solid var(--border)',
+                    color: 'var(--text)',
+                    background: loading ? 'var(--bg)' : 'var(--surface)',
+                  }}
                 >
                   <option value="basic">Basic</option>
                   <option value="intermediate">Intermediate</option>
@@ -425,142 +625,200 @@ export default function Home() {
                 </select>
               </div>
 
-              <div className="mb-4">
-                <label
-                  htmlFor="problem"
-                  className="block text-sm font-medium text-gray-700 mb-2"
-                >
-                 Math Problem
+              {/* Problem */}
+              <div>
+                <label htmlFor="problem" className="block text-sm font-medium mb-1.5">
+                  Math Problem
                 </label>
                 <textarea
                   id="problem"
                   value={problem}
                   onChange={(e) => handleProblemChange(e.target.value)}
                   disabled={loading}
-                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 text-gray-900 ${
-                    validationError ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'
-                  }`}
-                  rows={8}
+                  rows={6}
                   placeholder="Enter your problem here (e.g., Solve for x: 2x + 5 = 15)"
+                  className="w-full px-3 py-2 rounded-md text-sm font-mono outline-none resize-y transition"
+                  style={{
+                    border: `1px solid ${validationError ? '#ef4444' : 'var(--border)'}`,
+                    color: 'var(--text)',
+                    background: 'var(--surface)',
+                  }}
                   required
                 />
                 {validationError && (
-                  <p className="mt-1 text-sm text-red-600">{validationError}</p>
+                  <p className="mt-1 text-xs" style={{ color: '#ef4444' }}>
+                    {validationError}
+                  </p>
                 )}
               </div>
 
+              {/* Submit */}
               <button
                 type="submit"
-                disabled={loading || !!validationError || problem.length < 10}
-                className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
+                disabled={isDisabled}
+                className="w-full py-2.5 rounded-md text-sm font-medium transition-colors"
+                style={{
+                  background: isDisabled ? 'var(--border-strong)' : 'var(--accent)',
+                  color: isDisabled ? 'var(--text-muted)' : '#fff',
+                  cursor: isDisabled ? 'not-allowed' : 'pointer',
+                }}
               >
-                {loading ? 'Running Benchmark...' : 'Run Benchmark'}
+                {loading ? 'Running Benchmark\u2026' : 'Run Benchmark'}
               </button>
             </form>
 
             {error && (
-              <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-md">
-                <p className="text-red-800 text-sm whitespace-pre-wrap">
-                  {error}
-                </p>
+              <div
+                className="mt-5 p-3 rounded-md text-xs leading-relaxed whitespace-pre-wrap"
+                style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b' }}
+              >
+                {error}
               </div>
             )}
-          </div>
+          </aside>
 
-          {/* Right Side - Results */}
-          <div className="overflow-y-auto space-y-6">
-            {!result && !loading && (
-              <div className="bg-white rounded-lg shadow-md p-12 text-center">
-                <div className="text-gray-400 mb-4">
-                  <svg
-                    className="w-24 h-24 mx-auto"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
+          {/* ─── Main content ─── */}
+          <section className="flex-1 overflow-y-auto p-8 space-y-6">
+          {loading && (
+            <div
+              className="rounded-lg p-10 text-center"
+              style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+            >
+              <div
+                className="animate-spin rounded-full h-10 w-10 mx-auto mb-4"
+                style={{ border: '2px solid var(--border)', borderTopColor: 'var(--text)' }}
+              />
+              <p className="text-sm font-medium">{streamingStatus || 'Running benchmark\u2026'}</p>
+              <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                This may take a few minutes
+              </p>
+              {streamingResponse && (
+                <div className="mt-6 text-left">
+                  <div className="flex items-center justify-between mb-2">
+                    <span
+                      className="text-[11px] font-mono uppercase tracking-wider"
+                      style={{ color: 'var(--text-subtle)' }}
+                    >
+                      Live Output
+                    </span>
+                    <span
+                      className="font-mono text-[11px] px-2 py-0.5 rounded"
+                      style={{ color: 'var(--text-muted)', border: '1px solid var(--border)' }}
+                    >
+                      {streamingTechnique || 'preview'}
+                    </span>
+                  </div>
+                  <div
+                    className="p-4 rounded-md max-h-64 overflow-y-auto"
+                    style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                    />
-                  </svg>
+                    <pre className="text-sm font-mono whitespace-pre-wrap" style={{ color: 'var(--text)' }}>
+                      {streamingResponse}
+                      <span className="animate-pulse">{'\u258d'}</span>
+                    </pre>
+                  </div>
                 </div>
-                <p className="text-gray-600 text-lg">
-                  Enter a problem and click "Run Benchmark" to see results
-                </p>
-              </div>
-            )}
+              )}
+            </div>
+          )}
 
-            {loading && (
-              <div className="bg-white rounded-lg shadow-md p-12 text-center">
-                <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                <p className="text-gray-600 text-lg">Running benchmark...</p>
-                <p className="text-gray-500 text-sm mt-2">
-                  {streamingStatus || 'This may take a few minutes'}
-                </p>
-                {streamingResponse && (
-                  <div className="mt-6 text-left">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-sm font-semibold text-gray-800">Live Output</h3>
-                      <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                        {streamingTechnique || 'preview'}
-                      </span>
-                    </div>
-                    <div className="p-4 bg-green-50 rounded border border-green-200 max-h-64 overflow-y-auto">
-                      <pre className="text-sm text-gray-900 whitespace-pre-wrap">
-                        {streamingResponse}
-                        <span className="animate-pulse">▍</span>
-                      </pre>
-                    </div>
+          {/* ═══ Results ═══ */}
+          {result && (
+            <>
+              {/* ── Best Technique ── */}
+              <div
+                className="rounded-lg overflow-hidden"
+                style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+              >
+                {/* Header */}
+                <div
+                  className="flex items-center justify-between px-6 py-4"
+                  style={{ borderBottom: '1px solid var(--border)' }}
+                >
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-lg font-semibold">Best Technique</h2>
+                    <span
+                      className="font-mono text-xs px-2.5 py-1 rounded"
+                      style={{ background: 'var(--accent)', color: '#fff' }}
+                    >
+                      {result.best_technique?.toUpperCase()}
+                    </span>
                   </div>
-                )}
-              </div>
-            )}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleSaveToDb}
+                      disabled={savingToDb}
+                      className="px-3 py-1.5 rounded-md text-xs font-medium transition-colors disabled:cursor-not-allowed"
+                      style={{
+                        border: '1px solid var(--border)',
+                        color: 'var(--text)',
+                        background: 'var(--surface)',
+                      }}
+                    >
+                      {savingToDb ? 'Saving\u2026' : 'Save to DB'}
+                    </button>
+                    <button
+                      onClick={exportResults}
+                      className="px-3 py-1.5 rounded-md text-xs font-medium transition-colors"
+                      style={{ background: 'var(--accent)', color: '#fff' }}
+                    >
+                      Export JSON
+                    </button>
+                  </div>
+                </div>
 
-                {result && (
-              <>
-                {/* Best Technique Prompt and Response */}
-                <div className="bg-white rounded-lg shadow-md p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-2xl font-bold text-gray-900">
-                      Best Technique: {result.best_technique?.toUpperCase() || 'N/A'}
-                    </h2>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={handleSaveToDb}
-                        disabled={savingToDb}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-xs font-medium transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
-                      >
-                        {savingToDb ? 'Saving...' : 'Save to DB'}
-                      </button>
-                      <button
-                        onClick={exportResults}
-                        className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                        Export JSON
-                      </button>
+                {/* Save / Export status */}
+                {saveStatus && (() => {
+                  const isSuccess = saveStatus.startsWith('Saved') || saveStatus.startsWith('Exported as JSON and saved')
+                  const isExportOnly = saveStatus.startsWith('Exported as JSON. Don')
+                  const isNotSaved = saveStatus.startsWith('Not saved')
+                  const isFail = !isSuccess && !isExportOnly && !isNotSaved
+
+                  let bg = '#fffbeb'
+                  let borderColor = '#fde68a'
+                  let textColor = 'var(--amber)'
+                  let icon = '\u26a0 '
+
+                  if (isSuccess) {
+                    bg = '#f0fdf4'; borderColor = '#bbf7d0'; textColor = 'var(--green)'; icon = '\u2713 '
+                  } else if (isExportOnly) {
+                    bg = '#eff6ff'; borderColor = '#bfdbfe'; textColor = 'var(--blue)'; icon = '\u2193 '
+                  } else if (isFail) {
+                    bg = '#fef2f2'; borderColor = '#fecaca'; textColor = '#dc2626'; icon = '\u2715 '
+                  }
+
+                  return (
+                    <div
+                      className="px-6 py-2 text-xs"
+                      style={{ background: bg, borderBottom: `1px solid ${borderColor}`, color: textColor }}
+                    >
+                      {icon}
+                      {isExportOnly ? (
+                        <>Exported as JSON. Don{'\u2019'}t forget to <strong>Save to DB</strong> as well.</>
+                      ) : isNotSaved ? (
+                        <>Not saved yet. Click <strong>Save to DB</strong> to save this result.</>
+                      ) : (
+                        saveStatus
+                      )}
                     </div>
-                  </div>
-                  {saveStatus && (
-                    <p className={`mb-3 text-xs ${saveStatus.startsWith('Saved') ? 'text-green-700' : 'text-red-700'}`}>
-                      {saveStatus}
-                    </p>
-                  )}
-                  
+                  )
+                })()}
+
+                {/* Body */}
+                <div className="p-6 space-y-6">
                   {/* Prompt Used */}
-                  <div className="mb-6">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-lg font-semibold text-gray-800">Prompt Used</h3>
-                      <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                        {result.best_technique}
-                      </span>
-                    </div>
-                    <div className="p-4 bg-gray-50 rounded border border-gray-200">
-                      <pre className="text-sm text-gray-700 whitespace-pre-wrap font-mono">
+                  <div>
+                    <p
+                      className="text-[11px] font-mono uppercase tracking-wider mb-2"
+                      style={{ color: 'var(--text-subtle)' }}
+                    >
+                      Prompt Used
+                    </p>
+                    <div
+                      className="p-4 rounded-md overflow-auto max-h-72"
+                      style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}
+                    >
+                      <pre className="text-sm font-mono whitespace-pre-wrap leading-relaxed">
                         {result.best_result?.prompt || 'No prompt available'}
                       </pre>
                     </div>
@@ -568,146 +826,256 @@ export default function Home() {
 
                   {/* Model Response */}
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-800 mb-2">Model Response</h3>
-                    <div className="p-4 bg-green-50 rounded border border-green-200">
-                      <pre className="text-sm text-gray-900 whitespace-pre-wrap">
+                    <p
+                      className="text-[11px] font-mono uppercase tracking-wider mb-2"
+                      style={{ color: 'var(--text-subtle)' }}
+                    >
+                      Model Response
+                    </p>
+                    <div
+                      className="p-4 rounded-md overflow-auto max-h-96"
+                      style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}
+                    >
+                      <pre className="text-sm font-mono whitespace-pre-wrap leading-relaxed">
                         {result.best_result?.response || 'No response'}
                       </pre>
                     </div>
                   </div>
                 </div>
+              </div>
 
-                {/* Scores */}
-                <div className="bg-white rounded-lg shadow-md p-6">
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">
-                Performance Scores
-              </h2>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-blue-50 p-4 rounded">
-                  <p className="text-sm text-gray-600 mb-1">Overall Score</p>
-                  <p className="text-3xl font-bold text-blue-600">
-                    {result.best_result?.scores?.overall?.toFixed(3) || '0.000'}
-                  </p>
-                </div>
-                <div className="bg-green-50 p-4 rounded">
-                  <p className="text-sm text-gray-600 mb-1">Accuracy</p>
-                  <p className="text-3xl font-bold text-green-600">
-                    {result.best_result?.scores?.accuracy?.toFixed(3) || '0.000'}
-                  </p>
-                </div>
-                <div className="bg-purple-50 p-4 rounded">
-                  <p className="text-sm text-gray-600 mb-1">Completeness</p>
-                  <p className="text-3xl font-bold text-purple-600">
-                    {result.best_result?.scores?.completeness?.toFixed(3) || '0.000'}
-                  </p>
-                </div>
-                <div className="bg-orange-50 p-4 rounded">
-                  <p className="text-sm text-gray-600 mb-1">Efficiency</p>
-                  <p className="text-3xl font-bold text-orange-600">
-                    {result.best_result?.scores?.efficiency?.toFixed(3) || '0.000'}
-                  </p>
+              {/* ── Performance Scores ── */}
+              <div
+                className="rounded-lg p-6"
+                style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+              >
+                <h2 className="text-lg font-semibold mb-4">Performance Scores</h2>
+                <div className="grid grid-cols-4 gap-4">
+                  {[
+                    { label: 'OVERALL', value: result.best_result?.scores?.overall },
+                    { label: 'ACCURACY', value: result.best_result?.scores?.accuracy },
+                    { label: 'COMPLETENESS', value: result.best_result?.scores?.completeness },
+                    { label: 'EFFICIENCY', value: result.best_result?.scores?.efficiency },
+                  ].map((s) => (
+                    <div
+                      key={s.label}
+                      className="p-4 rounded-md text-center"
+                      style={{ border: '1px solid var(--border)' }}
+                    >
+                      <p
+                        className="text-[10px] font-mono uppercase tracking-widest mb-2"
+                        style={{ color: 'var(--text-subtle)' }}
+                      >
+                        {s.label}
+                      </p>
+                      <p
+                        className="text-3xl font-mono font-light"
+                        style={{ color: scoreColor(s.value ?? 0) }}
+                      >
+                        {s.value?.toFixed(3) ?? '0.000'}
+                      </p>
+                    </div>
+                  ))}
                 </div>
               </div>
-            </div>
 
-                {/* Comparison Table */}
-                <div className="bg-white rounded-lg shadow-md p-6">
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">
-                Technique Comparison
-              </h2>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b-2 border-gray-200">
-                      <th className="text-left py-2 px-4 text-gray-700">
-                        Technique
-                      </th>
-                      <th className="text-center py-2 px-4 text-gray-700">
-                        Accuracy
-                      </th>
-                      <th className="text-center py-2 px-4 text-gray-700">
-                        Completeness
-                      </th>
-                      <th className="text-center py-2 px-4 text-gray-700">
-                        Efficiency
-                      </th>
-                      <th className="text-center py-2 px-4 text-gray-700">
-                        Overall
-                      </th>
-                      <th className="text-center py-2 px-4 text-gray-700">
-                        Details
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {result.comparison?.map((tech) => {
-                      const isBest = tech.technique === result.best_technique
-                      const techResult = result.all_results[tech.technique]
-                      const isExpanded = expandedTechnique === tech.technique
-                      return (
-                        <Fragment key={tech.technique}>
+              {/* ── Technique Comparison ── */}
+              <div
+                className="rounded-lg overflow-hidden"
+                style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+              >
+                <div
+                  className="flex items-center justify-between px-6 py-4"
+                  style={{ borderBottom: '1px solid var(--border)' }}
+                >
+                  <h2 className="text-lg font-semibold">Technique Comparison</h2>
+                  <span className="font-mono text-xs" style={{ color: 'var(--text-subtle)' }}>
+                    {result.comparison?.length ?? 0} techniques
+                  </span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                        {['Technique', 'Accuracy', 'Completeness', 'Efficiency', 'Overall', 'Details'].map(
+                          (col, i) => (
+                            <th
+                              key={col}
+                              className={`${
+                                i === 0 ? 'text-left px-6' : 'text-center px-4'
+                              } py-3 text-[10px] font-mono uppercase tracking-widest font-medium`}
+                              style={{ color: 'var(--text-subtle)' }}
+                            >
+                              {col}
+                            </th>
+                          )
+                        )}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {result.comparison?.map((tech) => {
+                        const isBest = tech.technique === result.best_technique
+                        return (
                           <tr
-                            className={`border-b border-gray-100 ${
-                              isBest ? 'bg-blue-50 font-semibold' : 'hover:bg-gray-50'
-                            }`}
+                            key={tech.technique}
+                            className={isBest ? 'font-medium' : ''}
+                            style={{ borderBottom: '1px solid var(--border)' }}
                           >
-                            <td className="py-3 px-4 text-gray-900">
-                              {tech.technique?.toUpperCase() || 'N/A'}
-                              {isBest && ' ⭐'}
+                            <td className="px-6 py-3 font-medium">
+                              {tech.technique?.toUpperCase() ?? 'N/A'}
                             </td>
-                            <td className="py-3 px-4 text-center text-gray-700">
-                              {tech.accuracy?.toFixed(3) || '0.000'}
+                            <td className="text-center px-4 py-3 font-mono">
+                              {tech.accuracy?.toFixed(3) ?? '0.000'}
                             </td>
-                            <td className="py-3 px-4 text-center text-gray-700">
-                              {tech.completeness?.toFixed(3) || '0.000'}
+                            <td className="text-center px-4 py-3 font-mono">
+                              {tech.completeness?.toFixed(3) ?? '0.000'}
                             </td>
-                            <td className="py-3 px-4 text-center text-gray-700">
-                              {tech.efficiency?.toFixed(3) || '0.000'}
+                            <td className="text-center px-4 py-3 font-mono">
+                              {tech.efficiency?.toFixed(3) ?? '0.000'}
                             </td>
-                            <td className="py-3 px-4 text-center font-bold text-blue-600">
-                              {tech.overall?.toFixed(3) || '0.000'}
+                            <td
+                              className="text-center px-4 py-3 font-mono font-semibold"
+                              style={{ color: scoreColor(tech.overall ?? 0) }}
+                            >
+                              {tech.overall?.toFixed(3) ?? '0.000'}
                             </td>
-                            <td className="py-3 px-4 text-center">
+                            <td className="text-center px-4 py-3">
                               <button
-                                onClick={() => setExpandedTechnique(isExpanded ? null : tech.technique)}
-                                className="text-blue-600 hover:text-blue-800 text-sm underline"
+                                onClick={() =>
+                                  setExpandedTechnique(
+                                    expandedTechnique === tech.technique ? null : tech.technique
+                                  )
+                                }
+                                className="text-xs font-medium hover:underline"
+                                style={{ color: 'var(--blue)' }}
                               >
-                                {isExpanded ? 'Hide' : 'View'}
+                                View &rarr;
                               </button>
                             </td>
                           </tr>
-                          {isExpanded && techResult && (
-                            <tr className="bg-gray-50">
-                              <td colSpan={6} className="p-4">
-                                <div className="space-y-4">
-                                  <div>
-                                    <h4 className="font-semibold text-gray-800 mb-2">Prompt:</h4>
-                                    <pre className="text-xs text-gray-700 whitespace-pre-wrap bg-white p-3 rounded border border-gray-200 font-mono">
-                                      {techResult.prompt}
-                                    </pre>
-                                  </div>
-                                  <div>
-                                    <h4 className="font-semibold text-gray-800 mb-2">Response:</h4>
-                                    <pre className="text-xs text-gray-900 whitespace-pre-wrap bg-white p-3 rounded border border-gray-200">
-                                      {techResult.response}
-                                    </pre>
-                                  </div>
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                        </Fragment>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
+        </section>
+        </div>
+      )}
+      {/* ═══ Technique Details Modal ═══ */}
+      {expandedTechnique && expandedResult && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center pt-[8vh] overflow-y-auto"
+          style={{ background: 'rgba(0,0,0,0.25)' }}
+          onClick={() => setExpandedTechnique(null)}
+        >
+          <div
+            className="relative w-full max-w-2xl rounded-lg shadow-xl mb-16"
+            style={{ background: 'var(--surface)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal header */}
+            <div
+              className="flex items-center justify-between px-6 py-4"
+              style={{ borderBottom: '1px solid var(--border)' }}
+            >
+              <div className="flex items-center gap-3">
+                <h2 className="text-lg font-semibold">Technique Details</h2>
+                <span
+                  className="font-mono text-xs px-2 py-1 rounded"
+                  style={{ color: 'var(--text)', border: '1px solid var(--border)' }}
+                >
+                  {expandedTechnique.toUpperCase()}
+                </span>
+              </div>
+              <button
+                onClick={() => setExpandedTechnique(null)}
+                className="w-8 h-8 flex items-center justify-center rounded-md transition-colors"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                &#x2715;
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Performance */}
+              <div>
+                <p
+                  className="text-[11px] font-mono uppercase tracking-wider mb-3"
+                  style={{ color: 'var(--text-subtle)' }}
+                >
+                  Performance
+                </p>
+                <div className="grid grid-cols-4 gap-3">
+                  {[
+                    { label: 'OVERALL', value: expandedResult.scores?.overall },
+                    { label: 'ACCURACY', value: expandedResult.scores?.accuracy },
+                    { label: 'COMPLETENESS', value: expandedResult.scores?.completeness },
+                    { label: 'EFFICIENCY', value: expandedResult.scores?.efficiency },
+                  ].map((s) => (
+                    <div
+                      key={s.label}
+                      className="p-3 rounded-md text-center"
+                      style={{ border: '1px solid var(--border)' }}
+                    >
+                      <p
+                        className="text-[9px] font-mono uppercase tracking-widest mb-1"
+                        style={{ color: 'var(--text-subtle)' }}
+                      >
+                        {s.label}
+                      </p>
+                      <p
+                        className="text-2xl font-mono font-light"
+                        style={{ color: scoreColor(s.value ?? 0) }}
+                      >
+                        {s.value?.toFixed(3) ?? '0.000'}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Prompt */}
+              <div>
+                <p
+                  className="text-[11px] font-mono uppercase tracking-wider mb-2"
+                  style={{ color: 'var(--text-subtle)' }}
+                >
+                  Prompt Used
+                </p>
+                <div
+                  className="p-4 rounded-md max-h-48 overflow-y-auto"
+                  style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}
+                >
+                  <pre className="text-sm font-mono whitespace-pre-wrap leading-relaxed">
+                    {expandedResult.prompt}
+                  </pre>
+                </div>
+              </div>
+
+              {/* Response */}
+              <div>
+                <p
+                  className="text-[11px] font-mono uppercase tracking-wider mb-2"
+                  style={{ color: 'var(--text-subtle)' }}
+                >
+                  Model Response
+                </p>
+                <div
+                  className="p-4 rounded-md max-h-72 overflow-y-auto"
+                  style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}
+                >
+                  <pre className="text-sm font-mono whitespace-pre-wrap leading-relaxed">
+                    {expandedResult.response}
+                  </pre>
+                </div>
               </div>
             </div>
-              </>
-            )}
           </div>
         </div>
-      </div>
-    </main>
+      )}
+    </div>
   )
 }
