@@ -3,6 +3,8 @@ Efficiency Scorer Module
 Evaluates the efficiency of model responses based on latency and token usage.
 """
 
+import os
+
 class EfficiencyScorer:
     """
     Scores the efficiency of model responses.
@@ -29,12 +31,24 @@ class EfficiencyScorer:
         
         elapsed_time = metrics.get('elapsed_time', 0)
         total_tokens = metrics.get('total_tokens', 0)
+        prompt_tokens = metrics.get('prompt_tokens', 0)
+        completion_tokens = metrics.get('completion_tokens', 0)
+
+        token_mix_alpha = float(os.getenv('EFFICIENCY_TOKEN_COMPLETION_WEIGHT', '0.75'))
+        token_mix_alpha = max(0.0, min(1.0, token_mix_alpha))
+
+        blended_tokens = int(
+            token_mix_alpha * max(completion_tokens, 0)
+            + (1.0 - token_mix_alpha) * max(total_tokens, 0)
+        )
+
+        effective_tokens = blended_tokens if blended_tokens > 0 else max(total_tokens - prompt_tokens, 0)
         
         # Component 1: Time efficiency (40%)
         time_score = self._score_time(elapsed_time)
         
         # Component 2: Token efficiency (30%)
-        token_score = self._score_tokens(total_tokens, response)
+        token_score = self._score_tokens(effective_tokens, response)
         
         # Component 3: Conciseness (30%)
         conciseness_score = self._score_conciseness(response)

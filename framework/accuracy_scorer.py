@@ -5,7 +5,7 @@ Evaluates the accuracy of model responses using exact and symbolic matching.
 
 import re
 from typing import Any, Optional
-from sympy import sympify, simplify, parse_expr
+from sympy import sympify, simplify, parse_expr, symbols, solve
 from sympy.core.sympify import SympifyError
 
 class AccuracyScorer:
@@ -38,6 +38,14 @@ class AccuracyScorer:
         # If no ground truth provided, try to auto-solve simple problems
         if expected is None and problem:
             expected = self._auto_solve_simple_problem(problem)
+
+        # If still no ground truth, try symbolic equation solving
+        if expected is None and problem:
+            expected = self._auto_solve_equation_problem(problem)
+
+        # Special handling for solved root sets
+        if isinstance(expected, dict) and expected.get("type") == "equation_roots":
+            return self._score_equation_roots(response, expected)
         
         if expected is None:
             # Heuristic scoring when no ground truth
@@ -257,3 +265,141 @@ class AccuracyScorer:
             score += 0.2
         
         return min(score, 1.0)
+
+    def _normalize_math_text(self, text: str) -> str:
+        """Normalize unicode math symbols for parsing."""
+        replacements = {
+            "−": "-",
+            "–": "-",
+            "×": "*",
+            "÷": "/",
+            "⁰": "^0",
+            "¹": "^1",
+            "²": "^2",
+            "³": "^3",
+            "⁴": "^4",
+            "⁵": "^5",
+            "⁶": "^6",
+            "⁷": "^7",
+            "⁸": "^8",
+            "⁹": "^9",
+        }
+        normalized = text
+        for src, dst in replacements.items():
+            normalized = normalized.replace(src, dst)
+        return normalized
+
+    def _auto_solve_equation_problem(self, problem: str) -> Optional[dict]:
+        """Attempt to solve a single-variable equation and return expected real roots."""
+        if not problem:
+            return None
+
+        normalized = self._normalize_math_text(problem)
+        lines = [line.strip() for line in normalized.splitlines() if line.strip()]
+        equation_line = None
+        for line in lines:
+            if "=" in line and "x" in line.lower():
+                equation_line = line
+                break
+
+        if equation_line is None:
+            match = re.search(r"([0-9xX\^\-+*/().\s]+=[0-9xX\^\-+*/().\s]+)", normalized)
+            if match:
+                equation_line = match.group(1).strip()
+
+        if equation_line is None:
+            return None
+
+        try:
+            left, right = equation_line.split("=", 1)
+            left_expr = sympify(left.replace("^", "**"))
+            right_expr = sympify(right.replace("^", "**"))
+            x = symbols("x", real=True)
+            equation_expr = simplify(left_expr - right_expr)
+
+            roots = solve(equation_expr, x)
+            real_roots = []
+            for root in roots:
+                try:
+                    root_val = complex(root.evalf())
+                    if abs(root_val.imag) < 1e-9:
+                        real_roots.append(float(root_val.real))
+                except Exception:
+                    continue
+
+            if not real_roots:
+                return None
+
+            return {
+                "type": "equation_roots",
+                "variable": x,
+                "equation": equation_expr,
+                "roots": self._unique_numeric(real_roots),
+            }
+        except Exception:
+            return None
+
+    def _unique_numeric(self, values: list, tolerance: float = 1e-6) -> list:
+        """Deduplicate numeric list with tolerance."""
+        unique = []
+        for value in sorted(values):
+            if not any(abs(value - existing) <= tolerance for existing in unique):
+                unique.append(value)
+        return unique
+
+    def _extract_numeric_candidates(self, response: str) -> list:
+        """Extract numeric candidates from response text."""
+        numbers = re.findall(r"-?\d+(?:\.\d+)?", response)
+        parsed = []
+        for value in numbers:
+            try:
+                parsed.append(float(value))
+            except ValueError:
+                continue
+        return self._unique_numeric(parsed)
+
+    def _score_equation_roots(self, response: str, expected: dict) -> float:
+        """Score response by matching predicted real roots against expected root set."""
+        equation = expected.get("equation")
+        variable = expected.get("variable")
+        expected_roots = expected.get("roots", [])
+        if equation is None or variable is None or not expected_roots:
+            return self._heuristic_score(response)
+
+        candidates = self._extract_numeric_candidates(response)
+        valid_roots = []
+        for candidate in candidates:
+            try:
+                residual = float(abs(equation.subs(variable, candidate).evalf()))
+                if residual <= 1e-5:
+                    valid_roots.append(candidate)
+            except Exception:
+                continue
+
+        valid_roots = self._unique_numeric(valid_roots)
+        if not valid_roots:
+            return 0.0
+
+        matched = 0
+        unmatched_expected = expected_roots[:]
+        for candidate in valid_roots:
+            for idx, target in enumerate(unmatched_expected):
+                if abs(candidate - target) <= 1e-4:
+                    matched += 1
+                    unmatched_expected.pop(idx)
+                    break
+
+        precision = matched / max(len(valid_roots), 1)
+        recall = matched / max(len(expected_roots), 1)
+
+        if matched == len(expected_roots) and len(valid_roots) == len(expected_roots):
+            return 1.0
+
+        f1 = (2 * precision * recall) / max(precision + recall, 1e-9)
+        if f1 >= 0.9:
+            return 0.9
+        if f1 >= 0.7:
+            return 0.75
+        if f1 >= 0.5:
+            return 0.5
+        return 0.25

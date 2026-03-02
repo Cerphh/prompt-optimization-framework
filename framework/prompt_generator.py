@@ -7,6 +7,8 @@ from typing import List, Dict
 import random
 import json
 import os
+import hashlib
+import re
 
 class PromptGenerator:
     """
@@ -19,6 +21,10 @@ class PromptGenerator:
     
     def __init__(self):
         """Initialize the prompt generator and load example dataset from JSON."""
+        self.few_shot_min_examples = int(os.getenv("FEW_SHOT_MIN_EXAMPLES", "1"))
+        self.few_shot_max_examples = int(os.getenv("FEW_SHOT_MAX_EXAMPLES", "3"))
+        self.few_shot_diversity_lambda = float(os.getenv("FEW_SHOT_DIVERSITY_LAMBDA", "0.15"))
+
         # Get the path to the JSON file (in the same directory as this module)
         current_dir = os.path.dirname(os.path.abspath(__file__))
         json_path = os.path.join(current_dir, "example_problems.json")
@@ -151,6 +157,90 @@ class PromptGenerator:
                 found_keywords.add(keyword)
         
         return found_keywords
+
+    def _tokenize_text(self, text: str) -> set:
+        """Tokenize text into normalized lexical units for similarity scoring."""
+        return set(re.findall(r"[a-zA-Z0-9_]+", text.lower()))
+
+    def _lexical_jaccard(self, text_a: str, text_b: str) -> float:
+        """Compute lexical Jaccard similarity between two texts."""
+        tokens_a = self._tokenize_text(text_a)
+        tokens_b = self._tokenize_text(text_b)
+        if not tokens_a or not tokens_b:
+            return 0.0
+        intersection = len(tokens_a.intersection(tokens_b))
+        union = len(tokens_a.union(tokens_b))
+        return intersection / union if union else 0.0
+
+    def _estimate_problem_complexity(self, problem: str, subject: str) -> int:
+        """Estimate problem complexity (1=low, 2=medium, 3=high)."""
+        text = problem.lower()
+        complexity = 1
+
+        if len(problem.split()) >= 18:
+            complexity += 1
+
+        advanced_markers = [
+            "given that", "conditional", "system", "variance", "standard deviation",
+            "integral", "derivative", "limit", "chain rule", "product rule", "prove"
+        ]
+        if any(marker in text for marker in advanced_markers):
+            complexity += 1
+
+        if subject in {"statistics", "calculus"}:
+            complexity += 1
+
+        return max(1, min(3, complexity))
+
+    def _extract_equation_signature(self, text: str) -> Dict[str, bool]:
+        """Extract structural markers that help match equation-solving strategy."""
+        value = text.lower().replace("⁴", "^4").replace("³", "^3").replace("²", "^2")
+        has_equation = "=" in value
+        return {
+            "has_equation": has_equation,
+            "has_x4": "x^4" in value or "x4" in value,
+            "has_x3": "x^3" in value or "x3" in value,
+            "has_x2": "x^2" in value or "x2" in value,
+            "has_abs": "|" in value or "abs(" in value,
+            "has_system": "system" in value or ("," in value and has_equation),
+            "has_fractional": "/" in value,
+        }
+
+    def _detect_primary_intent(self, text: str) -> str:
+        """Detect primary solve intent from problem text."""
+        value = text.lower()
+        has_equation = "=" in value and bool(re.search(r"\b[a-z]\b|\d+[a-z]|[a-z]\d+", value))
+        if "conditional" in value or "given that" in value or "|" in value:
+            return "conditional_probability"
+        if "probability" in value or " p(" in value:
+            return "probability"
+        if "derivative" in value or "differentiate" in value:
+            return "derivative"
+        if "integral" in value or "integrate" in value or "∫" in value:
+            return "integral"
+        if "limit" in value or "lim(" in value or "lim" in value:
+            return "limit"
+        if "variance" in value:
+            return "variance"
+        if "mean" in value:
+            return "mean"
+        if "median" in value:
+            return "median"
+        if "mode" in value:
+            return "mode"
+        if "factor" in value:
+            return "factor"
+        if "expand" in value:
+            return "expand"
+        if "simplify" in value:
+            return "simplify"
+        if "system" in value:
+            return "system"
+        if has_equation and any(marker in value for marker in ["calculate", "find", "determine", "what is"]):
+            return "solve_equation"
+        if "solve" in value or "find x" in value or "solve for x" in value:
+            return "solve_equation"
+        return "general"
     
     def _score_example_relevance(self, example: dict, problem: str, problem_keywords: set) -> float:
         """
@@ -194,8 +284,63 @@ class PromptGenerator:
             if obj in problem_lower and obj in example_lower:
                 score += 0.2
                 break
+
+        # Lexical similarity between target problem and example problem
+        lexical_similarity = self._lexical_jaccard(problem_lower, example_lower)
+        score += lexical_similarity * 0.25
+
+        problem_intent = self._detect_primary_intent(problem_lower)
+        example_intent = self._detect_primary_intent(example_lower)
+        if problem_intent == example_intent:
+            score += 0.25
+        elif problem_intent != "general" and example_intent != "general":
+            score -= 0.12
+
+        # Equation-structure alignment (critical for solve-equation few-shot quality)
+        problem_sig = self._extract_equation_signature(problem_lower)
+        example_sig = self._extract_equation_signature(example_lower)
+
+        if problem_sig["has_equation"] and example_sig["has_equation"]:
+            score += 0.08
+
+            if problem_sig["has_x4"]:
+                if example_sig["has_x4"]:
+                    score += 0.35
+                else:
+                    score -= 0.25
+
+            if problem_sig["has_x3"] and example_sig["has_x3"]:
+                score += 0.2
+
+            if problem_sig["has_x2"] and example_sig["has_x2"]:
+                score += 0.12
+
+            if problem_sig["has_abs"] != example_sig["has_abs"]:
+                score -= 0.1
+
+            if problem_sig["has_system"] != example_sig["has_system"]:
+                score -= 0.08
+
+            if problem_sig["has_fractional"] and example_sig["has_fractional"]:
+                score += 0.08
+
+        # Strategy-pattern matching (boost examples that use same solving style)
+        strategy_pairs = [
+            ("given that", "given that"),
+            ("probability", "probability"),
+            ("derivative", "derivative"),
+            ("integral", "integral"),
+            ("limit", "limit"),
+            ("factor", "factor"),
+            ("system", "system"),
+            ("mean", "mean"),
+            ("variance", "variance"),
+        ]
+        for problem_marker, example_marker in strategy_pairs:
+            if problem_marker in problem_lower and example_marker in example_text:
+                score += 0.08
         
-        return min(score, 1.0)  # Cap at 1.0
+        return max(score, 0.0)
     
     def _select_relevant_examples(self, available_examples: list, problem: str, 
                                   num_examples: int, seed: int) -> list:
@@ -238,12 +383,56 @@ class PromptGenerator:
         if len(highly_relevant) >= num_examples:
             # Use a seeded random selection from highly relevant examples
             # This maintains determinism while preferring relevant ones
-            rng = random.Random(seed)
-            return rng.sample(highly_relevant[:min(len(highly_relevant), num_examples * 3)], 
-                            num_examples)
+            candidate_pool = highly_relevant[:min(len(highly_relevant), num_examples * 4)]
+            if len(candidate_pool) <= num_examples:
+                return candidate_pool
+            return self._select_diverse_examples(candidate_pool, problem, num_examples)
         else:
             # Fall back to top-ranked examples by relevance
-            return [ex for _, ex in scored_examples[:num_examples]]
+            top_candidates = [ex for _, ex in scored_examples[:max(num_examples * 3, num_examples)]]
+            if len(top_candidates) <= num_examples:
+                return top_candidates
+            return self._select_diverse_examples(top_candidates, problem, num_examples)
+
+    def _select_diverse_examples(self, candidates: list, problem: str, num_examples: int) -> list:
+        """
+        Select examples using relevance-diversity tradeoff.
+
+        Greedy MMR-like selection: maximize relevance while reducing redundancy.
+        """
+        if num_examples >= len(candidates):
+            return candidates
+
+        selected = []
+        remaining = candidates[:]
+
+        while remaining and len(selected) < num_examples:
+            best_example = None
+            best_score = float("-inf")
+
+            for candidate in remaining:
+                base_relevance = self._score_example_relevance(
+                    candidate,
+                    problem,
+                    self._detect_problem_keywords(problem),
+                )
+                if not selected:
+                    mmr_score = base_relevance
+                else:
+                    redundancy = max(
+                        self._lexical_jaccard(candidate.get("problem", ""), chosen.get("problem", ""))
+                        for chosen in selected
+                    )
+                    mmr_score = base_relevance - (self.few_shot_diversity_lambda * redundancy)
+
+                if mmr_score > best_score:
+                    best_score = mmr_score
+                    best_example = candidate
+
+            selected.append(best_example)
+            remaining = [item for item in remaining if item is not best_example]
+
+        return selected
     
     def generate_few_shot(self, problem: str, subject: str = "general", num_examples: int = None) -> str:
         """
@@ -263,8 +452,15 @@ class PromptGenerator:
 
         # Auto-determine number of examples based on subject if not specified
         if num_examples is None:
-            # Statistics and calculus benefit more from multiple examples
-            num_examples = 2 if subject in ['statistics', 'calculus'] else 1
+            complexity = self._estimate_problem_complexity(normalized_problem, subject)
+            if complexity >= 3:
+                num_examples = min(self.few_shot_max_examples, 3)
+            elif complexity == 2:
+                num_examples = min(self.few_shot_max_examples, 2)
+            else:
+                num_examples = self.few_shot_min_examples
+
+        num_examples = max(self.few_shot_min_examples, min(num_examples, self.few_shot_max_examples))
         
         # Get examples from the specified subject, default to general if not found
         if subject not in self.example_dataset:
@@ -278,9 +474,8 @@ class PromptGenerator:
             # Return zero-shot if no examples
             return f"{problem}"
         
-        # Use problem text as seed for deterministic selection
-        # Same problem always gets same examples
-        seed = hash(normalized_problem) % (2**32)
+        # Use stable hash for deterministic selection across process restarts
+        seed = int(hashlib.sha256(normalized_problem.encode("utf-8")).hexdigest()[:8], 16)
         
         # Select relevant examples (smart selection based on problem content)
         num_to_select = min(num_examples, len(available_examples))
@@ -295,7 +490,7 @@ class PromptGenerator:
         ])
         
         return (
-            "Solve step-by-step, be concise.\n\n"
+            "Follow the same step-by-step style shown in the examples. Be concise and end with a clear final answer.\n\n"
             f"{examples_text}\n\n"
             f"Q: {normalized_problem}\n"
             "A:"

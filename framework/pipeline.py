@@ -11,6 +11,7 @@ Implements:
 """
 
 from typing import Dict, List, Any, Optional
+import hashlib
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from .prompt_generator import PromptGenerator
 from .model_runner import ModelRunner
@@ -124,6 +125,131 @@ class BenchmarkPipeline:
             "comparison": self._generate_comparison(results),
             "weights": self.weights
         }
+
+    def benchmark_stream_events(
+        self,
+        problem: str,
+        ground_truth: str = None,
+        subject: str = "general",
+    ):
+        """
+        Stream benchmark progress and partial output events.
+
+        Emits event dicts:
+        - status: progress updates
+        - token: incremental response text for the preview technique
+        - complete: final benchmark payload
+        - error: terminal error event
+        """
+        prompts = self.prompt_generator.generate_all_techniques(problem, subject=subject)
+        if not prompts:
+            yield {"type": "error", "error": "No prompting techniques available."}
+            return
+
+        techniques = sorted(prompts.keys())
+        preview_technique = techniques[0]
+        remaining_techniques = [t for t in techniques if t != preview_technique]
+
+        yield {
+            "type": "status",
+            "message": f"Streaming response for {preview_technique}...",
+            "technique": preview_technique,
+        }
+
+        results: Dict[str, Dict[str, Any]] = {}
+
+        with ThreadPoolExecutor(max_workers=max(1, len(remaining_techniques))) as executor:
+            future_to_technique = {
+                executor.submit(
+                    self._evaluate_single_prompt,
+                    technique_name=technique_name,
+                    prompt=prompts[technique_name],
+                    problem=problem,
+                    ground_truth=ground_truth,
+                ): technique_name
+                for technique_name in remaining_techniques
+            }
+
+            model_result = None
+            for event in self.model_runner.run_stream(prompts[preview_technique]):
+                event_type = event.get("type")
+                if event_type == "token":
+                    yield {
+                        "type": "token",
+                        "technique": preview_technique,
+                        "content": event.get("content", ""),
+                    }
+                elif event_type == "done":
+                    model_result = event.get("result")
+                elif event_type == "error":
+                    model_result = {
+                        "response": "",
+                        "success": False,
+                        "error": event.get("error", "Unknown stream error"),
+                        "metrics": {
+                            "elapsed_time": 0,
+                            "prompt_tokens": 0,
+                            "completion_tokens": 0,
+                            "total_tokens": 0,
+                        },
+                    }
+
+            if not model_result or not model_result.get("success", False):
+                results[preview_technique] = {
+                    "technique": preview_technique,
+                    "success": False,
+                    "error": (model_result or {}).get("error", "Streaming finished without a final model result."),
+                    "prompt": prompts[preview_technique],
+                    "scores": {
+                        "accuracy": 0.0,
+                        "completeness": 0.0,
+                        "efficiency": 0.0,
+                        "overall": 0.0,
+                    },
+                }
+            else:
+                results[preview_technique] = self._build_scored_result(
+                    technique_name=preview_technique,
+                    prompt=prompts[preview_technique],
+                    model_result=model_result,
+                    problem=problem,
+                    ground_truth=ground_truth,
+                )
+
+            yield {
+                "type": "status",
+                "message": "Finalizing remaining techniques...",
+            }
+
+            for future in as_completed(future_to_technique):
+                technique_name = future_to_technique[future]
+                try:
+                    results[technique_name] = future.result()
+                except Exception as e:
+                    results[technique_name] = {
+                        "technique": technique_name,
+                        "success": False,
+                        "error": str(e),
+                        "prompt": prompts[technique_name],
+                        "scores": {
+                            "accuracy": 0.0,
+                            "completeness": 0.0,
+                            "efficiency": 0.0,
+                            "overall": 0.0,
+                        },
+                    }
+
+        best_technique = self._greedy_select(results, problem)
+        final_result = {
+            "problem": problem,
+            "ground_truth": ground_truth,
+            "all_results": results,
+            "best_technique": best_technique,
+            "best_result": results[best_technique],
+            "comparison": self._generate_comparison(results),
+            "weights": self.weights,
+        }
+        yield {"type": "complete", "result": final_result}
     
     def _evaluate_single_prompt(self, technique_name: str, prompt: str,
                                 problem: str, ground_truth: str = None) -> Dict[str, Any]:
@@ -156,21 +282,35 @@ class BenchmarkPipeline:
                 }
             }
         
+        return self._build_scored_result(
+            technique_name=technique_name,
+            prompt=prompt,
+            model_result=model_result,
+            problem=problem,
+            ground_truth=ground_truth,
+        )
+
+    def _build_scored_result(
+        self,
+        technique_name: str,
+        prompt: str,
+        model_result: Dict[str, Any],
+        problem: str,
+        ground_truth: str = None,
+    ) -> Dict[str, Any]:
         response = model_result["response"]
         metrics = model_result["metrics"]
-        
-        # Calculate scores
+
         accuracy = self.accuracy_scorer.score(response, ground_truth, problem)
         completeness = self.completeness_scorer.score(response, problem)
         efficiency = self.efficiency_scorer.score(response, metrics)
-        
-        # Calculate weighted overall score
+
         overall = (
             accuracy * self.weights['accuracy'] +
             completeness * self.weights['completeness'] +
             efficiency * self.weights['efficiency']
         )
-        
+
         return {
             "technique": technique_name,
             "success": True,
@@ -217,10 +357,9 @@ class BenchmarkPipeline:
                 best_technique = technique_name
                 best_score = overall
             elif overall == best_score:
-                # Exact tie - use problem hash for deterministic selection
-                problem_hash = hash(problem + technique_name) % 100
-                current_hash = hash(problem + best_technique) % 100
-                # Higher hash wins (deterministic)
+                # Exact tie - deterministic hash (stable across process restarts)
+                problem_hash = hashlib.sha256(f"{problem}|{technique_name}".encode("utf-8")).hexdigest()
+                current_hash = hashlib.sha256(f"{problem}|{best_technique}".encode("utf-8")).hexdigest()
                 if problem_hash > current_hash:
                     best_technique = technique_name
         

@@ -54,6 +54,9 @@ export default function Home() {
   const [validationError, setValidationError] = useState('')
   const [savingToDb, setSavingToDb] = useState(false)
   const [saveStatus, setSaveStatus] = useState('')
+  const [streamingResponse, setStreamingResponse] = useState('')
+  const [streamingTechnique, setStreamingTechnique] = useState('')
+  const [streamingStatus, setStreamingStatus] = useState('')
 
   // Check API health
   useEffect(() => {
@@ -149,6 +152,9 @@ export default function Home() {
     setError('')
     setSaveStatus('')
     setResult(null)
+    setStreamingResponse('')
+    setStreamingTechnique('')
+    setStreamingStatus('Initializing benchmark...')
 
     try {
       // Check connection first
@@ -156,7 +162,7 @@ export default function Home() {
         throw new Error('⚠️ System offline: Make sure Ollama is running (ollama serve) and the backend API is started')
       }
 
-      const response = await fetch('http://localhost:8000/benchmark', {
+      const response = await fetch('http://localhost:8000/benchmark/stream', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -180,8 +186,56 @@ export default function Home() {
         }
       }
 
-      const data = await response.json()
-      setResult(data)
+      if (!response.body) {
+        throw new Error('Streaming not supported by this browser/session')
+      }
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let finalResult: BenchmarkResult | null = null
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          if (!line.trim()) continue
+
+          let event: any
+          try {
+            event = JSON.parse(line)
+          } catch {
+            continue
+          }
+
+          if (event.type === 'status') {
+            if (event.technique) {
+              setStreamingTechnique(event.technique)
+            }
+            setStreamingStatus(event.message || 'Running benchmark...')
+          } else if (event.type === 'token') {
+            if (event.technique) {
+              setStreamingTechnique(event.technique)
+            }
+            setStreamingResponse((prev) => prev + (event.content || ''))
+          } else if (event.type === 'complete') {
+            finalResult = event.result
+          } else if (event.type === 'error') {
+            throw new Error(`🔴 Server Error: ${event.error || 'Unknown streaming error'}`)
+          }
+        }
+      }
+
+      if (!finalResult) {
+        throw new Error('Benchmark stream ended before returning final result')
+      }
+
+      setResult(finalResult)
       setSaveStatus('Not saved yet. Click Save to DB.')
     } catch (err) {
       if (err instanceof TypeError && err.message.includes('fetch')) {
@@ -354,8 +408,24 @@ export default function Home() {
                 <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
                 <p className="text-gray-600 text-lg">Running benchmark...</p>
                 <p className="text-gray-500 text-sm mt-2">
-                  This may take a few minutes
+                  {streamingStatus || 'This may take a few minutes'}
                 </p>
+                {streamingResponse && (
+                  <div className="mt-6 text-left">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-sm font-semibold text-gray-800">Live Output</h3>
+                      <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                        {streamingTechnique || 'preview'}
+                      </span>
+                    </div>
+                    <div className="p-4 bg-green-50 rounded border border-green-200 max-h-64 overflow-y-auto">
+                      <pre className="text-sm text-gray-900 whitespace-pre-wrap">
+                        {streamingResponse}
+                        <span className="animate-pulse">▍</span>
+                      </pre>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

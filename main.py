@@ -4,9 +4,12 @@ Research Benchmarking API for comparative prompt evaluation.
 """
 
 import os
+import json
+import hashlib
 from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, List, Any, Dict
 from framework.pipeline import BenchmarkPipeline
@@ -67,17 +70,63 @@ def _apply_db_based_selection(result: Dict[str, Any], domain: str) -> Dict[str, 
         available_techniques=successful_techniques,
     )
 
-    if selection.get("success"):
+    min_samples = int(os.getenv("DB_MIN_SAMPLES_PER_TECHNIQUE", "5"))
+    min_gap = float(os.getenv("DB_MIN_AVG_SCORE_GAP", "0.03"))
+    exploration_rate = float(os.getenv("DB_EXPLORATION_RATE", "0.15"))
+
+    ranking = selection.get("ranking", []) if isinstance(selection, dict) else []
+    can_use_db = bool(selection.get("success"))
+    db_decision_reason = "ok"
+
+    if can_use_db and len(ranking) >= 2:
+        top = ranking[0]
+        second = ranking[1]
+        top_samples = int(top.get("samples", 0))
+        second_samples = int(second.get("samples", 0))
+        score_gap = float(top.get("average_overall", 0.0)) - float(second.get("average_overall", 0.0))
+
+        if min(top_samples, second_samples) < min_samples:
+            can_use_db = False
+            db_decision_reason = "insufficient_samples"
+        elif score_gap < min_gap:
+            can_use_db = False
+            db_decision_reason = "low_confidence_gap"
+
+    if can_use_db and exploration_rate > 0:
+        exploration_key = f"{domain}|{result.get('problem', '')}"
+        bucket = int(hashlib.sha256(exploration_key.encode("utf-8")).hexdigest()[:8], 16)
+        ratio = bucket / 0xFFFFFFFF
+        if ratio < exploration_rate:
+            can_use_db = False
+            db_decision_reason = "exploration_runtime"
+
+    if can_use_db:
         best_technique = selection["best_technique"]
         if best_technique in result.get("all_results", {}):
             result["best_technique"] = best_technique
             result["best_result"] = result["all_results"][best_technique]
             result["selection_source"] = "db_history"
-            result["selection_details"] = selection
+            result["selection_details"] = {
+                **selection,
+                "db_decision_reason": db_decision_reason,
+                "db_confidence_rules": {
+                    "min_samples_per_technique": min_samples,
+                    "min_average_gap": min_gap,
+                    "exploration_rate": exploration_rate,
+                },
+            }
             return result
 
     result["selection_source"] = "runtime_scores"
-    result["selection_details"] = selection
+    result["selection_details"] = {
+        **selection,
+        "db_decision_reason": db_decision_reason,
+        "db_confidence_rules": {
+            "min_samples_per_technique": min_samples,
+            "min_average_gap": min_gap,
+            "exploration_rate": exploration_rate,
+        },
+    }
     return result
 
 
@@ -167,6 +216,38 @@ async def run_benchmark(request: BenchmarkRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/benchmark/stream", tags=["Benchmarking"])
+async def run_benchmark_stream(request: BenchmarkRequest):
+    """
+    Stream benchmark progress and model output in real time (NDJSON).
+
+    Event types:
+    - status
+    - token
+    - complete
+    - error
+    """
+    def event_stream():
+        try:
+            for event in pipeline.benchmark_stream_events(
+                problem=request.problem,
+                ground_truth=request.ground_truth,
+                subject=request.subject,
+            ):
+                if event.get("type") == "complete":
+                    result = event.get("result", {})
+                    result = _apply_db_based_selection(
+                        result=result,
+                        domain=request.subject or "general",
+                    )
+                    event["result"] = result
+                yield json.dumps(event) + "\n"
+        except Exception as e:
+            yield json.dumps({"type": "error", "error": str(e)}) + "\n"
+
+    return StreamingResponse(event_stream(), media_type="application/x-ndjson")
 
 
 @app.get("/techniques", tags=["Info"])
