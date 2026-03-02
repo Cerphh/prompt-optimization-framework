@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 
 interface Technique {
   technique: string
@@ -36,6 +36,10 @@ interface BenchmarkResult {
   all_results: Record<string, TechniqueResult>
   comparison: Technique[]
   all_responses: Record<string, { response: string; score: number }>
+  selection_source?: 'db_history' | 'runtime_scores'
+  selection_details?: {
+    total_samples?: number
+  }
   storage?: {
     success: boolean
     document_id?: string
@@ -46,6 +50,8 @@ interface BenchmarkResult {
 export default function Home() {
   const [problem, setProblem] = useState('')
   const [subject, setSubject] = useState('algebra')
+  const [difficulty, setDifficulty] = useState('basic')
+  const [difficultyManualOverride, setDifficultyManualOverride] = useState(false)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<BenchmarkResult | null>(null)
   const [error, setError] = useState('')
@@ -106,8 +112,51 @@ export default function Home() {
     return 'algebra'
   }
 
+  const detectDifficulty = (text: string, detectedSubject: string): string => {
+    const lowerText = text.toLowerCase()
+
+    const advancedKeywords = [
+      'differentiate', 'derivative', 'integrate', 'integral', 'limit', 'optimization',
+      'proof', 'prove', 'inflection', 'concavity', 'series', 'partial derivative'
+    ]
+    const intermediateKeywords = [
+      'system of equations', 'quadratic', 'factor', 'inequality', 'probability',
+      'permutation', 'combination', 'standard deviation', 'variance', 'word problem'
+    ]
+
+    let score = 0
+
+    if (detectedSubject === 'calculus') score += 3
+    if (detectedSubject === 'statistics') score += 1
+
+    if (advancedKeywords.some((keyword) => lowerText.includes(keyword))) score += 3
+    if (intermediateKeywords.some((keyword) => lowerText.includes(keyword))) score += 2
+
+    const operatorCount = (text.match(/[+\-*/^=]/g) || []).length
+    if (operatorCount >= 6) score += 2
+    else if (operatorCount >= 3) score += 1
+
+    const numberCount = (text.match(/\d+/g) || []).length
+    if (numberCount >= 6) score += 1
+
+    const wordCount = text.trim().split(/\s+/).filter(Boolean).length
+    if (wordCount >= 25) score += 1
+
+    if (score >= 5) return 'advanced'
+    if (score >= 2) return 'intermediate'
+    return 'basic'
+  }
+
   const handleProblemChange = (text: string) => {
     setProblem(text)
+
+    if (!text.trim()) {
+      setSubject('algebra')
+      setDifficultyManualOverride(false)
+      if (!difficultyManualOverride) {
+        setDifficulty('basic')
+      }
+    }
     
     // Input validation
     if (text.length > 0 && text.length < 10) {
@@ -120,6 +169,11 @@ export default function Home() {
     if (text.length > 5) {
       const detectedSubject = detectSubject(text)
       setSubject(detectedSubject)
+
+      if (!difficultyManualOverride) {
+        const detectedDifficulty = detectDifficulty(text, detectedSubject)
+        setDifficulty(detectedDifficulty)
+      }
     }
   }
 
@@ -164,6 +218,7 @@ export default function Home() {
         body: JSON.stringify({
           problem,
           subject,
+          difficulty,
         }),
       })
 
@@ -211,6 +266,7 @@ export default function Home() {
           source: 'frontend_manual_save',
           metadata: {
             subject,
+            difficulty,
           },
         }),
       })
@@ -285,6 +341,28 @@ export default function Home() {
 
               <div className="mb-4">
                 <label
+                  htmlFor="difficulty"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Difficulty Level <span className="text-xs text-gray-500">(auto-detected, override allowed)</span>
+                </label>
+                <select
+                  id="difficulty"
+                  value={difficulty}
+                  onChange={(e) => {
+                    setDifficulty(e.target.value)
+                    setDifficultyManualOverride(true)
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                >
+                  <option value="basic">Basic</option>
+                  <option value="intermediate">Intermediate</option>
+                  <option value="advanced">Advanced</option>
+                </select>
+              </div>
+
+              <div className="mb-4">
+                <label
                   htmlFor="problem"
                   className="block text-sm font-medium text-gray-700 mb-2"
                 >
@@ -294,6 +372,7 @@ export default function Home() {
                   id="problem"
                   value={problem}
                   onChange={(e) => handleProblemChange(e.target.value)}
+                  disabled={loading}
                   className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 text-gray-900 ${
                     validationError ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'
                   }`}
@@ -486,9 +565,8 @@ export default function Home() {
                       const techResult = result.all_results[tech.technique]
                       const isExpanded = expandedTechnique === tech.technique
                       return (
-                        <>
+                        <Fragment key={tech.technique}>
                           <tr
-                            key={tech.technique}
                             className={`border-b border-gray-100 ${
                               isBest ? 'bg-blue-50 font-semibold' : 'hover:bg-gray-50'
                             }`}
@@ -538,7 +616,7 @@ export default function Home() {
                               </td>
                             </tr>
                           )}
-                        </>
+                        </Fragment>
                       );
                     })}
                   </tbody>

@@ -54,7 +54,7 @@ firestore_store = FirestoreStore(
 )
 
 
-def _apply_db_based_selection(result: Dict[str, Any], domain: str) -> Dict[str, Any]:
+def _apply_db_based_selection(result: Dict[str, Any], domain: str, difficulty: str) -> Dict[str, Any]:
     """Apply DB-based greedy selection from historical Firestore results."""
     successful_techniques = [
         technique
@@ -64,6 +64,7 @@ def _apply_db_based_selection(result: Dict[str, Any], domain: str) -> Dict[str, 
 
     selection = firestore_store.get_best_technique_by_domain(
         domain=domain,
+        difficulty=difficulty,
         available_techniques=successful_techniques,
     )
 
@@ -86,6 +87,7 @@ class BenchmarkRequest(BaseModel):
     problem: str
     ground_truth: Optional[str] = None
     subject: Optional[str] = "algebra"  # algebra, statistics, or calculus
+    difficulty: Optional[str] = "basic"  # basic, intermediate, advanced
 
 
 class WeightsUpdate(BaseModel):
@@ -154,6 +156,7 @@ async def run_benchmark(request: BenchmarkRequest):
         result = _apply_db_based_selection(
             result=result,
             domain=request.subject or "general",
+            difficulty=request.difficulty or "basic",
         )
         
         if not result["best_result"]["success"]:
@@ -280,6 +283,7 @@ async def benchmark_dataset_problem(problem_id: int):
         result = _apply_db_based_selection(
             result=result,
             domain=problem_data.get("category", "general"),
+            difficulty="basic",
         )
         
         if not result["best_result"]["success"]:
