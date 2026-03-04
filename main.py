@@ -57,6 +57,28 @@ firestore_store = FirestoreStore(
 )
 
 
+def _persist_and_attach_storage(
+    result: Dict[str, Any],
+    source: str,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Persist benchmark result to Firestore and attach storage status to result payload."""
+    storage = firestore_store.save_benchmark_result(
+        benchmark_result=result,
+        source=source,
+        metadata=metadata or {},
+    )
+    result["storage"] = storage
+
+    if firestore_store.required and not storage.get("success", False):
+        raise HTTPException(
+            status_code=500,
+            detail=f"Firestore write failed: {storage.get('error', 'Unknown error')}",
+        )
+
+    return result
+
+
 def _apply_db_based_selection(result: Dict[str, Any], domain: str, difficulty: str) -> Dict[str, Any]:
     """Apply DB-based greedy selection from historical Firestore results."""
     successful_techniques = [
@@ -213,6 +235,15 @@ async def run_benchmark(request: BenchmarkRequest):
                 status_code=500,
                 detail=result["best_result"].get("error", "Benchmark failed")
             )
+
+        result = _persist_and_attach_storage(
+            result=result,
+            source="benchmark_api",
+            metadata={
+                "subject": request.subject,
+                "difficulty": request.difficulty,
+            },
+        )
         
         return result
     except HTTPException:
@@ -245,6 +276,14 @@ async def run_benchmark_stream(request: BenchmarkRequest):
                         result=result,
                         domain=request.subject or "general",
                         difficulty=request.difficulty or "basic",
+                    )
+                    result = _persist_and_attach_storage(
+                        result=result,
+                        source="benchmark_stream_api",
+                        metadata={
+                            "subject": request.subject,
+                            "difficulty": request.difficulty,
+                        },
                     )
                     event["result"] = result
                 yield json.dumps(event) + "\n"
@@ -373,6 +412,15 @@ async def benchmark_dataset_problem(problem_id: int):
                 status_code=500,
                 detail=result["best_result"].get("error", "Benchmark failed")
             )
+
+        result = _persist_and_attach_storage(
+            result=result,
+            source="benchmark_dataset_api",
+            metadata={
+                "category": problem_data.get("category", "general"),
+                "difficulty": "basic",
+            },
+        )
         
         return result
     except HTTPException:

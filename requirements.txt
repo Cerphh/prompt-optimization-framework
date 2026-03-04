@@ -7,3 +7,4 @@ sympy
 requests
 firebase-admin
 python-dotenv
+pytest

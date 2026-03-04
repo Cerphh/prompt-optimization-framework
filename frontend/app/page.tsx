@@ -20,6 +20,10 @@ interface TechniqueResult {
     total_tokens: number
     prompt_tokens: number
     completion_tokens: number
+    done_reason?: string
+    truncated?: boolean
+    continuation_rounds?: number
+    continuation_error?: string | null
   }
   scores: {
     accuracy: number
@@ -384,6 +388,16 @@ export default function Home() {
 
   /* Derived data for the technique-details modal */
   const expandedResult = expandedTechnique ? result?.all_results[expandedTechnique] : null
+  const bestMetrics = result?.best_result?.metrics
+  const bestContinuationRounds = bestMetrics?.continuation_rounds ?? 0
+  const bestWasExtended = bestContinuationRounds > 0
+  const bestStillTruncated = bestMetrics?.truncated === true
+
+  const expandedMetrics = expandedResult?.metrics
+  const expandedContinuationRounds = expandedMetrics?.continuation_rounds ?? 0
+  const expandedWasExtended = expandedContinuationRounds > 0
+  const expandedStillTruncated = expandedMetrics?.truncated === true
+
   const isDisabled = loading || !!validationError || problem.length < 10
 
   /* Whether we're in "results" mode (sidebar + right panel) */
@@ -804,6 +818,21 @@ export default function Home() {
                   )
                 })()}
 
+                {(bestWasExtended || bestStillTruncated) && (
+                  <div
+                    className="px-6 py-2 text-xs"
+                    style={{
+                      background: bestStillTruncated ? '#fef2f2' : '#eff6ff',
+                      borderBottom: `1px solid ${bestStillTruncated ? '#fecaca' : '#bfdbfe'}`,
+                      color: bestStillTruncated ? '#dc2626' : 'var(--blue)',
+                    }}
+                  >
+                    {bestStillTruncated
+                      ? '⚠ Response may still be incomplete due model token limit. Try increasing MODEL_NUM_PREDICT or MODEL_MAX_CONTINUE_ROUNDS.'
+                      : `↻ Long-answer safeguard used: ${bestContinuationRounds} continuation round${bestContinuationRounds === 1 ? '' : 's'} to finish the response.`}
+                  </div>
+                )}
+
                 {/* Body */}
                 <div className="p-6 space-y-6">
                   {/* Prompt Used */}
@@ -1000,6 +1029,21 @@ export default function Home() {
             </div>
 
             <div className="p-6 space-y-6">
+              {(expandedWasExtended || expandedStillTruncated) && (
+                <div
+                  className="px-3 py-2 rounded text-xs"
+                  style={{
+                    background: expandedStillTruncated ? '#fef2f2' : '#eff6ff',
+                    border: `1px solid ${expandedStillTruncated ? '#fecaca' : '#bfdbfe'}`,
+                    color: expandedStillTruncated ? '#dc2626' : 'var(--blue)',
+                  }}
+                >
+                  {expandedStillTruncated
+                    ? '⚠ This technique output may still be incomplete due token limits.'
+                    : `↻ This technique used ${expandedContinuationRounds} continuation round${expandedContinuationRounds === 1 ? '' : 's'} to complete output.`}
+                </div>
+              )}
+
               {/* Performance */}
               <div>
                 <p

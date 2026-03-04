@@ -1,5 +1,6 @@
 import requests
 import json
+import sys
 
 # Test the benchmark endpoint
 url = "http://localhost:8000/benchmark"
@@ -9,10 +10,18 @@ data = {
 }
 
 try:
-    response = requests.post(url, json=data)
+    response = requests.post(url, json=data, timeout=20)
     print(f"Status: {response.status_code}")
-    print(f"Response: {json.dumps(response.json(), indent=2)}")
-except Exception as e:
+
+    try:
+        print(f"Response: {json.dumps(response.json(), indent=2)}")
+    except ValueError:
+        print(f"Response text: {response.text}")
+
+    response.raise_for_status()
+except requests.exceptions.RequestException as e:
     print(f"Error: {e}")
-    if hasattr(e, 'response'):
-        print(f"Response text: {e.response.text}")
+    response = getattr(e, "response", None)
+    if response is not None:
+        print(f"Response text: {response.text}")
+    sys.exit(1)

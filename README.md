@@ -83,6 +83,18 @@ pip install -r requirements.txt
 
 ### 3.1 Configure Firebase Firestore (for result storage)
 
+Start by copying the example env file:
+
+```bash
+cp .env.example .env
+```
+
+On Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
 You can store these settings in a `.env` file at the project root (recommended):
 
 ```env
@@ -141,6 +153,22 @@ Notes:
 - `ENABLE_FIRESTORE=true` (default) enables writes.
 - `FIRESTORE_REQUIRED=true` makes benchmark requests fail if Firestore write fails.
 
+### 3.2 Model Completion Settings (avoid cut-off answers)
+
+Optional model generation settings:
+
+```bash
+export MODEL_NUM_PREDICT=1024
+export MODEL_AUTO_CONTINUE_ON_LENGTH=true
+export MODEL_MAX_CONTINUE_ROUNDS=2
+export MODEL_CONTINUATION_TAIL_CHARS=1200
+```
+
+Notes:
+- `MODEL_NUM_PREDICT` sets the base maximum completion tokens per generation call.
+- If the model still ends with `done_reason=length`, auto-continuation appends additional rounds.
+- Increase `MODEL_MAX_CONTINUE_ROUNDS` for very long reasoning tasks.
+
 ### 4. Install Ollama & Model
 
 ```bash
@@ -158,6 +186,14 @@ python test_pipeline.py
 
 This runs a comprehensive benchmark on a sample problem, evaluating both prompting techniques and displaying comparative results.
 
+### Automated Tests
+
+```bash
+pytest
+```
+
+Pytest is configured to run deterministic tests from the `tests/` folder without requiring Ollama.
+
 ### API Server
 
 ```bash
@@ -166,7 +202,7 @@ uvicorn main:app --reload
 
 Visit: http://127.0.0.1:8000/docs
 
-Each benchmark response now includes a `storage` object with Firestore write status and document ID.
+Benchmark responses from `/benchmark`, `/benchmark/dataset/{problem_id}`, and the final `complete` event from `/benchmark/stream` include a `storage` object with Firestore write status and document ID (when available). If Firestore is disabled or unavailable, the same object includes failure details.
 
 ### Programmatic Usage
 
