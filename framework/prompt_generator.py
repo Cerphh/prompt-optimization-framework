@@ -24,6 +24,7 @@ class PromptGenerator:
         self.few_shot_min_examples = int(os.getenv("FEW_SHOT_MIN_EXAMPLES", "1"))
         self.few_shot_max_examples = int(os.getenv("FEW_SHOT_MAX_EXAMPLES", "3"))
         self.few_shot_diversity_lambda = float(os.getenv("FEW_SHOT_DIVERSITY_LAMBDA", "0.15"))
+        self.few_shot_min_relevance = float(os.getenv("FEW_SHOT_MIN_RELEVANCE", "0.35"))
 
         # Get the path to the JSON file (in the same directory as this module)
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -62,17 +63,62 @@ class PromptGenerator:
             }
     
     
-    def generate_zero_shot(self, problem: str) -> str:
+    def _get_anchor_example(self, problem: str, subject: str = "general") -> Dict:
+        """Get the best-matching example to anchor prompt style without full few-shot context."""
+        normalized_problem = self._normalize_problem_text(problem)
+        problem_keywords = self._detect_problem_keywords(normalized_problem)
+
+        candidate_subjects = []
+        if subject in self.example_dataset:
+            candidate_subjects.append(subject)
+        if "general" in self.example_dataset and "general" not in candidate_subjects:
+            candidate_subjects.append("general")
+
+        if not candidate_subjects:
+            candidate_subjects = list(self.example_dataset.keys())
+
+        best_example = None
+        best_score = float("-inf")
+        best_subject = subject if subject in self.example_dataset else "general"
+
+        for subj in candidate_subjects:
+            for example in self.example_dataset.get(subj, []):
+                score = self._score_example_relevance(example, normalized_problem, problem_keywords)
+                if score > best_score:
+                    best_score = score
+                    best_example = example
+                    best_subject = subj
+
+        return {
+            "example": best_example,
+            "score": max(best_score, 0.0) if best_example else 0.0,
+            "subject": best_subject,
+        }
+
+    def generate_zero_shot(self, problem: str, subject: str = "general") -> str:
         """
-        Generate zero-shot prompt: direct question without context.
+        Generate bank-anchored zero-shot prompt: no worked examples, but style anchored
+        to a related example from the example bank.
         
         Args:
             problem: The math problem
+            subject: Subject category used for selecting a style anchor
             
         Returns:
             Zero-shot prompt
         """
-        return f"{problem}"
+        normalized_problem = self._normalize_problem_text(problem)
+        anchor = self._get_anchor_example(normalized_problem, subject=subject)
+        anchor_example = anchor.get("example")
+
+        if not anchor_example:
+            return f"Q: {normalized_problem}\nA:"
+
+        return (
+            "Solve the next question clearly, step-by-step, and end with a concise final answer.\n\n"
+            f"Q: {normalized_problem}\n"
+            "A:"
+        )
 
     def _normalize_problem_text(self, problem: str) -> str:
         """Normalize user input to avoid duplicated Q:/A: wrappers in prompts."""
@@ -482,6 +528,17 @@ class PromptGenerator:
         selected_examples = self._select_relevant_examples(
             available_examples, normalized_problem, num_to_select, seed
         )
+
+        # If selected examples are not sufficiently related, fall back to bank-anchored zero-shot.
+        # This prevents unrelated few-shot examples from hurting quality.
+        problem_keywords = self._detect_problem_keywords(normalized_problem)
+        selected_scores = [
+            self._score_example_relevance(ex, normalized_problem, problem_keywords)
+            for ex in selected_examples
+        ]
+        best_relevance = max(selected_scores) if selected_scores else 0.0
+        if best_relevance < self.few_shot_min_relevance:
+            return self.generate_zero_shot(normalized_problem, subject=subject)
         
         # Format examples (concise format for speed)
         examples_text = "\n\n".join([
@@ -508,7 +565,7 @@ class PromptGenerator:
             Dictionary mapping technique name to prompt
         """
         return {
-            "zero_shot": self.generate_zero_shot(problem),
+            "zero_shot": self.generate_zero_shot(problem, subject=subject),
             "few_shot": self.generate_few_shot(problem, subject=subject)
         }
     
