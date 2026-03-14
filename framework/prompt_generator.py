@@ -34,9 +34,9 @@ class PromptGenerator:
         try:
             with open(json_path, 'r', encoding='utf-8') as f:
                 self.example_dataset = json.load(f)
-            print(f"✓ Loaded example dataset from {json_path}")
+            print(f"Loaded example dataset from {json_path}")
         except FileNotFoundError:
-            print(f"⚠ Warning: Could not find {json_path}, using minimal fallback examples")
+            print(f"Warning: Could not find {json_path}, using minimal fallback examples")
             # Fallback to minimal examples if JSON file not found
             self.example_dataset = {
                 "general": [
@@ -54,7 +54,7 @@ class PromptGenerator:
                 ]
             }
         except json.JSONDecodeError as e:
-            print(f"⚠ Warning: Error parsing JSON file: {e}")
+            print(f"Warning: Error parsing JSON file: {e}")
             # Use minimal fallback if JSON is malformed
             self.example_dataset = {
                 "general": [
@@ -115,7 +115,7 @@ class PromptGenerator:
             return f"Q: {normalized_problem}\nA:"
 
         return (
-            "Solve the next question clearly, step-by-step, and end with a concise final answer.\n\n"
+            "Solve the following math problem and end with a concise final answer.\n\n"
             f"Q: {normalized_problem}\n"
             "A:"
         )
@@ -256,6 +256,18 @@ class PromptGenerator:
         """Detect primary solve intent from problem text."""
         value = text.lower()
         has_equation = "=" in value and bool(re.search(r"\b[a-z]\b|\d+[a-z]|[a-z]\d+", value))
+
+        real_solution_markers = [
+            "real solution",
+            "real solutions",
+            "real root",
+            "real roots",
+            "all real values",
+            "real values",
+        ]
+        if any(marker in value for marker in real_solution_markers):
+            return "real_solutions"
+
         if "conditional" in value or "given that" in value or "|" in value:
             return "conditional_probability"
         if "probability" in value or " p(" in value:
@@ -510,13 +522,13 @@ class PromptGenerator:
         
         # Get examples from the specified subject, default to general if not found
         if subject not in self.example_dataset:
-            print(f"⚠ Warning: Subject '{subject}' not found in dataset, using 'algebra'")
+            print(f"Warning: Subject '{subject}' not found in dataset, using 'algebra'")
             subject = "algebra"
         
         available_examples = self.example_dataset.get(subject, [])
         
         if not available_examples:
-            print(f"⚠ Warning: No examples found for subject '{subject}'")
+            print(f"Warning: No examples found for subject '{subject}'")
             # Return zero-shot if no examples
             return f"{problem}"
         
@@ -547,7 +559,7 @@ class PromptGenerator:
         ])
         
         return (
-            "Follow the same step-by-step style shown in the examples. Be concise and end with a clear final answer.\n\n"
+            "Solve the following math problems and give the final answer.\n\n"
             f"{examples_text}\n\n"
             f"Q: {normalized_problem}\n"
             "A:"

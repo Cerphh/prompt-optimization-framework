@@ -79,6 +79,162 @@
     {
       "problem": "Solve for all real solutions: x⁴ - 16 = 0",
       "solution": "x⁴ - 16 = 0\nDifference of squares: (x² - 4)(x² + 4) = 0\nFrom x² - 4 = 0, we get x = ±2\nFrom x² + 4 = 0, there are no real solutions\nSo the real solutions are x = -2, 2"
+    },
+    {
+      "problem": "Evaluate the expression 4x - 3y + 2 when x = 5 and y = -1.",
+      "solution": "Substitute values: 4(5) - 3(-1) + 2 = 20 + 3 + 2 = 25."
+    },
+    {
+      "problem": "Simplify: 2(3x - 4) + 5x - (x - 7).",
+      "solution": "2(3x - 4) + 5x - (x - 7) = 6x - 8 + 5x - x + 7 = 10x - 1."
+    },
+    {
+      "problem": "Simplify using exponent rules: x^3 * x^5 / x^2.",
+      "solution": "x^(3+5-2) = x^6 (for x != 0)."
+    },
+    {
+      "problem": "Simplify the radical: sqrt(72).",
+      "solution": "sqrt(72) = sqrt(36*2) = 6sqrt(2)."
+    },
+    {
+      "problem": "Add polynomials: (2x^2 + 3x - 5) + (x^2 - 4x + 9).",
+      "solution": "Combine like terms: 3x^2 - x + 4."
+    },
+    {
+      "problem": "Multiply polynomials: (x - 3)(x + 5).",
+      "solution": "x^2 + 5x - 3x - 15 = x^2 + 2x - 15."
+    },
+    {
+      "problem": "Simplify the rational expression: (x^2 - 9)/(x^2 - 3x).",
+      "solution": "Factor: (x-3)(x+3)/[x(x-3)] = (x+3)/x, where x != 0,3."
+    },
+    {
+      "problem": "Simplify: (2/x) + (3/(2x)).",
+      "solution": "Common denominator 2x: 4/(2x) + 3/(2x) = 7/(2x), x != 0."
+    },
+    {
+      "problem": "Solve the inequality: 3x - 4 <= 11.",
+      "solution": "3x <= 15, so x <= 5."
+    },
+    {
+      "problem": "Solve the quadratic equation: 2x^2 + x - 3 = 0.",
+      "solution": "(2x+3)(x-1)=0, so x = 1 or x = -3/2."
+    },
+    {
+      "problem": "Solve the cubic equation: x^3 - 6x^2 + 11x - 6 = 0.",
+      "solution": "(x-1)(x-2)(x-3)=0, so x = 1, 2, 3."
+    },
+    {
+      "problem": "Solve the equation: x^4 - 10x^2 + 9 = 0.",
+      "solution": "Let u=x^2: u^2-10u+9=0=(u-1)(u-9). So x = ±1, ±3."
+    },
+    {
+      "problem": "Solve the rational equation: (x + 1)/(x - 2) = 3.",
+      "solution": "x+1 = 3x-6 => 7 = 2x => x = 7/2, with x != 2."
+    },
+    {
+      "problem": "Solve the radical equation: sqrt(x + 9) = x - 3.",
+      "solution": "Require x>=3. Square: x+9 = x^2-6x+9 => x^2-7x=0 => x=0 or 7. Valid solution: x=7."
+    },
+    {
+      "problem": "Solve the absolute value inequality: |2x + 1| < 5.",
+      "solution": "-5 < 2x+1 < 5 => -6 < 2x < 4 => -3 < x < 2."
+    },
+    {
+      "problem": "Solve by substitution: y = 2x + 1 and 3x + y = 13.",
+      "solution": "3x + (2x+1) = 13 => 5x=12 => x=12/5, y=29/5."
+    },
+    {
+      "problem": "Solve using matrices: [[1,2],[3,4]][x,y]^T = [5,11]^T.",
+      "solution": "From x+2y=5 and 3x+4y=11, solve to get y=2 and x=1."
+    },
+    {
+      "problem": "Given f(x)=2x^2-3x+1, find f(3).",
+      "solution": "f(3)=2(9)-9+1=10."
+    },
+    {
+      "problem": "Find the domain of f(x)=1/(x-2).",
+      "solution": "All real x except x=2."
+    },
+    {
+      "problem": "Find the inverse of f(x)=3x-2.",
+      "solution": "Let y=3x-2 => x=(y+2)/3, so f^{-1}(x)=(x+2)/3."
+    },
+    {
+      "problem": "If f(x)=x^2+1 and g(x)=2x-3, find (f o g)(x).",
+      "solution": "f(g(x))=(2x-3)^2+1=4x^2-12x+10."
+    },
+    {
+      "problem": "Simplify: (3+2i) + (1-5i).",
+      "solution": "(3+1) + (2-5)i = 4 - 3i."
+    },
+    {
+      "problem": "Multiply complex numbers: (2+i)(2-i).",
+      "solution": "(2+i)(2-i) = 4 - i^2 = 5."
+    },
+    {
+      "problem": "Find the 10th term of an arithmetic sequence with a1=4 and d=3.",
+      "solution": "a10 = a1 + 9d = 4 + 27 = 31."
+    },
+    {
+      "problem": "Find the sum of the first 6 terms of a geometric sequence with a1=2 and r=3.",
+      "solution": "S6 = 2(3^6-1)/(3-1) = 2(729-1)/2 = 728."
+    },
+    {
+      "problem": "Expand using the binomial theorem: (x+2)^4.",
+      "solution": "x^4 + 8x^3 + 24x^2 + 32x + 16."
+    },
+    {
+      "problem": "Compute det([[2,1],[5,3]]).",
+      "solution": "det = 2*3 - 1*5 = 1."
+    },
+    {
+      "problem": "Multiply matrices [[1,2],[0,1]] and [[3,1],[4,2]].",
+      "solution": "Product = [[11,5],[4,2]]."
+    },
+    {
+      "problem": "Apply T(x,y)=(2x-y, x+3y) to (1,2).",
+      "solution": "T(1,2) = (0,7)."
+    },
+    {
+      "problem": "Find eigenvalues of A=[[2,0],[0,5]].",
+      "solution": "The eigenvalues are 2 and 5."
+    },
+    {
+      "problem": "Factor x^2 + 1 over the real numbers and over the complex numbers.",
+      "solution": "Over R: irreducible. Over C: (x-i)(x+i)."
+    },
+    {
+      "problem": "Factor x^2 - 2 over Q and over R.",
+      "solution": "Over Q: irreducible. Over R: (x-sqrt(2))(x+sqrt(2))."
+    },
+    {
+      "problem": "Find the range of f(x)=x^2.",
+      "solution": "Since x^2 >= 0 for all real x, the range is [0, infinity)."
+    },
+    {
+      "problem": "Find the inverse of f(x)=2x+5.",
+      "solution": "Let y=2x+5. Swap x and y: x=2y+5 => y=(x-5)/2. So f^{-1}(x)=(x-5)/2."
+    },
+    {
+      "problem": "If f(x)=x+1 and g(x)=x^2, find (g o f)(x).",
+      "solution": "g(f(x))=(x+1)^2 = x^2 + 2x + 1."
+    },
+    {
+      "problem": "Compute the composition (f o g)(x) if f(x)=2x-1 and g(x)=x^2+3.",
+      "solution": "(f o g)(x)=f(g(x))=2(x^2+3)-1=2x^2+5."
+    },
+    {
+      "problem": "Expand using the binomial theorem: (2x-1)^3.",
+      "solution": "(2x-1)^3 = 8x^3 - 12x^2 + 6x - 1."
+    },
+    {
+      "problem": "Apply linear transformation T represented by matrix [[1,0],[2,1]] to vector (3,4).",
+      "solution": "T(3,4) = (1*3+0*4, 2*3+1*4) = (3,10)."
+    },
+    {
+      "problem": "Find an eigenvector of A=[[3,0],[0,2]] corresponding to eigenvalue 3.",
+      "solution": "Solve (A-3I)v=0 => [[0,0],[0,-1]]v=0, so v=(1,0) is an eigenvector."
     }
   ],
   "statistics": [
@@ -157,6 +313,186 @@
     {
       "problem": "A fair coin is tossed 3 times. What is the probability of getting exactly 2 heads?",
       "solution": "Total outcomes for 3 tosses = 2³ = 8\nExactly 2 heads can happen in: HHT, HTH, THH (3 outcomes)\nP(exactly 2 heads) = 3/8"
+    },
+    {
+      "problem": "Construct a frequency table for data: 2, 2, 3, 4, 4, 4, 5.",
+      "solution": "Frequencies are: 2->2, 3->1, 4->3, 5->1."
+    },
+    {
+      "problem": "For classes 0-9, 10-19, 20-29 with frequencies 3, 5, 2, what is the modal class?",
+      "solution": "The modal class is 10-19 because it has the highest frequency (5)."
+    },
+    {
+      "problem": "Create a stem-and-leaf plot stems for values 12, 15, 17, 21, 24, 29.",
+      "solution": "Stem 1: leaves 2 5 7; Stem 2: leaves 1 4 9."
+    },
+    {
+      "problem": "Find Q1, Q3, and IQR for data: 1, 2, 4, 5, 7, 8, 10, 12.",
+      "solution": "Q1=(2+4)/2=3, Q3=(8+10)/2=9, IQR=Q3-Q1=6."
+    },
+    {
+      "problem": "A boxplot has Q1=20, Q3=30. What is the outlier cutoff using 1.5*IQR?",
+      "solution": "IQR=10, 1.5*IQR=15. Lower cutoff=5, upper cutoff=45."
+    },
+    {
+      "problem": "Two fair dice are rolled. What is P(sum = 7)?",
+      "solution": "Favorable outcomes: (1,6),(2,5),(3,4),(4,3),(5,2),(6,1): 6 out of 36. Probability = 1/6."
+    },
+    {
+      "problem": "If P(A)=0.65, find P(A^c).",
+      "solution": "P(A^c)=1-P(A)=1-0.65=0.35."
+    },
+    {
+      "problem": "If P(A)=0.5, P(B)=0.4, and P(A ∩ B)=0.2, find P(A|B).",
+      "solution": "P(A|B)=P(A ∩ B)/P(B)=0.2/0.4=0.5."
+    },
+    {
+      "problem": "If P(A)=0.3, P(B)=0.5, and P(A ∩ B)=0.15, are A and B independent?",
+      "solution": "Since P(A)P(B)=0.3*0.5=0.15=P(A ∩ B), yes, they are independent."
+    },
+    {
+      "problem": "A disease prevalence is 1%. Test sensitivity is 99% and specificity is 95%. Find P(disease | positive).",
+      "solution": "P(+)=0.99*0.01 + 0.05*0.99 = 0.0594. P(D|+)=0.0099/0.0594=0.1667."
+    },
+    {
+      "problem": "How many committees of 4 can be chosen from 10 people?",
+      "solution": "C(10,4)=10!/(4!6!)=210."
+    },
+    {
+      "problem": "A PMF is p(0)=0.2, p(1)=0.5, p(2)=0.3. Verify it is valid.",
+      "solution": "All probabilities are nonnegative and sum to 1.0, so it is a valid PMF."
+    },
+    {
+      "problem": "For X with PMF p(0)=0.3 and p(2)=0.7, find E[X].",
+      "solution": "E[X]=0*0.3 + 2*0.7 = 1.4."
+    },
+    {
+      "problem": "For X with PMF p(1)=0.5 and p(3)=0.5, find Var(X).",
+      "solution": "E[X]=2. E[X^2]=0.5*1+0.5*9=5. Var(X)=E[X^2]-E[X]^2=5-4=1."
+    },
+    {
+      "problem": "Given f(x)=c*x on 0<=x<=2 and 0 otherwise, find c.",
+      "solution": "Integral_0^2 c*x dx = c*(2^2/2)=2c=1, so c=1/2."
+    },
+    {
+      "problem": "If f(x)=1/2 on 0<=x<=2, find F(1).",
+      "solution": "F(1)=Integral_0^1 1/2 dx = 1/2."
+    },
+    {
+      "problem": "Find the MGF of a Bernoulli(p) random variable.",
+      "solution": "M_X(t)=E[e^{tX}] = (1-p) + p*e^t."
+    },
+    {
+      "problem": "For Bernoulli(p=0.3), find P(X=1) and P(X=0).",
+      "solution": "P(X=1)=0.3 and P(X=0)=0.7."
+    },
+    {
+      "problem": "If X~Binomial(n=8,p=0.5), find P(X=3).",
+      "solution": "P(X=3)=C(8,3)(0.5)^3(0.5)^5=56/256=0.21875."
+    },
+    {
+      "problem": "If X~Geometric(p=0.25), what is E[X]?",
+      "solution": "For geometric counting trials to first success, E[X]=1/p=4."
+    },
+    {
+      "problem": "If X~Poisson(lambda=3), find P(X=0).",
+      "solution": "P(X=0)=e^{-3}*3^0/0!=e^{-3}."
+    },
+    {
+      "problem": "For X~Uniform(2,10), find mean and variance.",
+      "solution": "Mean=(a+b)/2=6. Variance=(b-a)^2/12=64/12=16/3."
+    },
+    {
+      "problem": "If X~N(100, 15^2), find z-score for x=130.",
+      "solution": "z=(130-100)/15=2."
+    },
+    {
+      "problem": "If X~Exponential(rate=0.2), find E[X].",
+      "solution": "E[X]=1/lambda=1/0.2=5."
+    },
+    {
+      "problem": "If X~Beta(alpha=2,beta=3), find E[X].",
+      "solution": "E[X]=alpha/(alpha+beta)=2/5=0.4."
+    },
+    {
+      "problem": "If X~Gamma(k=4,theta=2), find E[X] and Var(X).",
+      "solution": "E[X]=k*theta=8 and Var(X)=k*theta^2=16."
+    },
+    {
+      "problem": "A population has mean 50 and SD 12. For n=36, what are mean and SD of the sample mean?",
+      "solution": "E[Xbar]=50 and SD(Xbar)=12/sqrt(36)=2."
+    },
+    {
+      "problem": "Using CLT, approximate P(Xbar > 102) if population mean=100, SD=10, n=25.",
+      "solution": "SE=10/sqrt(25)=2. z=(102-100)/2=1. So P(Xbar>102)=P(Z>1)≈0.1587."
+    },
+    {
+      "problem": "A sample mean is 70 from n=64, known sigma=16. Find a 95% confidence interval for the mean.",
+      "solution": "SE=16/sqrt(64)=2. CI=70±1.96*2 => (66.08, 73.92)."
+    },
+    {
+      "problem": "Given z=2.3 for a two-tailed z-test at alpha=0.05, reject or fail to reject H0?",
+      "solution": "Critical values are ±1.96. Since 2.3>1.96, reject H0."
+    },
+    {
+      "problem": "Given t=1.5 with df=20 for a two-tailed test at alpha=0.05, reject or fail to reject H0?",
+      "solution": "Critical t is about ±2.086. Since |1.5|<2.086, fail to reject H0."
+    },
+    {
+      "problem": "A chi-square goodness-of-fit test gives chi-square=9.4 with df=3 at alpha=0.05. Reject H0?",
+      "solution": "Critical value is about 7.815. Since 9.4>7.815, reject H0."
+    },
+    {
+      "problem": "Interpret ANOVA result with F=5.8 and p=0.01.",
+      "solution": "Since p<0.05, reject equal-means null; at least one group mean differs."
+    },
+    {
+      "problem": "For regression line y = 2 + 1.5x, predict y when x=4.",
+      "solution": "y=2+1.5(4)=8."
+    },
+    {
+      "problem": "Find all real values of p if P(A)=p and P(B)=2p with disjoint events and P(A union B)=1.",
+      "solution": "Disjoint means P(A union B)=P(A)+P(B)=p+2p=3p. Set 3p=1, so p=1/3."
+    },
+    {
+      "problem": "Find all real values of p given that P(A|B)=1/2 and P(A ∩ B)=1/6.",
+      "solution": "Use P(A|B)=P(A ∩ B)/P(B). So 1/2=(1/6)/p => p=1/3."
+    },
+    {
+      "problem": "Find all real values of p given that P(A|B)=2/3 and P(A ∩ B)=1/5.",
+      "solution": "2/3=(1/5)/p => p=3/10."
+    },
+    {
+      "problem": "A boxplot has min=4, Q1=10, median=14, Q3=18, max=30. What is the IQR?",
+      "solution": "IQR = Q3 - Q1 = 18 - 10 = 8."
+    },
+    {
+      "problem": "Classify random variable X = number of heads in 5 coin tosses as discrete or continuous.",
+      "solution": "X takes countable values {0,1,2,3,4,5}, so it is discrete."
+    },
+    {
+      "problem": "Classify random variable Y = waiting time (in minutes) for a bus as discrete or continuous.",
+      "solution": "Y can take any nonnegative real value, so it is continuous."
+    },
+    {
+      "problem": "Given PMF p(0)=0.1, p(1)=0.4, p(2)=0.5, find F(1).",
+      "solution": "F(1)=P(X<=1)=p(0)+p(1)=0.1+0.4=0.5."
+    },
+    {
+      "problem": "Find the MGF of a normal random variable X~N(mu,sigma^2).",
+      "solution": "M_X(t)=exp(mu*t + (sigma^2*t^2)/2)."
+    },
+    {
+      "problem": "Using CLT, approximate P(Xbar < 52) for population mean 50, SD 8, n=64.",
+      "solution": "SE=8/sqrt(64)=1. z=(52-50)/1=2. So P(Xbar<52)=Phi(2)≈0.9772."
+    },
+    {
+      "problem": "A sample has mean 24, sample SD 5, n=25. Find a 95% t-confidence interval for the mean.",
+      "solution": "Use t_{0.975,24}≈2.064. SE=5/sqrt(25)=1. Margin=2.064. CI=(21.936,26.064)."
+    },
+    {
+      "problem": "A dataset has correlation coefficient r=-0.82. Interpret sign and strength.",
+      "solution": "The relationship is strong and negative: as one variable increases, the other tends to decrease."
     }
   ],
   "calculus": [
@@ -227,6 +563,174 @@
     {
       "problem": "Find the derivative using chain rule: f(x) = √(3x + 1)",
       "solution": "f(x) = (3x + 1)^(1/2)\nf'(x) = (1/2)(3x + 1)^(-1/2) · 3\n= 3 / (2√(3x + 1))"
+    },
+    {
+      "problem": "Find lim(x->2) (x^2 - 4)/(x - 2).",
+      "solution": "Factor numerator: (x-2)(x+2)/(x-2) = x+2, so the limit is 4."
+    },
+    {
+      "problem": "Is f(x)=|x| continuous at x=0?",
+      "solution": "Yes. Left and right limits at 0 are both 0, and f(0)=0, so f is continuous at 0."
+    },
+    {
+      "problem": "Find the second derivative of f(x)=x^4 - 3x^2 + 2.",
+      "solution": "f'(x)=4x^3-6x and f''(x)=12x^2-6."
+    },
+    {
+      "problem": "Find the tangent line to y=x^2 at x=3.",
+      "solution": "Slope is y'=2x so m=6 at x=3. Point is (3,9). Tangent: y-9=6(x-3)."
+    },
+    {
+      "problem": "Given s(t)=t^3-6t^2+9t, find velocity and acceleration.",
+      "solution": "v(t)=s'(t)=3t^2-12t+9 and a(t)=v'(t)=6t-12."
+    },
+    {
+      "problem": "Find all real values of x where f'(x)=0 for f(x)=x³-3x.",
+      "solution": "f'(x)=3x^2-3=3(x^2-1). Set to zero: x^2=1, so x=-1 or x=1."
+    },
+    {
+      "problem": "Find all real values where f'(x)=0 for f(x)=x^3-12x.",
+      "solution": "f'(x)=3x^2-12=3(x^2-4). So x=-2 or x=2."
+    },
+    {
+      "problem": "Find antiderivative: Integral (5x^4 - 2x + 1) dx.",
+      "solution": "Integral = x^5 - x^2 + x + C."
+    },
+    {
+      "problem": "Evaluate Integral_0^1 (3x^2 + 2) dx.",
+      "solution": "Antiderivative is x^3+2x. Value = (1+2) - (0+0) = 3."
+    },
+    {
+      "problem": "Use FTC: if F(x)=Integral_1^x (t^2+1) dt, find F'(x).",
+      "solution": "By the Fundamental Theorem of Calculus, F'(x)=x^2+1."
+    },
+    {
+      "problem": "Evaluate by substitution: Integral 2x*cos(x^2) dx.",
+      "solution": "Let u=x^2, du=2x dx. Integral becomes Integral cos(u) du = sin(u)+C = sin(x^2)+C."
+    },
+    {
+      "problem": "Evaluate by parts: Integral x*e^x dx.",
+      "solution": "u=x, dv=e^x dx => du=dx, v=e^x. Integral = x e^x - Integral e^x dx = e^x(x-1)+C."
+    },
+    {
+      "problem": "Evaluate using partial fractions: Integral 1/(x^2-1) dx.",
+      "solution": "1/(x^2-1)=1/2[1/(x-1)-1/(x+1)]. Integral = (1/2)ln|x-1|-(1/2)ln|x+1|+C."
+    },
+    {
+      "problem": "Evaluate trigonometric integral: Integral sin(x)cos(x) dx.",
+      "solution": "Let u=sin(x), du=cos(x)dx. Integral = Integral u du = (1/2)sin^2(x)+C."
+    },
+    {
+      "problem": "Determine whether Integral_1^infinity 1/x^2 dx converges.",
+      "solution": "Integral_1^b x^-2 dx = 1-1/b. Limit as b->infinity is 1, so it converges to 1."
+    },
+    {
+      "problem": "Find area under y=x from x=0 to x=4.",
+      "solution": "Area = Integral_0^4 x dx = [x^2/2]_0^4 = 8."
+    },
+    {
+      "problem": "Find volume when y=x is revolved about x-axis on [0,2].",
+      "solution": "Disk method: V=pi Integral_0^2 x^2 dx = pi*(8/3) = 8pi/3."
+    },
+    {
+      "problem": "A variable force F(x)=3x^2 moves an object from x=0 to x=2. Find work.",
+      "solution": "Work = Integral_0^2 3x^2 dx = [x^3]_0^2 = 8."
+    },
+    {
+      "problem": "Find partial derivatives of f(x,y)=x^2 y + e^y.",
+      "solution": "f_x=2xy and f_y=x^2+e^y."
+    },
+    {
+      "problem": "Find grad f for f(x,y,z)=x^2+y^2+z^2.",
+      "solution": "grad f = (2x, 2y, 2z)."
+    },
+    {
+      "problem": "For F=(x^2, y^2, z^2), find divergence.",
+      "solution": "div F = d/dx(x^2)+d/dy(y^2)+d/dz(z^2) = 2x+2y+2z."
+    },
+    {
+      "problem": "For F=(-y, x, 0), find curl.",
+      "solution": "curl F = (0,0, d/dx(x)-d/dy(-y)) = (0,0,2)."
+    },
+    {
+      "problem": "Evaluate double integral Integral_0^1 Integral_0^2 (x+y) dx dy.",
+      "solution": "Inner integral gives [x^2/2 + yx]_0^2 = 2+2y. Outer integral gives Integral_0^1 (2+2y)dy = 3."
+    },
+    {
+      "problem": "Evaluate triple integral Integral_0^1 Integral_0^1 Integral_0^1 xyz dx dy dz.",
+      "solution": "Separable: (Integral_0^1 xdx)(Integral_0^1 ydy)(Integral_0^1 zdz) = (1/2)^3 = 1/8."
+    },
+    {
+      "problem": "Compute line integral Integral_C x ds on line segment from 0 to 2 on x-axis.",
+      "solution": "Here ds=dx and x runs 0 to 2, so Integral_0^2 x dx = 2."
+    },
+    {
+      "problem": "State Green's theorem relation for a positively oriented simple closed curve C.",
+      "solution": "Integral_C (P dx + Q dy) = DoubleIntegral_D (dQ/dx - dP/dy) dA."
+    },
+    {
+      "problem": "State Stokes' theorem.",
+      "solution": "Surface integral of curl F over S equals line integral of F over boundary C: DoubleIntegral_S (curl F·n)dS = Integral_C F·dr."
+    },
+    {
+      "problem": "State Divergence theorem.",
+      "solution": "TripleIntegral_V (div F)dV = SurfaceIntegral_boundary(V) F·n dS."
+    },
+    {
+      "problem": "Determine convergence of geometric series sum from n=0 to infinity of (1/3)^n.",
+      "solution": "It converges since |r|=1/3<1. Sum = 1/(1-1/3)=3/2."
+    },
+    {
+      "problem": "Determine convergence of harmonic series sum from n=1 to infinity of 1/n.",
+      "solution": "The harmonic series diverges."
+    },
+    {
+      "problem": "Find the Maclaurin series for e^x up to x^4 term.",
+      "solution": "e^x = 1 + x + x^2/2! + x^3/3! + x^4/4! + ..."
+    },
+    {
+      "problem": "Find the Taylor series of sin(x) about x=0 up to x^5 term.",
+      "solution": "sin(x)=x - x^3/3! + x^5/5! + ..."
+    },
+    {
+      "problem": "Find radius of convergence for sum from n=0 to infinity of x^n.",
+      "solution": "This is geometric with ratio x, so it converges for |x|<1. Radius R=1."
+    },
+    {
+      "problem": "Find interval of convergence for sum from n=1 to infinity of x^n/n.",
+      "solution": "Radius is 1. At x=1 it diverges (harmonic), at x=-1 it converges (alternating harmonic). Interval is [-1,1)."
+    },
+    {
+      "problem": "Differentiate implicitly: x^2 + xy + y^2 = 7.",
+      "solution": "Differentiate: 2x + (x*y' + y) + 2y*y' = 0 => y' = -(2x+y)/(x+2y)."
+    },
+    {
+      "problem": "Find the third derivative of f(x)=x^5.",
+      "solution": "f'(x)=5x^4, f''(x)=20x^3, f'''(x)=60x^2."
+    },
+    {
+      "problem": "Use FTC to evaluate Integral_2^5 4 dx.",
+      "solution": "Integral_2^5 4 dx = 4(5-2)=12."
+    },
+    {
+      "problem": "Find partial derivatives of f(x,y)=x*e^y + y^3.",
+      "solution": "f_x=e^y and f_y=x*e^y + 3y^2."
+    },
+    {
+      "problem": "Find a power series for 1/(1-x) about x=0.",
+      "solution": "For |x|<1, 1/(1-x) = sum_{n=0}^{infinity} x^n."
+    },
+    {
+      "problem": "Find the Taylor series of e^x about x=1 up to quadratic term.",
+      "solution": "e^x = e + e(x-1) + e(x-1)^2/2 + ..."
+    },
+    {
+      "problem": "Find the Maclaurin series for cos(x) up to x^4 term.",
+      "solution": "cos(x)=1 - x^2/2! + x^4/4! + ..."
+    },
+    {
+      "problem": "Compute surface integral of f(x,y,z)=z over plane z=2 on square 0<=x<=1, 0<=y<=1.",
+      "solution": "Since f=2 is constant and area is 1, the surface integral is 2."
     }
   ]
 }

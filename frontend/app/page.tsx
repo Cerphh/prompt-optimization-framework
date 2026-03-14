@@ -51,6 +51,10 @@ interface BenchmarkResult {
   }
 }
 
+const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://127.0.0.1:8000').replace(/\/+$/, '')
+
+const apiUrl = (path: string): string => `${API_BASE_URL}${path}`
+
 /* Score color mapping */
 const scoreColor = (v: number): string => {
   if (v >= 0.95) return 'var(--green)'
@@ -81,15 +85,31 @@ export default function Home() {
   // Check API health
   useEffect(() => {
     const checkHealth = async () => {
+      const controller = new AbortController()
+      const timeoutId = window.setTimeout(() => controller.abort(), 4000)
+
       try {
-        const response = await fetch('http://localhost:8000/health', { timeout: 3000 } as any)
-        if (response.ok) {
-          setHealthStatus('healthy')
-        } else {
+        const response = await fetch(apiUrl('/health'), {
+          signal: controller.signal,
+        })
+
+        if (!response.ok) {
           setHealthStatus('unhealthy')
+          return
         }
+
+        const health = await response.json().catch(() => null)
+        // Mark as unhealthy when API is up but model connectivity is degraded.
+        if (health?.model_connected === false) {
+          setHealthStatus('unhealthy')
+          return
+        }
+
+        setHealthStatus('healthy')
       } catch {
         setHealthStatus('unhealthy')
+      } finally {
+        clearTimeout(timeoutId)
       }
     }
     
@@ -238,7 +258,7 @@ export default function Home() {
         throw new Error('⚠️ System offline: Make sure Ollama is running (ollama serve) and the backend API is started')
       }
 
-      const response = await fetch('http://localhost:8000/benchmark/stream', {
+      const response = await fetch(apiUrl('/benchmark/stream'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -340,7 +360,7 @@ export default function Home() {
     setSaveStatus('')
 
     try {
-      const response = await fetch('http://localhost:8000/results/save', {
+      const response = await fetch(apiUrl('/results/save'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

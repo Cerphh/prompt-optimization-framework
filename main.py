@@ -28,10 +28,24 @@ app = FastAPI(
     version="1.0.0"
 )
 
+
+def _get_cors_origins() -> List[str]:
+    """Resolve allowed CORS origins from env or sensible local defaults."""
+    configured = os.getenv("CORS_ALLOW_ORIGINS", "")
+    if configured.strip():
+        origins = [origin.strip().rstrip("/") for origin in configured.split(",") if origin.strip()]
+        if origins:
+            return origins
+
+    return [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
+
 # Add CORS middleware to allow frontend access
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Next.js frontend
+    allow_origins=_get_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -40,7 +54,7 @@ app.add_middleware(
 # Initialize pipeline
 pipeline = BenchmarkPipeline(
     model_name=os.getenv("MODEL_NAME", "llama3"),
-    base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+    base_url=os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434"),
     accuracy_weight=0.5,
     completeness_weight=0.3,
     efficiency_weight=0.2

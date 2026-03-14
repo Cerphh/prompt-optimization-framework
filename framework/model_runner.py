@@ -20,7 +20,7 @@ class ModelRunner:
     - Model metadata
     """
     
-    def __init__(self, model_name: str = "llama3", base_url: str = "http://localhost:11434"):
+    def __init__(self, model_name: str = "llama3", base_url: str = "http://127.0.0.1:11434"):
         self.model_name = model_name
         self.base_url = base_url
         self.session = requests.Session()

@@ -28,7 +28,7 @@ class BenchmarkPipeline:
     """
     
     def __init__(self, model_name: str = "llama3",
-                 base_url: str = "http://localhost:11434",
+                 base_url: str = "http://127.0.0.1:11434",
                  accuracy_weight: float = 0.5,
                  completeness_weight: float = 0.3,
                  efficiency_weight: float = 0.2):
