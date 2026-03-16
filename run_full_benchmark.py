@@ -4,6 +4,7 @@ Runs all dataset problems and generates summary report for thesis analysis.
 """
 
 import time
+import os
 from framework.pipeline import BenchmarkPipeline
 from framework.dataset import get_sample_dataset
 
@@ -14,7 +15,7 @@ print()
 
 # Initialize
 pipeline = BenchmarkPipeline(
-    model_name="llama3",
+    model_name=os.getenv("MODEL_NAME", "llama3"),
     accuracy_weight=0.5,
     completeness_weight=0.3,
     efficiency_weight=0.2

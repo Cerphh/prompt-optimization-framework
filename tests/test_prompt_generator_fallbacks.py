@@ -17,3 +17,29 @@ def test_few_shot_falls_back_to_zero_shot_when_subject_examples_missing():
     assert prompt.startswith("Solve the following math problem and end with a concise final answer.")
     assert "Q: Solve for x: 2x + 6 = 10" in prompt
     assert "A:" in prompt
+
+
+def test_hard_problem_uses_more_examples_when_num_examples_not_provided():
+    generator = PromptGenerator()
+    generator.few_shot_min_examples = 1
+    generator.few_shot_max_examples = 4
+    generator.few_shot_medium_examples = 2
+    generator.few_shot_hard_examples = 4
+    generator.example_dataset = {
+        "calculus": [
+            {"problem": "Find derivative of x^4", "solution": "4x^3"},
+            {"problem": "Use chain rule on (2x+1)^5", "solution": "10(2x+1)^4"},
+            {"problem": "Find limit of (sin x)/x", "solution": "1"},
+            {"problem": "Evaluate integral of x^2", "solution": "x^3/3 + C"},
+            {"problem": "Find derivative of e^(3x)", "solution": "3e^(3x)"},
+        ],
+        "general": [],
+    }
+
+    prompt = generator.generate_few_shot(
+        "Find the derivative using chain rule and evaluate a related limit.",
+        subject="calculus",
+    )
+
+    assert prompt.startswith("Solve the following math problems and give the final answer.")
+    assert prompt.count("\nQ: ") >= 5

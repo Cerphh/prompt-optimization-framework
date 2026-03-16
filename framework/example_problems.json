@@ -239,6 +239,18 @@
     {
       "problem": "Find an eigenvector of A=[[3,0],[0,2]] corresponding to eigenvalue 3.",
       "solution": "Solve (A-3I)v=0 => [[0,0],[0,-1]]v=0, so v=(1,0) is an eigenvector."
+    },
+    {
+      "problem": "Solve for all real solutions: x^4 - 6x^2 + 8 = 0.",
+      "solution": "Let u=x^2. Then u^2-6u+8=0=(u-2)(u-4). So x^2=2 or x^2=4. Real solutions: x=+-sqrt(2), +-2."
+    },
+    {
+      "problem": "Solve for x: |x - 3| + |x + 1| = 10.",
+      "solution": "Break into regions around -1 and 3. For x>=3: (x-3)+(x+1)=10 => 2x-2=10 => x=6. For -1<=x<3: (3-x)+(x+1)=4, impossible. For x<-1: (3-x)+(-x-1)=10 => 2-2x=10 => x=-4. Solutions: x=-4, 6."
+    },
+    {
+      "problem": "Solve the rational equation: 1/(x-1) + 1/(x+1) = 1.",
+      "solution": "Domain: x!=1,-1. Combine fractions: (x+1 + x-1)/(x^2-1)=1 => 2x/(x^2-1)=1 => x^2-2x-1=0. Quadratic formula: x=(2+-sqrt(4+4))/2=1+-sqrt(2). Both are valid (not +-1)."
     }
   ],
   "statistics": [
@@ -497,6 +509,18 @@
     {
       "problem": "A dataset has correlation coefficient r=-0.82. Interpret sign and strength.",
       "solution": "The relationship is strong and negative: as one variable increases, the other tends to decrease."
+    },
+    {
+      "problem": "A screening test has sensitivity 0.92 and specificity 0.97. Disease prevalence is 0.02. Find P(disease | positive).",
+      "solution": "Let D be disease and + be positive. P(D)=0.02, P(+|D)=0.92, P(+|D^c)=0.03. P(+)=0.92(0.02)+0.03(0.98)=0.0184+0.0294=0.0478. By Bayes: P(D|+)=0.0184/0.0478≈0.3849."
+    },
+    {
+      "problem": "If X~Binomial(n=6,p=0.5), find P(X>=4).",
+      "solution": "P(X>=4)=P(X=4)+P(X=5)+P(X=6)=[C(6,4)+C(6,5)+C(6,6)](0.5)^6=(15+6+1)/64=22/64=11/32."
+    },
+    {
+      "problem": "A random variable has PMF p(x)=k*x for x in {1,2,3,4}. Find k and E[X].",
+      "solution": "Normalization: k(1+2+3+4)=10k=1 => k=0.1. Then E[X]=sum x*p(x)=sum x*(0.1x)=0.1(1^2+2^2+3^2+4^2)=0.1(30)=3."
     }
   ],
   "calculus": [
@@ -735,6 +759,18 @@
     {
       "problem": "Compute surface integral of f(x,y,z)=z over plane z=2 on square 0<=x<=1, 0<=y<=1.",
       "solution": "Since f=2 is constant and area is 1, the surface integral is 2."
+    },
+    {
+      "problem": "Find and classify critical points of f(x)=x^3-3x^2+2.",
+      "solution": "f'(x)=3x^2-6x=3x(x-2), so critical points are x=0 and x=2. f''(x)=6x-6. f''(0)=-6<0 so local maximum at x=0 with f(0)=2. f''(2)=6>0 so local minimum at x=2 with f(2)=-2."
+    },
+    {
+      "problem": "Evaluate the improper integral Integral_0^infinity e^(-2x) dx.",
+      "solution": "Integral_0^infinity e^(-2x) dx = lim_{b->infinity} Integral_0^b e^(-2x) dx = lim_{b->infinity} [-(1/2)e^(-2x)]_0^b = (1/2)(1-e^(-2b)) = 1/2."
+    },
+    {
+      "problem": "Solve the differential equation dy/dx = 3y with y(0)=2.",
+      "solution": "Separate variables: dy/y = 3 dx. Integrate: ln|y| = 3x + C, so y = Ce^(3x). Use y(0)=2 gives C=2. Therefore y=2e^(3x)."
     }
   ]
 }

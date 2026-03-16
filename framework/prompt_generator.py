@@ -68,7 +68,9 @@ class PromptGenerator:
     def __init__(self):
         """Initialize the prompt generator and load example dataset from JSON."""
         self.few_shot_min_examples = int(os.getenv("FEW_SHOT_MIN_EXAMPLES", "1"))
-        self.few_shot_max_examples = int(os.getenv("FEW_SHOT_MAX_EXAMPLES", "3"))
+        self.few_shot_max_examples = int(os.getenv("FEW_SHOT_MAX_EXAMPLES", "4"))
+        self.few_shot_medium_examples = int(os.getenv("FEW_SHOT_MEDIUM_EXAMPLES", "2"))
+        self.few_shot_hard_examples = int(os.getenv("FEW_SHOT_HARD_EXAMPLES", "4"))
         self.few_shot_diversity_lambda = float(os.getenv("FEW_SHOT_DIVERSITY_LAMBDA", "0.15"))
         self.few_shot_min_relevance = float(os.getenv("FEW_SHOT_MIN_RELEVANCE", "0.35"))
 
@@ -491,12 +493,16 @@ class PromptGenerator:
         # Auto-determine number of examples based on subject if not specified
         if num_examples is None:
             complexity = self._estimate_problem_complexity(normalized_problem, subject)
+            target_examples = self.few_shot_min_examples
             if complexity >= 3:
-                num_examples = min(self.few_shot_max_examples, 3)
+                target_examples = self.few_shot_hard_examples
             elif complexity == 2:
-                num_examples = min(self.few_shot_max_examples, 2)
-            else:
-                num_examples = self.few_shot_min_examples
+                target_examples = self.few_shot_medium_examples
+
+            num_examples = max(
+                self.few_shot_min_examples,
+                min(target_examples, self.few_shot_max_examples),
+            )
 
         num_examples = max(self.few_shot_min_examples, min(num_examples, self.few_shot_max_examples))
         

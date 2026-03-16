@@ -76,6 +76,7 @@ def test_run_auto_continues_when_length_limit_hit():
     runner.session = FakeSession(non_stream_payloads=[first_response, continuation_response])
     runner.auto_continue_on_length = True
     runner.max_continue_rounds = 1
+    runner.verifier_retry_enabled = False
 
     result = runner.run("Solve this hard problem")
 
@@ -120,6 +121,7 @@ def test_run_stream_auto_continues_after_length_limit():
     )
     runner.auto_continue_on_length = True
     runner.max_continue_rounds = 1
+    runner.verifier_retry_enabled = False
 
     events = list(runner.run_stream("Solve this harder problem"))
 

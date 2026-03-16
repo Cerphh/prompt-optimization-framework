@@ -3,6 +3,8 @@ Test Pipeline - Research Benchmarking Framework
 Demonstrates comparative evaluation of prompting techniques on math problems.
 """
 
+import os
+
 print("=" * 70)
 print("PROMPT OPTIMIZATION FRAMEWORK - RESEARCH BENCHMARK")
 print("=" * 70)
@@ -20,7 +22,7 @@ except Exception as e:
 # Initialize pipeline
 try:
     pipeline = BenchmarkPipeline(
-        model_name="llama3",
+        model_name=os.getenv("MODEL_NAME", "llama3"),
         accuracy_weight=0.5,
         completeness_weight=0.3,
         efficiency_weight=0.2

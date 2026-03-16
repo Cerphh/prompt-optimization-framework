@@ -65,7 +65,7 @@ prompt-optimization-framework/
 
 - Python 3.8+
 - Ollama installed and running
-- llama3 model downloaded
+- llama3 model downloaded (recommended upgrade for harder math: qwen2.5:14b)
 
 ### 2. Setup Virtual Environment
 
@@ -158,22 +158,33 @@ Notes:
 Optional model generation settings:
 
 ```bash
-export MODEL_NUM_PREDICT=1024
+export MODEL_NAME=llama3
+export MODEL_NUM_CTX=8192
+export MODEL_NUM_PREDICT=2048
+export MODEL_TEMPERATURE=0
 export MODEL_AUTO_CONTINUE_ON_LENGTH=true
-export MODEL_MAX_CONTINUE_ROUNDS=2
+export MODEL_MAX_CONTINUE_ROUNDS=4
 export MODEL_CONTINUATION_TAIL_CHARS=1200
+export MODEL_VERIFIER_RETRY_ENABLED=true
+export MODEL_VERIFIER_RETRY_ATTEMPTS=1
+export MODEL_VERIFIER_NUM_PREDICT=256
+export FEW_SHOT_HARD_EXAMPLES=4
 ```
 
 Notes:
 - `MODEL_NUM_PREDICT` sets the base maximum completion tokens per generation call.
 - If the model still ends with `done_reason=length`, auto-continuation appends additional rounds.
 - Increase `MODEL_MAX_CONTINUE_ROUNDS` for very long reasoning tasks.
+- `MODEL_VERIFIER_RETRY_ENABLED` runs a lightweight verification pass and retries once when the answer is weak.
+- Keep `MODEL_TEMPERATURE=0` for deterministic math outputs.
 
 ### 4. Install Ollama & Model
 
 ```bash
 # Download from https://ollama.ai
 ollama pull llama3
+# Optional math-focused upgrade
+ollama pull qwen2.5:14b
 ```
 
 ## Usage
@@ -212,10 +223,10 @@ from framework.dataset import get_sample_dataset
 
 # Initialize pipeline
 pipeline = BenchmarkPipeline(
-    model_name="llama3",
-    accuracy_weight=0.5,
-    completeness_weight=0.3,
-    efficiency_weight=0.2
+   model_name="llama3",
+   accuracy_weight=0.5,
+   completeness_weight=0.3,
+   efficiency_weight=0.2,
 )
 
 # Run benchmark on a problem
