@@ -137,3 +137,26 @@ def test_stream_complete_event_includes_storage(monkeypatch):
     assert events
     assert events[-1]["type"] == "complete"
     assert events[-1]["result"]["storage"]["success"] is True
+
+
+def test_benchmark_tolerates_invalid_db_policy_env_values(monkeypatch):
+    def fake_benchmark(problem: str, ground_truth=None, subject: str = "general"):
+        return _mock_benchmark_result(problem=problem, ground_truth=ground_truth)
+
+    monkeypatch.setattr(main.pipeline, "benchmark", fake_benchmark)
+    monkeypatch.setattr(main.firestore_store, "save_benchmark_result", _mock_storage)
+    monkeypatch.setattr(main.firestore_store, "get_best_technique_by_domain", _mock_no_history)
+
+    monkeypatch.setenv("DB_MIN_SAMPLES_PER_TECHNIQUE", "invalid")
+    monkeypatch.setenv("DB_MIN_AVG_SCORE_GAP", "invalid")
+    monkeypatch.setenv("DB_EXPLORATION_RATE", "2.5")
+
+    client = TestClient(main.app)
+    response = client.post(
+        "/benchmark",
+        json={"problem": "What is 2 + 2?", "subject": "algebra", "difficulty": "basic"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["storage"]["success"] is True

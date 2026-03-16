@@ -3,12 +3,58 @@ Prompt Generator Module
 Generates multiple prompting strategies for comparative benchmarking.
 """
 
-from typing import List, Dict
-import random
+from typing import List, Dict, Optional
 import json
 import os
-import hashlib
 import re
+
+PROBLEM_KEYWORDS = {
+    # Algebra - solving
+    'solve', 'find', 'calculate', 'determine', 'equation', 'equals', '=',
+    # Algebra - operations
+    'factor', 'expand', 'simplify', 'system',
+    # Calculus
+    'derivative', 'differentiate', 'integrate', 'integral', 'limit', 'lim',
+    'd/dx', 'dy/dx', '∫', '∂',
+    # Statistics - central tendency
+    'mean', 'median', 'mode', 'average',
+    # Statistics - spread
+    'variance', 'standard deviation', 'range', 'deviation',
+    # Probability - general
+    'probability', 'p(', 'chance', 'odds', 'likely',
+    # Probability - conditional
+    'given that', 'given', '|', 'conditional',
+    # Probability - objects
+    'coin', 'coins', 'dice', 'die', 'card', 'ball', 'balls', 'bag',
+    # Probability - concepts
+    'flip', 'flipped', 'roll', 'rolled', 'draw', 'drawn',
+    'heads', 'tails', 'outcome', 'outcomes', 'event', 'favorable',
+    # Combinatorics
+    'combinations', 'permutations', 'c(', 'factorial',
+    # Distributions
+    'random', 'distribution', 'expected value', 'sample'
+}
+
+OPERATION_WORDS = {
+    'solve', 'find', 'calculate', 'factor', 'expand', 'simplify',
+    'derivative', 'integrate', 'limit',
+    'mean', 'median', 'mode', 'probability', 'variance',
+    'roll', 'flip', 'draw', 'combinations', 'permutations'
+}
+
+SPECIFIC_OBJECTS = ('dice', 'die', 'coin', 'ball', 'card', 'bag')
+
+STRATEGY_PAIRS = (
+    ("given that", "given that"),
+    ("probability", "probability"),
+    ("derivative", "derivative"),
+    ("integral", "integral"),
+    ("limit", "limit"),
+    ("factor", "factor"),
+    ("system", "system"),
+    ("mean", "mean"),
+    ("variance", "variance"),
+)
 
 class PromptGenerator:
     """
@@ -62,58 +108,19 @@ class PromptGenerator:
                 ]
             }
     
-    
-    def _get_anchor_example(self, problem: str, subject: str = "general") -> Dict:
-        """Get the best-matching example to anchor prompt style without full few-shot context."""
-        normalized_problem = self._normalize_problem_text(problem)
-        problem_keywords = self._detect_problem_keywords(normalized_problem)
-
-        candidate_subjects = []
-        if subject in self.example_dataset:
-            candidate_subjects.append(subject)
-        if "general" in self.example_dataset and "general" not in candidate_subjects:
-            candidate_subjects.append("general")
-
-        if not candidate_subjects:
-            candidate_subjects = list(self.example_dataset.keys())
-
-        best_example = None
-        best_score = float("-inf")
-        best_subject = subject if subject in self.example_dataset else "general"
-
-        for subj in candidate_subjects:
-            for example in self.example_dataset.get(subj, []):
-                score = self._score_example_relevance(example, normalized_problem, problem_keywords)
-                if score > best_score:
-                    best_score = score
-                    best_example = example
-                    best_subject = subj
-
-        return {
-            "example": best_example,
-            "score": max(best_score, 0.0) if best_example else 0.0,
-            "subject": best_subject,
-        }
-
     def generate_zero_shot(self, problem: str, subject: str = "general") -> str:
         """
-        Generate bank-anchored zero-shot prompt: no worked examples, but style anchored
-        to a related example from the example bank.
+        Generate a deterministic zero-shot prompt with no worked examples.
         
         Args:
             problem: The math problem
-            subject: Subject category used for selecting a style anchor
+            subject: Subject category (reserved for API compatibility)
             
         Returns:
             Zero-shot prompt
         """
+        _ = subject
         normalized_problem = self._normalize_problem_text(problem)
-        anchor = self._get_anchor_example(normalized_problem, subject=subject)
-        anchor_example = anchor.get("example")
-
-        if not anchor_example:
-            return f"Q: {normalized_problem}\nA:"
-
         return (
             "Solve the following math problem and end with a concise final answer.\n\n"
             f"Q: {normalized_problem}\n"
@@ -168,37 +175,9 @@ class PromptGenerator:
         """
         problem_lower = problem.lower()
         
-        # Define keyword categories
-        keywords = {
-            # Algebra - solving
-            'solve', 'find', 'calculate', 'determine', 'equation', 'equals', '=',
-            # Algebra - operations
-            'factor', 'expand', 'simplify', 'system',
-            # Calculus
-            'derivative', 'differentiate', 'integrate', 'integral', 'limit', 'lim',
-            'd/dx', 'dy/dx', '∫', '∂',
-            # Statistics - central tendency
-            'mean', 'median', 'mode', 'average',
-            # Statistics - spread
-            'variance', 'standard deviation', 'range', 'deviation',
-            # Probability - general
-            'probability', 'p(', 'chance', 'odds', 'likely',
-            # Probability - conditional
-            'given that', 'given', '|', 'conditional',
-            # Probability - objects
-            'coin', 'coins', 'dice', 'die', 'card', 'ball', 'balls', 'bag',
-            # Probability - concepts
-            'flip', 'flipped', 'roll', 'rolled', 'draw', 'drawn',
-            'heads', 'tails', 'outcome', 'outcomes', 'event', 'favorable',
-            # Combinatorics
-            'combinations', 'permutations', 'c(', 'p(', 'factorial',
-            # Distributions
-            'random', 'distribution', 'expected value', 'sample'
-        }
-        
         # Find matching keywords
         found_keywords = set()
-        for keyword in keywords:
+        for keyword in PROBLEM_KEYWORDS:
             if keyword in problem_lower:
                 found_keywords.add(keyword)
         
@@ -324,21 +303,13 @@ class PromptGenerator:
         # Bonus for similar operation words in problem statement
         example_lower = example['problem'].lower()
         
-        operation_words = {
-            'solve', 'find', 'calculate', 'factor', 'expand', 'simplify',
-            'derivative', 'integrate', 'limit', 
-            'mean', 'median', 'mode', 'probability', 'variance',
-            'roll', 'flip', 'draw', 'combinations', 'permutations'
-        }
-        
-        for word in operation_words:
+        for word in OPERATION_WORDS:
             if word in problem_lower and word in example_lower:
                 score += 0.3
                 break
         
         # Extra bonus for matching specific objects (dice, coins, balls, etc.)
-        specific_objects = ['dice', 'die', 'coin', 'ball', 'card', 'bag']
-        for obj in specific_objects:
+        for obj in SPECIFIC_OBJECTS:
             if obj in problem_lower and obj in example_lower:
                 score += 0.2
                 break
@@ -383,25 +354,18 @@ class PromptGenerator:
                 score += 0.08
 
         # Strategy-pattern matching (boost examples that use same solving style)
-        strategy_pairs = [
-            ("given that", "given that"),
-            ("probability", "probability"),
-            ("derivative", "derivative"),
-            ("integral", "integral"),
-            ("limit", "limit"),
-            ("factor", "factor"),
-            ("system", "system"),
-            ("mean", "mean"),
-            ("variance", "variance"),
-        ]
-        for problem_marker, example_marker in strategy_pairs:
+        for problem_marker, example_marker in STRATEGY_PAIRS:
             if problem_marker in problem_lower and example_marker in example_text:
                 score += 0.08
         
         return max(score, 0.0)
     
-    def _select_relevant_examples(self, available_examples: list, problem: str, 
-                                  num_examples: int, seed: int) -> list:
+    def _select_relevant_examples(
+        self,
+        available_examples: list,
+        problem: str,
+        num_examples: int,
+    ) -> list:
         """
         Select the most relevant examples for the given problem.
         
@@ -409,7 +373,6 @@ class PromptGenerator:
             available_examples: List of available examples
             problem: The user's problem
             num_examples: Number of examples to select
-            seed: Random seed for deterministic fallback
             
         Returns:
             List of selected examples
@@ -439,20 +402,35 @@ class PromptGenerator:
         highly_relevant = [ex for score, ex in scored_examples if score > 0.4]
         
         if len(highly_relevant) >= num_examples:
-            # Use a seeded random selection from highly relevant examples
-            # This maintains determinism while preferring relevant ones
+            # Prefer the most relevant pool and then diversify to reduce redundancy.
             candidate_pool = highly_relevant[:min(len(highly_relevant), num_examples * 4)]
             if len(candidate_pool) <= num_examples:
                 return candidate_pool
-            return self._select_diverse_examples(candidate_pool, problem, num_examples)
+            return self._select_diverse_examples(
+                candidate_pool,
+                problem,
+                num_examples,
+                problem_keywords=problem_keywords,
+            )
         else:
             # Fall back to top-ranked examples by relevance
             top_candidates = [ex for _, ex in scored_examples[:max(num_examples * 3, num_examples)]]
             if len(top_candidates) <= num_examples:
                 return top_candidates
-            return self._select_diverse_examples(top_candidates, problem, num_examples)
+            return self._select_diverse_examples(
+                top_candidates,
+                problem,
+                num_examples,
+                problem_keywords=problem_keywords,
+            )
 
-    def _select_diverse_examples(self, candidates: list, problem: str, num_examples: int) -> list:
+    def _select_diverse_examples(
+        self,
+        candidates: list,
+        problem: str,
+        num_examples: int,
+        problem_keywords: Optional[set] = None,
+    ) -> list:
         """
         Select examples using relevance-diversity tradeoff.
 
@@ -460,6 +438,12 @@ class PromptGenerator:
         """
         if num_examples >= len(candidates):
             return candidates
+
+        problem_keywords = problem_keywords or self._detect_problem_keywords(problem)
+        relevance_cache = {
+            id(candidate): self._score_example_relevance(candidate, problem, problem_keywords)
+            for candidate in candidates
+        }
 
         selected = []
         remaining = candidates[:]
@@ -469,11 +453,7 @@ class PromptGenerator:
             best_score = float("-inf")
 
             for candidate in remaining:
-                base_relevance = self._score_example_relevance(
-                    candidate,
-                    problem,
-                    self._detect_problem_keywords(problem),
-                )
+                base_relevance = relevance_cache[id(candidate)]
                 if not selected:
                     mmr_score = base_relevance
                 else:
@@ -530,15 +510,14 @@ class PromptGenerator:
         if not available_examples:
             print(f"Warning: No examples found for subject '{subject}'")
             # Return zero-shot if no examples
-            return f"{problem}"
-        
-        # Use stable hash for deterministic selection across process restarts
-        seed = int(hashlib.sha256(normalized_problem.encode("utf-8")).hexdigest()[:8], 16)
+            return self.generate_zero_shot(normalized_problem, subject=subject)
         
         # Select relevant examples (smart selection based on problem content)
         num_to_select = min(num_examples, len(available_examples))
         selected_examples = self._select_relevant_examples(
-            available_examples, normalized_problem, num_to_select, seed
+            available_examples,
+            normalized_problem,
+            num_to_select,
         )
 
         # If selected examples are not sufficiently related, fall back to bank-anchored zero-shot.

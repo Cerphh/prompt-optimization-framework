@@ -3,14 +3,15 @@ Dataset Module
 Manages math problems with ground truth answers for benchmarking.
 """
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import json
 
 class MathDataset:
     """Dataset handler for math problems with ground truth answers."""
     
     def __init__(self):
-        self.problems = []
+        self.problems: List[Dict[str, Any]] = []
+        self._problems_by_id: Dict[int, Dict[str, Any]] = {}
     
     def add_problem(self, problem: str, answer: str, category: str = "general"):
         """
@@ -21,23 +22,22 @@ class MathDataset:
             answer: Ground truth answer
             category: Problem category (arithmetic, algebra, calculus, etc.)
         """
-        self.problems.append({
+        record = {
             "problem": problem,
             "answer": answer,
             "category": category,
             "id": len(self.problems)
-        })
+        }
+        self.problems.append(record)
+        self._problems_by_id[record["id"]] = record
     
     def get_problems(self) -> List[Dict[str, Any]]:
         """Get all problems in the dataset."""
         return self.problems
     
-    def get_problem(self, problem_id: int) -> Dict[str, Any]:
+    def get_problem(self, problem_id: int) -> Optional[Dict[str, Any]]:
         """Get a specific problem by ID."""
-        for problem in self.problems:
-            if problem["id"] == problem_id:
-                return problem
-        return None
+        return self._problems_by_id.get(problem_id)
     
     def load_from_dict(self, data: List[Dict[str, str]]):
         """

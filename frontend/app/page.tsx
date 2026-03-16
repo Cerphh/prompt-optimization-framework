@@ -724,7 +724,7 @@ export default function Home() {
               />
               <p className="text-sm font-medium">{streamingStatus || 'Running benchmark\u2026'}</p>
               <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-                This may take a few minutes
+                This may take a few seconds
               </p>
               {streamingResponse && (
                 <div className="mt-6 text-left">

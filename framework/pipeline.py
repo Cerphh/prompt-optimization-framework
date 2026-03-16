@@ -12,6 +12,7 @@ Implements:
 
 from typing import Dict, List, Any, Optional
 import hashlib
+import math
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from .prompt_generator import PromptGenerator
 from .model_runner import ModelRunner
@@ -54,10 +55,43 @@ class BenchmarkPipeline:
             'completeness': completeness_weight,
             'efficiency': efficiency_weight
         }
-        
-        # Normalize weights to sum to 1
-        total = sum(self.weights.values())
-        self.weights = {k: v/total for k, v in self.weights.items()}
+        self.weights = self._normalize_weights(self.weights)
+
+    def _normalize_weights(self, weights: Dict[str, float]) -> Dict[str, float]:
+        """Validate and normalize metric weights to sum to 1.0."""
+        sanitized: Dict[str, float] = {}
+        for name, value in weights.items():
+            if value is None:
+                raise ValueError(f"Weight '{name}' cannot be None")
+
+            numeric_value = float(value)
+            if not math.isfinite(numeric_value):
+                raise ValueError(f"Weight '{name}' must be a finite number")
+            if numeric_value < 0:
+                raise ValueError(f"Weight '{name}' must be >= 0")
+
+            sanitized[name] = numeric_value
+
+        total = sum(sanitized.values())
+        if total <= 0:
+            raise ValueError("At least one metric weight must be greater than 0")
+
+        return {name: value / total for name, value in sanitized.items()}
+
+    def _build_failed_result(self, technique_name: str, prompt: str, error: str) -> Dict[str, Any]:
+        """Build a uniform failed technique payload."""
+        return {
+            "technique": technique_name,
+            "success": False,
+            "error": error,
+            "prompt": prompt,
+            "scores": {
+                "accuracy": 0.0,
+                "completeness": 0.0,
+                "efficiency": 0.0,
+                "overall": 0.0,
+            },
+        }
     
     def benchmark(self, problem: str, ground_truth: str = None, subject: str = "general") -> Dict[str, Any]:
         """
@@ -75,10 +109,12 @@ class BenchmarkPipeline:
         """
         # Step 1: Generate prompts using all techniques
         prompts = self.prompt_generator.generate_all_techniques(problem, subject=subject)
+        if not prompts:
+            raise ValueError("No prompting techniques available.")
         
         # Step 2: Evaluate each technique IN PARALLEL
         results = {}
-        with ThreadPoolExecutor(max_workers=len(prompts)) as executor:
+        with ThreadPoolExecutor(max_workers=max(1, len(prompts))) as executor:
             # Submit all tasks
             future_to_technique = {
                 executor.submit(
@@ -99,18 +135,11 @@ class BenchmarkPipeline:
                     results[technique_name] = result
                 except Exception as e:
                     # Handle individual technique failure
-                    results[technique_name] = {
-                        "technique": technique_name,
-                        "success": False,
-                        "error": str(e),
-                        "prompt": prompts[technique_name],
-                        "scores": {
-                            "accuracy": 0.0,
-                            "completeness": 0.0,
-                            "efficiency": 0.0,
-                            "overall": 0.0
-                        }
-                    }
+                    results[technique_name] = self._build_failed_result(
+                        technique_name=technique_name,
+                        prompt=prompts[technique_name],
+                        error=str(e),
+                    )
         
         # Step 3: Greedy selection - pick best performing technique
         best_technique = self._greedy_select(results, problem)
@@ -195,18 +224,11 @@ class BenchmarkPipeline:
                     }
 
             if not model_result or not model_result.get("success", False):
-                results[preview_technique] = {
-                    "technique": preview_technique,
-                    "success": False,
-                    "error": (model_result or {}).get("error", "Streaming finished without a final model result."),
-                    "prompt": prompts[preview_technique],
-                    "scores": {
-                        "accuracy": 0.0,
-                        "completeness": 0.0,
-                        "efficiency": 0.0,
-                        "overall": 0.0,
-                    },
-                }
+                results[preview_technique] = self._build_failed_result(
+                    technique_name=preview_technique,
+                    prompt=prompts[preview_technique],
+                    error=(model_result or {}).get("error", "Streaming finished without a final model result."),
+                )
             else:
                 results[preview_technique] = self._build_scored_result(
                     technique_name=preview_technique,
@@ -226,18 +248,11 @@ class BenchmarkPipeline:
                 try:
                     results[technique_name] = future.result()
                 except Exception as e:
-                    results[technique_name] = {
-                        "technique": technique_name,
-                        "success": False,
-                        "error": str(e),
-                        "prompt": prompts[technique_name],
-                        "scores": {
-                            "accuracy": 0.0,
-                            "completeness": 0.0,
-                            "efficiency": 0.0,
-                            "overall": 0.0,
-                        },
-                    }
+                    results[technique_name] = self._build_failed_result(
+                        technique_name=technique_name,
+                        prompt=prompts[technique_name],
+                        error=str(e),
+                    )
 
         best_technique = self._greedy_select(results, problem)
         final_result = {
@@ -269,18 +284,11 @@ class BenchmarkPipeline:
         model_result = self.model_runner.run(prompt)
         
         if not model_result["success"]:
-            return {
-                "technique": technique_name,
-                "success": False,
-                "error": model_result.get("error", "Unknown error"),
-                "prompt": prompt,
-                "scores": {
-                    "accuracy": 0.0,
-                    "completeness": 0.0,
-                    "efficiency": 0.0,
-                    "overall": 0.0
-                }
-            }
+            return self._build_failed_result(
+                technique_name=technique_name,
+                prompt=prompt,
+                error=model_result.get("error", "Unknown error"),
+            )
         
         return self._build_scored_result(
             technique_name=technique_name,
@@ -339,6 +347,9 @@ class BenchmarkPipeline:
         Returns:
             Name of the best technique
         """
+        if not results:
+            raise ValueError("No technique results available for selection.")
+
         # Sort techniques deterministically by name for consistent iteration
         sorted_techniques = sorted(results.items(), key=lambda x: x[0])
         
@@ -363,7 +374,7 @@ class BenchmarkPipeline:
                 if problem_hash > current_hash:
                     best_technique = technique_name
         
-        return best_technique if best_technique else list(results.keys())[0]
+        return best_technique if best_technique else sorted_techniques[0][0]
     
     def _generate_comparison(self, results: Dict[str, Dict]) -> List[Dict]:
         """
@@ -410,16 +421,16 @@ class BenchmarkPipeline:
             completeness: New completeness weight
             efficiency: New efficiency weight
         """
+        new_weights = dict(self.weights)
+
         if accuracy is not None:
-            self.weights['accuracy'] = accuracy
+            new_weights['accuracy'] = accuracy
         if completeness is not None:
-            self.weights['completeness'] = completeness
+            new_weights['completeness'] = completeness
         if efficiency is not None:
-            self.weights['efficiency'] = efficiency
-        
-        # Normalize
-        total = sum(self.weights.values())
-        self.weights = {k: v/total for k, v in self.weights.items()}
+            new_weights['efficiency'] = efficiency
+
+        self.weights = self._normalize_weights(new_weights)
 
 
 # Legacy compatibility wrapper

@@ -13,7 +13,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, List, Any, Dict
 from framework.pipeline import BenchmarkPipeline
-from framework.dataset import MathDataset, get_sample_dataset
+from framework.dataset import get_sample_dataset
 from framework.firestore_store import FirestoreStore
 
 try:
@@ -41,6 +41,39 @@ def _get_cors_origins() -> List[str]:
         "http://localhost:3000",
         "http://127.0.0.1:3000",
     ]
+
+
+def _get_env_int(name: str, default: int, min_value: Optional[int] = None) -> int:
+    """Parse integer environment variable with fallback and optional lower bound."""
+    raw_value = os.getenv(name)
+    try:
+        value = int(raw_value) if raw_value is not None else default
+    except (TypeError, ValueError):
+        value = default
+
+    if min_value is not None and value < min_value:
+        return min_value
+    return value
+
+
+def _get_env_float(
+    name: str,
+    default: float,
+    min_value: Optional[float] = None,
+    max_value: Optional[float] = None,
+) -> float:
+    """Parse float environment variable with fallback and optional bounds."""
+    raw_value = os.getenv(name)
+    try:
+        value = float(raw_value) if raw_value is not None else default
+    except (TypeError, ValueError):
+        value = default
+
+    if min_value is not None and value < min_value:
+        value = min_value
+    if max_value is not None and value > max_value:
+        value = max_value
+    return value
 
 # Add CORS middleware to allow frontend access
 app.add_middleware(
@@ -107,27 +140,46 @@ def _apply_db_based_selection(result: Dict[str, Any], domain: str, difficulty: s
         available_techniques=successful_techniques,
     )
 
-    min_samples = int(os.getenv("DB_MIN_SAMPLES_PER_TECHNIQUE", "5"))
-    min_gap = float(os.getenv("DB_MIN_AVG_SCORE_GAP", "0.03"))
-    exploration_rate = float(os.getenv("DB_EXPLORATION_RATE", "0.15"))
+    if not isinstance(selection, dict):
+        selection = {
+            "success": False,
+            "reason": "invalid_selection_payload",
+            "error": "Selection payload must be a dictionary.",
+        }
 
-    ranking = selection.get("ranking", []) if isinstance(selection, dict) else []
-    can_use_db = bool(selection.get("success"))
+    min_samples = _get_env_int("DB_MIN_SAMPLES_PER_TECHNIQUE", default=5, min_value=1)
+    min_gap = _get_env_float("DB_MIN_AVG_SCORE_GAP", default=0.03, min_value=0.0)
+    exploration_rate = _get_env_float(
+        "DB_EXPLORATION_RATE",
+        default=0.15,
+        min_value=0.0,
+        max_value=1.0,
+    )
+
+    ranking = selection.get("ranking", [])
+    can_use_db = bool(selection.get("success", False))
     db_decision_reason = "ok"
 
     if can_use_db and len(ranking) >= 2:
-        top = ranking[0]
-        second = ranking[1]
-        top_samples = int(top.get("samples", 0))
-        second_samples = int(second.get("samples", 0))
-        score_gap = float(top.get("average_overall", 0.0)) - float(second.get("average_overall", 0.0))
+        top = ranking[0] if isinstance(ranking[0], dict) else {}
+        second = ranking[1] if isinstance(ranking[1], dict) else {}
 
-        if min(top_samples, second_samples) < min_samples:
+        try:
+            top_samples = max(0, int(top.get("samples", 0) or 0))
+            second_samples = max(0, int(second.get("samples", 0) or 0))
+            top_average = float(top.get("average_overall", 0.0) or 0.0)
+            second_average = float(second.get("average_overall", 0.0) or 0.0)
+            score_gap = top_average - second_average
+        except (TypeError, ValueError):
             can_use_db = False
-            db_decision_reason = "insufficient_samples"
-        elif score_gap < min_gap:
-            can_use_db = False
-            db_decision_reason = "low_confidence_gap"
+            db_decision_reason = "invalid_ranking_data"
+        else:
+            if min(top_samples, second_samples) < min_samples:
+                can_use_db = False
+                db_decision_reason = "insufficient_samples"
+            elif score_gap < min_gap:
+                can_use_db = False
+                db_decision_reason = "low_confidence_gap"
 
     if can_use_db and exploration_rate > 0:
         exploration_key = f"{domain}|{result.get('problem', '')}"
@@ -165,6 +217,35 @@ def _apply_db_based_selection(result: Dict[str, Any], domain: str, difficulty: s
         },
     }
     return result
+
+
+def _finalize_benchmark_result(
+    result: Dict[str, Any],
+    *,
+    domain: str,
+    difficulty: str,
+    source: str,
+    metadata: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Apply selection strategy, validate winner, and persist storage status."""
+    result = _apply_db_based_selection(
+        result=result,
+        domain=domain,
+        difficulty=difficulty,
+    )
+
+    best_result = result.get("best_result", {})
+    if not best_result.get("success", False):
+        raise HTTPException(
+            status_code=500,
+            detail=best_result.get("error", "Benchmark failed"),
+        )
+
+    return _persist_and_attach_storage(
+        result=result,
+        source=source,
+        metadata=metadata,
+    )
 
 
 class BenchmarkRequest(BaseModel):
@@ -238,20 +319,10 @@ async def run_benchmark(request: BenchmarkRequest):
             subject=request.subject
         )
 
-        result = _apply_db_based_selection(
+        result = _finalize_benchmark_result(
             result=result,
             domain=request.subject or "general",
             difficulty=request.difficulty or "basic",
-        )
-        
-        if not result["best_result"]["success"]:
-            raise HTTPException(
-                status_code=500,
-                detail=result["best_result"].get("error", "Benchmark failed")
-            )
-
-        result = _persist_and_attach_storage(
-            result=result,
             source="benchmark_api",
             metadata={
                 "subject": request.subject,
@@ -286,13 +357,10 @@ async def run_benchmark_stream(request: BenchmarkRequest):
             ):
                 if event.get("type") == "complete":
                     result = event.get("result", {})
-                    result = _apply_db_based_selection(
+                    result = _finalize_benchmark_result(
                         result=result,
                         domain=request.subject or "general",
                         difficulty=request.difficulty or "basic",
-                    )
-                    result = _persist_and_attach_storage(
-                        result=result,
                         source="benchmark_stream_api",
                         metadata={
                             "subject": request.subject,
@@ -415,20 +483,10 @@ async def benchmark_dataset_problem(problem_id: int):
             ground_truth=problem_data["answer"]
         )
 
-        result = _apply_db_based_selection(
+        result = _finalize_benchmark_result(
             result=result,
             domain=problem_data.get("category", "general"),
             difficulty="basic",
-        )
-        
-        if not result["best_result"]["success"]:
-            raise HTTPException(
-                status_code=500,
-                detail=result["best_result"].get("error", "Benchmark failed")
-            )
-
-        result = _persist_and_attach_storage(
-            result=result,
             source="benchmark_dataset_api",
             metadata={
                 "category": problem_data.get("category", "general"),
