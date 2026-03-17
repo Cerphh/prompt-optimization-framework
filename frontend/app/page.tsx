@@ -129,9 +129,13 @@ export default function Home() {
                  'rate of change', 'optimization', 'concave', 'inflection', 'slope', 'curve',
                  'velocity', 'acceleration', 'extrema', 'maximum', 'minimum', 'gradient',
                  'second derivative', 'critical point', 'antiderivative', 'riemann', 'area under',
-                 'function', 'exponential', 'logarithmic', 'sequence', 'series', 'convergence'],
-      patterns: [/d\/dx/, /∫/, /lim|limit/, /derivative|derivatives/, /integral|integrate/i, /exponential|logarithm|log\(/],
-      symbols: ['dx', 'dy', 'dy/dx', '∫', 'e^', 'ln('],
+                 'function', 'exponential', 'logarithmic', 'sequence', 'series', 'convergence',
+                 'graph', 'asymptote', 'domain', 'range', 'inverse function', 'composite function',
+                 'trigonometric', 'sine', 'cosine', 'tangent function', 'periodic'],
+      patterns: [/d\/dx/, /∫/, /lim|limit/, /derivative|derivatives/, /integral|integrate/i, 
+                 /exponential|logarithm|log\(/, /sin|cos|tan|graph|function/, /solve.*for|find.*value/],
+      problemGoals: ['solve', 'find', 'graph', 'calculate', 'determine'],  // What user wants to do
+      symbols: ['dx', 'dy', 'dy/dx', '∫', 'e^', 'ln(', 'sin', 'cos', 'tan', '^'],
       operations: ['derivative', 'integral', 'limit', 'exponential growth'],
       weight: 3
     }
@@ -142,10 +146,14 @@ export default function Home() {
                  'permutation', 'combination', 'count', 'arrangement', 'selection',
                  'bell curve', 'normal distribution', 'quartile', 'percentile', 'z-score',
                  'frequency', 'event', 'outcome', 'counting', 'arrange', 'choose',
-                 'factorial', 'nCr', 'nPr', 'odds', 'chance', 'flip', 'flipped', 'roll', 'rolled'],
+                 'factorial', 'nCr', 'nPr', 'odds', 'chance', 'flip', 'flipped', 'roll', 'rolled',
+                 'ways', 'how many', 'different', 'possible outcomes', 'sample space',
+                 'at least', 'probability of', 'likelihood', 'bayes', 'conditional'],
       patterns: [/probability|P\(/, /mean|average|median|mode/, /standard deviation|σ|variance/i,
                  /distribution/, /sample|population/, /permutation|combination|C\(|nCr|nPr/i,
-                 /counting|arrange|flip|roll|die|dice|coin/],
+                 /counting|arrange|flip|roll|die|dice|coin/, /how many ways|ways to/i, 
+                 /in how many|possible.*outcomes|select|pick/i],
+      problemGoals: ['count', 'probability', 'likelihood', 'chance', 'outcomes', 'arrangements'],  // What user wants
       symbols: ['μ', 'σ', 'P(', 'C(', 'n!', '!', '±'],
       operations: ['probability', 'counting', 'arrangement', 'permutation', 'combination'],
       weight: 2
@@ -163,6 +171,21 @@ export default function Home() {
       weight: 1
     }
     
+    // Helper function to detect problem goal (what user wants to find)
+    const detectProblemGoal = (text: string) => {
+      const goals = {
+        precalc: ['graph', 'sketch', 'solve for x', 'find x', 'find the derivative', 'find the integral', 
+                  'find the limit', 'determine the function', 'calculate the slope'],
+        counting: ['how many ways', 'in how many', 'probability', 'likelihood', 'chance', 'ways to arrange',
+                   'how many different', 'possible outcomes', 'probability of']
+      }
+      
+      let precalcGoals = goals.precalc.filter(g => lowerText.includes(g)).length
+      let countingGoals = goals.counting.filter(g => lowerText.includes(g)).length
+      
+      return { precalcGoals, countingGoals }
+    }
+    
     // Check patterns for each subject
     const checkPatterns = (patterns: typeof precalculusPatterns) => {
       let score = 0
@@ -172,7 +195,7 @@ export default function Home() {
         score += patterns.weight
       }
       
-      // Check regex patterns
+      // Check regex patterns (more specific, higher weight)
       if (patterns.patterns.some(pat => pat.test(lowerText))) {
         score += patterns.weight * 1.5
       }
@@ -185,9 +208,18 @@ export default function Home() {
       return score
     }
     
+    // Calculate base scores
     scores['pre-calculus'] = checkPatterns(precalculusPatterns)
     scores['counting-probability'] = checkPatterns(countingProbabilityPatterns)
     scores.algebra = checkPatterns(algebraPatterns)
+    
+    // Apply goal-based detection (helps distinguish pre-calc vs counting)
+    const { precalcGoals, countingGoals } = detectProblemGoal(text)
+    if (precalcGoals > countingGoals) {
+      scores['pre-calculus'] += 2
+    } else if (countingGoals > precalcGoals) {
+      scores['counting-probability'] += 2
+    }
     
     // Return subject with highest score, or algebra as default
     const maxScore = Math.max(scores['pre-calculus'], scores['counting-probability'], scores.algebra)
