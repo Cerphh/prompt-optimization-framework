@@ -76,6 +76,44 @@ def _get_env_float(
         value = max_value
     return value
 
+
+def _resolve_speed_profile(raw_value: Optional[str]) -> str:
+    """Normalize speed profile to a supported value."""
+    normalized = (raw_value or "balanced").strip().lower()
+    if normalized in {"balanced", "fast"}:
+        return normalized
+    return "balanced"
+
+
+def _build_fast_pipeline_from_defaults() -> BenchmarkPipeline:
+    """Create a per-request fast pipeline without mutating shared global state."""
+    request_pipeline = BenchmarkPipeline(
+        model_name=pipeline.model_runner.model_name,
+        base_url=pipeline.model_runner.base_url,
+        accuracy_weight=pipeline.weights.get("accuracy", 0.5),
+        completeness_weight=pipeline.weights.get("completeness", 0.3),
+        efficiency_weight=pipeline.weights.get("efficiency", 0.2),
+    )
+
+    runner = request_pipeline.model_runner
+    runner.verifier_retry_enabled = False
+    runner.verifier_retry_attempts = 0
+    runner.max_continue_rounds = _get_env_int("FAST_MODEL_MAX_CONTINUE_ROUNDS", default=1, min_value=0)
+
+    fast_num_predict = _get_env_int("FAST_MODEL_NUM_PREDICT", default=768, min_value=64)
+    fast_num_ctx = _get_env_int("FAST_MODEL_NUM_CTX", default=4096, min_value=512)
+
+    runner.generation_options["num_predict"] = min(
+        int(runner.generation_options.get("num_predict", fast_num_predict)),
+        fast_num_predict,
+    )
+    runner.generation_options["num_ctx"] = min(
+        int(runner.generation_options.get("num_ctx", fast_num_ctx)),
+        fast_num_ctx,
+    )
+
+    return request_pipeline
+
 # Add CORS middleware to allow frontend access
 app.add_middleware(
     CORSMiddleware,
@@ -289,6 +327,7 @@ class BenchmarkRequest(BaseModel):
     ground_truth: Optional[str] = None
     subject: Optional[str] = "algebra"  # algebra, counting-probability, or pre-calculus
     difficulty: Optional[str] = "basic"  # basic, intermediate, advanced
+    speed_profile: Optional[str] = "balanced"  # balanced, fast
 
 
 class WeightsUpdate(BaseModel):
@@ -355,7 +394,10 @@ async def run_benchmark(request: BenchmarkRequest):
     Returns comparative results and optimal technique selection.
     """
     try:
-        result = pipeline.benchmark(
+        speed_profile = _resolve_speed_profile(request.speed_profile)
+        request_pipeline = pipeline if speed_profile == "balanced" else _build_fast_pipeline_from_defaults()
+
+        result = request_pipeline.benchmark(
             problem=request.problem,
             ground_truth=request.ground_truth,
             subject=request.subject
@@ -369,6 +411,7 @@ async def run_benchmark(request: BenchmarkRequest):
             metadata={
                 "subject": request.subject,
                 "difficulty": request.difficulty,
+                "speed_profile": speed_profile,
             },
         )
         
@@ -390,9 +433,12 @@ async def run_benchmark_stream(request: BenchmarkRequest):
     - complete
     - error
     """
+    speed_profile = _resolve_speed_profile(request.speed_profile)
+    request_pipeline = pipeline if speed_profile == "balanced" else _build_fast_pipeline_from_defaults()
+
     def event_stream():
         try:
-            for event in pipeline.benchmark_stream_events(
+            for event in request_pipeline.benchmark_stream_events(
                 problem=request.problem,
                 ground_truth=request.ground_truth,
                 subject=request.subject,
@@ -407,6 +453,7 @@ async def run_benchmark_stream(request: BenchmarkRequest):
                         metadata={
                             "subject": request.subject,
                             "difficulty": request.difficulty,
+                            "speed_profile": speed_profile,
                         },
                     )
                     event["result"] = result

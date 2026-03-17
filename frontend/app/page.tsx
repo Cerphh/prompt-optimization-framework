@@ -408,6 +408,7 @@ export default function Home() {
           problem,
           subject,
           difficulty,
+          speed_profile: 'fast',
         }),
       })
 
