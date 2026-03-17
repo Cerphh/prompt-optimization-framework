@@ -139,7 +139,63 @@ class PromptGenerator:
         while lines and lines[-1].strip().lower() == "a:":
             lines.pop()
 
-        return "\n".join(lines).strip()
+        normalized = "\n".join(lines).strip()
+        
+        # Convert caret notation to Unicode superscripts
+        normalized = self._convert_caret_to_superscripts(normalized)
+        
+        return normalized
+    
+    def _convert_caret_to_superscripts(self, text: str) -> str:
+        """Convert x^n notation to Unicode superscripts (x³, x², etc.)."""
+        # Mapping of digits and common characters to superscript Unicode
+        superscript_map = {
+            '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
+            '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
+            '+': '⁺', '-': '⁻', '=': '⁼', '(': '⁽', ')': '⁾'
+        }
+        
+        result = []
+        i = 0
+        while i < len(text):
+            if i < len(text) - 1 and text[i] == '^':
+                # Check if next character is a digit or should be superscript
+                j = i + 1
+                superscript_part = ''
+                
+                # Handle parentheses: x^(3+2) -> x⁽³⁺²⁾
+                if j < len(text) and text[j] == '(':
+                    superscript_part += superscript_map.get('(', '(')
+                    j += 1
+                    while j < len(text) and text[j] != ')':
+                        if text[j] in superscript_map:
+                            superscript_part += superscript_map[text[j]]
+                        else:
+                            superscript_part += text[j]
+                        j += 1
+                    if j < len(text) and text[j] == ')':
+                        superscript_part += superscript_map.get(')', ')')
+                        j += 1
+                else:
+                    # Handle single character: x^3 -> x³
+                    while j < len(text) and (text[j].isdigit() or text[j] in superscript_map):
+                        if text[j] in superscript_map:
+                            superscript_part += superscript_map[text[j]]
+                        else:
+                            superscript_part += text[j]
+                        j += 1
+                
+                if superscript_part:
+                    result.append(superscript_part)
+                    i = j
+                else:
+                    result.append(text[i])
+                    i += 1
+            else:
+                result.append(text[i])
+                i += 1
+        
+        return ''.join(result)
 
     def _is_conditional_probability_problem(self, problem: str) -> bool:
         """Detect conditional probability phrasing to prioritize matching examples."""
@@ -562,12 +618,22 @@ class PromptGenerator:
         Returns:
             Few-shot prompt with subject-specific, relevant examples
         """
+        # Map "calculus" subject to "pre-calculus" if not found
+        subject_to_use = subject
+        if subject not in self.example_dataset:
+            if subject == "calculus":
+                subject_to_use = "pre-calculus"
+            else:
+                print(f"Warning: Subject '{subject}' not found in dataset, using 'algebra'")
+                subject_to_use = "algebra"
+        
         # Normalize user problem text (e.g., remove leading Q: and trailing A:)
         normalized_problem = self._normalize_problem_text(problem)
 
         # Auto-determine number of examples based on subject if not specified
         if num_examples is None:
-            complexity = self._estimate_problem_complexity(normalized_problem, subject)
+            # Use mapped subject_to_use for complexity estimation
+            complexity = self._estimate_problem_complexity(normalized_problem, subject_to_use)
             target_examples = self.few_shot_min_examples
             if complexity >= 3:
                 target_examples = self.few_shot_hard_examples
@@ -580,15 +646,6 @@ class PromptGenerator:
             )
 
         num_examples = max(self.few_shot_min_examples, min(num_examples, self.few_shot_max_examples))
-        
-        # Map "calculus" subject to "pre-calculus" if not found
-        subject_to_use = subject
-        if subject not in self.example_dataset:
-            if subject == "calculus":
-                subject_to_use = "pre-calculus"
-            else:
-                print(f"Warning: Subject '{subject}' not found in dataset, using 'algebra'")
-                subject_to_use = "algebra"
         
         available_examples = self.example_dataset.get(subject_to_use, [])
         
