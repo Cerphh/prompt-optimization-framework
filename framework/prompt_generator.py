@@ -211,7 +211,11 @@ class PromptGenerator:
             "given that", "conditional", "system", "variance", "standard deviation",
             "integral", "derivative", "limit", "chain rule", "product rule", "prove"
         ]
-        if any(marker in text for marker in advanced_markers):
+        # Count how many advanced markers are present
+        marker_count = sum(1 for marker in advanced_markers if marker in text)
+        if marker_count >= 1:
+            complexity += 1
+        if marker_count >= 2:
             complexity += 1
 
         if subject in {"counting-probability", "pre-calculus"}:
@@ -577,12 +581,16 @@ class PromptGenerator:
 
         num_examples = max(self.few_shot_min_examples, min(num_examples, self.few_shot_max_examples))
         
-        # Get examples from the specified subject, default to general if not found
+        # Map "calculus" subject to "pre-calculus" if not found
+        subject_to_use = subject
         if subject not in self.example_dataset:
-            print(f"Warning: Subject '{subject}' not found in dataset, using 'algebra'")
-            subject = "algebra"
+            if subject == "calculus":
+                subject_to_use = "pre-calculus"
+            else:
+                print(f"Warning: Subject '{subject}' not found in dataset, using 'algebra'")
+                subject_to_use = "algebra"
         
-        available_examples = self.example_dataset.get(subject, [])
+        available_examples = self.example_dataset.get(subject_to_use, [])
         
         if not available_examples:
             print(f"Warning: No examples found for subject '{subject}'")

@@ -166,6 +166,7 @@ export default function Home() {
                  'expression', 'substitute', 'inequality', 'variable', 'coefficient'],
       patterns: [/solve (for|x|y|z)/, /factor|factorize/, /simplify/, /expand/, /quadratic/i,
                  /equation(s)?/, /polynomial/, /inequality/, /system.*equation/],
+      problemGoals: ['solve', 'find', 'factor', 'simplify', 'expand'],
       symbols: ['=', '≠', '<', '>', '≤', '≥', 'x', 'x²', 'y'],
       operations: ['factor', 'simplify', 'solve', 'expand'],
       weight: 1
