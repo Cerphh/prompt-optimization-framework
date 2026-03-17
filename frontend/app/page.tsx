@@ -511,8 +511,8 @@ export default function Home() {
                     style={{ border: '1px solid var(--border)', color: 'var(--text)', background: 'var(--surface)' }}
                   >
                     <option value="algebra">Algebra</option>
-                    <option value="statistics">Statistics &amp; Probability</option>
-                    <option value="calculus">Calculus</option>
+                    <option value="statistics">Counting &amp; Probability</option>
+                    <option value="calculus">Pre-calculus</option>
                   </select>
                 </div>
                 <div>
@@ -622,8 +622,8 @@ export default function Home() {
                   }}
                 >
                   <option value="algebra">Algebra</option>
-                  <option value="statistics">Statistics &amp; Probability</option>
-                  <option value="calculus">Calculus</option>
+                  <option value="statistics">Counting &amp; Probability</option>
+                  <option value="calculus">Pre-calculus</option>
                 </select>
               </div>
 
