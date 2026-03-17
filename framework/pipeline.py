@@ -211,10 +211,13 @@ class BenchmarkPipeline:
                 elif event_type == "done":
                     model_result = event.get("result")
                 elif event_type == "error":
+                    error_msg = event.get("error", "").strip()
+                    if not error_msg:
+                        error_msg = "Unknown streaming error from model runner"
                     model_result = {
                         "response": "",
                         "success": False,
-                        "error": event.get("error", "Unknown stream error"),
+                        "error": error_msg,
                         "metrics": {
                             "elapsed_time": 0,
                             "prompt_tokens": 0,

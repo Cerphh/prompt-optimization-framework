@@ -253,7 +253,257 @@
       "solution": "Domain: x!=1,-1. Combine fractions: (x+1 + x-1)/(x^2-1)=1 => 2x/(x^2-1)=1 => x^2-2x-1=0. Quadratic formula: x=(2+-sqrt(4+4))/2=1+-sqrt(2). Both are valid (not +-1)."
     }
   ],
-  "statistics": [
+  "pre-calculus": [
+    {
+      "problem": "Find the derivative: f(x) = x³",
+      "solution": "f(x) = x³\nf'(x) = 3x⁽³⁻¹⁾\nf'(x) = 3x²"
+    },
+    {
+      "problem": "Find the derivative: f(x) = 5x⁴ - 2x² + 7",
+      "solution": "f(x) = 5x⁴ - 2x² + 7\nf'(x) = 5·4x³ - 2·2x + 0\nf'(x) = 20x³ - 4x"
+    },
+    {
+      "problem": "Evaluate: ∫ x² dx",
+      "solution": "∫ x² dx\n= x⁽²⁺¹⁾/(2+1) + C\n= x³/3 + C"
+    },
+    {
+      "problem": "Find the limit: lim(x→3) (x² - 9)/(x - 3)",
+      "solution": "lim(x→3) (x² - 9)/(x - 3)\n= lim(x→3) (x + 3)(x - 3)/(x - 3)\n= lim(x→3) (x + 3)\n= 3 + 3\n= 6"
+    },
+    {
+      "problem": "Find the derivative: f(x) = (x² + 1)(x³)",
+      "solution": "f(x) = (x² + 1)(x³)\nUsing product rule: f'(x) = u'v + uv'\nu = x² + 1, u' = 2x\nv = x³, v' = 3x²\nf'(x) = (2x)(x³) + (x² + 1)(3x²)\n= 2x⁴ + 3x⁴ + 3x²\n= 5x⁴ + 3x²"
+    },
+    {
+      "problem": "Evaluate: ∫ (3x² + 4x) dx",
+      "solution": "∫ (3x² + 4x) dx\n= 3∫x² dx + 4∫x dx\n= 3(x³/3) + 4(x²/2) + C\n= x³ + 2x² + C"
+    },
+    {
+      "problem": "Find the derivative: f(x) = 7x",
+      "solution": "f(x) = 7x\nf'(x) = 7·1·x⁽¹⁻¹⁾\nf'(x) = 7"
+    },
+    {
+      "problem": "Find the limit: lim(x→2) (x² + 3x - 1)",
+      "solution": "lim(x→2) (x² + 3x - 1)\nDirect substitution:\n= 2² + 3(2) - 1\n= 4 + 6 - 1\n= 9"
+    },
+    {
+      "problem": "Find the derivative using chain rule: f(x) = (2x + 1)³",
+      "solution": "f(x) = (2x + 1)³\nLet u = 2x + 1, then f = u³\ndf/dx = df/du · du/dx\n= 3u² · 2\n= 6(2x + 1)²"
+    },
+    {
+      "problem": "Evaluate: ∫₀² x dx",
+      "solution": "∫₀² x dx\n= [x²/2]₀²\n= (2²/2) - (0²/2)\n= 4/2 - 0\n= 2"
+    },
+    {
+      "problem": "Find the derivative: f(x) = 1/x",
+      "solution": "f(x) = 1/x = x⁻¹\nf'(x) = -1·x⁽⁻¹⁻¹⁾\nf'(x) = -x⁻²\nf'(x) = -1/x²"
+    },
+    {
+      "problem": "Find the limit: lim(x→0) (sin x)/x",
+      "solution": "lim(x→0) (sin x)/x\nThis is a standard limit:\nlim(x→0) (sin x)/x = 1"
+    },
+    {
+      "problem": "Find the derivative: f(x) = (x² + 3)/(x - 1)",
+      "solution": "Use quotient rule: (u/v)' = (u'v - uv')/v²\nu = x² + 3, u' = 2x\nv = x - 1, v' = 1\nf'(x) = [2x(x - 1) - (x² + 3)]/(x - 1)²\n= (2x² - 2x - x² - 3)/(x - 1)²\n= (x² - 2x - 3)/(x - 1)²"
+    },
+    {
+      "problem": "Find the derivative implicitly: x² + y² = 25",
+      "solution": "Differentiate both sides with respect to x:\nd/dx(x²) + d/dx(y²) = d/dx(25)\n2x + 2y(dy/dx) = 0\n2y(dy/dx) = -2x\ndy/dx = -x/y"
+    },
+    {
+      "problem": "Evaluate: ∫(2x + 5) dx",
+      "solution": "∫(2x + 5) dx = ∫2x dx + ∫5 dx\n= 2(x²/2) + 5x + C\n= x² + 5x + C"
+    },
+    {
+      "problem": "Evaluate: ∫₁³ (2x) dx",
+      "solution": "∫₁³ 2x dx = [x²]₁³\n= 3² - 1²\n= 9 - 1\n= 8"
+    },
+    {
+      "problem": "Find the derivative using chain rule: f(x) = √(3x + 1)",
+      "solution": "f(x) = (3x + 1)^(1/2)\nf'(x) = (1/2)(3x + 1)^(-1/2) · 3\n= 3 / (2√(3x + 1))"
+    },
+    {
+      "problem": "Find lim(x->2) (x^2 - 4)/(x - 2).",
+      "solution": "Factor numerator: (x-2)(x+2)/(x-2) = x+2, so the limit is 4."
+    },
+    {
+      "problem": "Is f(x)=|x| continuous at x=0?",
+      "solution": "Yes. Left and right limits at 0 are both 0, and f(0)=0, so f is continuous at 0."
+    },
+    {
+      "problem": "Find the second derivative of f(x)=x^4 - 3x^2 + 2.",
+      "solution": "f'(x)=4x^3-6x and f''(x)=12x^2-6."
+    },
+    {
+      "problem": "Find the tangent line to y=x^2 at x=3.",
+      "solution": "Slope is y'=2x so m=6 at x=3. Point is (3,9). Tangent: y-9=6(x-3)."
+    },
+    {
+      "problem": "Given s(t)=t^3-6t^2+9t, find velocity and acceleration.",
+      "solution": "v(t)=s'(t)=3t^2-12t+9 and a(t)=v'(t)=6t-12."
+    },
+    {
+      "problem": "Find all real values of x where f'(x)=0 for f(x)=x³-3x.",
+      "solution": "f'(x)=3x^2-3=3(x^2-1). Set to zero: x^2=1, so x=-1 or x=1."
+    },
+    {
+      "problem": "Find all real values where f'(x)=0 for f(x)=x^3-12x.",
+      "solution": "f'(x)=3x^2-12=3(x^2-4). So x=-2 or x=2."
+    },
+    {
+      "problem": "Find antiderivative: Integral (5x^4 - 2x + 1) dx.",
+      "solution": "Integral = x^5 - x^2 + x + C."
+    },
+    {
+      "problem": "Evaluate Integral_0^1 (3x^2 + 2) dx.",
+      "solution": "Antiderivative is x^3+2x. Value = (1+2) - (0+0) = 3."
+    },
+    {
+      "problem": "Use FTC: if F(x)=Integral_1^x (t^2+1) dt, find F'(x).",
+      "solution": "By the Fundamental Theorem of Calculus, F'(x)=x^2+1."
+    },
+    {
+      "problem": "Evaluate by substitution: Integral 2x*cos(x^2) dx.",
+      "solution": "Let u=x^2, du=2x dx. Integral becomes Integral cos(u) du = sin(u)+C = sin(x^2)+C."
+    },
+    {
+      "problem": "Evaluate by parts: Integral x*e^x dx.",
+      "solution": "u=x, dv=e^x dx => du=dx, v=e^x. Integral = x e^x - Integral e^x dx = e^x(x-1)+C."
+    },
+    {
+      "problem": "Evaluate using partial fractions: Integral 1/(x^2-1) dx.",
+      "solution": "1/(x^2-1)=1/2[1/(x-1)-1/(x+1)]. Integral = (1/2)ln|x-1|-(1/2)ln|x+1|+C."
+    },
+    {
+      "problem": "Evaluate trigonometric integral: Integral sin(x)cos(x) dx.",
+      "solution": "Let u=sin(x), du=cos(x)dx. Integral = Integral u du = (1/2)sin^2(x)+C."
+    },
+    {
+      "problem": "Determine whether Integral_1^infinity 1/x^2 dx converges.",
+      "solution": "Integral_1^b x^-2 dx = 1-1/b. Limit as b->infinity is 1, so it converges to 1."
+    },
+    {
+      "problem": "Find area under y=x from x=0 to x=4.",
+      "solution": "Area = Integral_0^4 x dx = [x^2/2]_0^4 = 8."
+    },
+    {
+      "problem": "Find volume when y=x is revolved about x-axis on [0,2].",
+      "solution": "Disk method: V=pi Integral_0^2 x^2 dx = pi*(8/3) = 8pi/3."
+    },
+    {
+      "problem": "A variable force F(x)=3x^2 moves an object from x=0 to x=2. Find work.",
+      "solution": "Work = Integral_0^2 3x^2 dx = [x^3]_0^2 = 8."
+    },
+    {
+      "problem": "Find partial derivatives of f(x,y)=x^2 y + e^y.",
+      "solution": "f_x=2xy and f_y=x^2+e^y."
+    },
+    {
+      "problem": "Find grad f for f(x,y,z)=x^2+y^2+z^2.",
+      "solution": "grad f = (2x, 2y, 2z)."
+    },
+    {
+      "problem": "For F=(x^2, y^2, z^2), find divergence.",
+      "solution": "div F = d/dx(x^2)+d/dy(y^2)+d/dz(z^2) = 2x+2y+2z."
+    },
+    {
+      "problem": "For F=(-y, x, 0), find curl.",
+      "solution": "curl F = (0,0, d/dx(x)-d/dy(-y)) = (0,0,2)."
+    },
+    {
+      "problem": "Evaluate double integral Integral_0^1 Integral_0^2 (x+y) dx dy.",
+      "solution": "Inner integral gives [x^2/2 + yx]_0^2 = 2+2y. Outer integral gives Integral_0^1 (2+2y)dy = 3."
+    },
+    {
+      "problem": "Evaluate triple integral Integral_0^1 Integral_0^1 Integral_0^1 xyz dx dy dz.",
+      "solution": "Separable: (Integral_0^1 xdx)(Integral_0^1 ydy)(Integral_0^1 zdz) = (1/2)^3 = 1/8."
+    },
+    {
+      "problem": "Compute line integral Integral_C x ds on line segment from 0 to 2 on x-axis.",
+      "solution": "Here ds=dx and x runs 0 to 2, so Integral_0^2 x dx = 2."
+    },
+    {
+      "problem": "State Green's theorem relation for a positively oriented simple closed curve C.",
+      "solution": "Integral_C (P dx + Q dy) = DoubleIntegral_D (dQ/dx - dP/dy) dA."
+    },
+    {
+      "problem": "State Stokes' theorem.",
+      "solution": "Surface integral of curl F over S equals line integral of F over boundary C: DoubleIntegral_S (curl F·n)dS = Integral_C F·dr."
+    },
+    {
+      "problem": "State Divergence theorem.",
+      "solution": "TripleIntegral_V (div F)dV = SurfaceIntegral_boundary(V) F·n dS."
+    },
+    {
+      "problem": "Determine convergence of geometric series sum from n=0 to infinity of (1/3)^n.",
+      "solution": "It converges since |r|=1/3<1. Sum = 1/(1-1/3)=3/2."
+    },
+    {
+      "problem": "Determine convergence of harmonic series sum from n=1 to infinity of 1/n.",
+      "solution": "The harmonic series diverges."
+    },
+    {
+      "problem": "Find the Maclaurin series for e^x up to x^4 term.",
+      "solution": "e^x = 1 + x + x^2/2! + x^3/3! + x^4/4! + ..."
+    },
+    {
+      "problem": "Find the Taylor series of sin(x) about x=0 up to x^5 term.",
+      "solution": "sin(x)=x - x^3/3! + x^5/5! + ..."
+    },
+    {
+      "problem": "Find radius of convergence for sum from n=0 to infinity of x^n.",
+      "solution": "This is geometric with ratio x, so it converges for |x|<1. Radius R=1."
+    },
+    {
+      "problem": "Find interval of convergence for sum from n=1 to infinity of x^n/n.",
+      "solution": "Radius is 1. At x=1 it diverges (harmonic), at x=-1 it converges (alternating harmonic). Interval is [-1,1)."
+    },
+    {
+      "problem": "Differentiate implicitly: x^2 + xy + y^2 = 7.",
+      "solution": "Differentiate: 2x + (x*y' + y) + 2y*y' = 0 => y' = -(2x+y)/(x+2y)."
+    },
+    {
+      "problem": "Find the third derivative of f(x)=x^5.",
+      "solution": "f'(x)=5x^4, f''(x)=20x^3, f'''(x)=60x^2."
+    },
+    {
+      "problem": "Use FTC to evaluate Integral_2^5 4 dx.",
+      "solution": "Integral_2^5 4 dx = 4(5-2)=12."
+    },
+    {
+      "problem": "Find partial derivatives of f(x,y)=x*e^y + y^3.",
+      "solution": "f_x=e^y and f_y=x*e^y + 3y^2."
+    },
+    {
+      "problem": "Find a power series for 1/(1-x) about x=0.",
+      "solution": "For |x|<1, 1/(1-x) = sum_{n=0}^{infinity} x^n."
+    },
+    {
+      "problem": "Find the Taylor series of e^x about x=1 up to quadratic term.",
+      "solution": "e^x = e + e(x-1) + e(x-1)^2/2 + ..."
+    },
+    {
+      "problem": "Find the Maclaurin series for cos(x) up to x^4 term.",
+      "solution": "cos(x)=1 - x^2/2! + x^4/4! + ..."
+    },
+    {
+      "problem": "Compute surface integral of f(x,y,z)=z over plane z=2 on square 0<=x<=1, 0<=y<=1.",
+      "solution": "Since f=2 is constant and area is 1, the surface integral is 2."
+    },
+    {
+      "problem": "Find and classify critical points of f(x)=x^3-3x^2+2.",
+      "solution": "f'(x)=3x^2-6x=3x(x-2), so critical points are x=0 and x=2. f''(x)=6x-6. f''(0)=-6<0 so local maximum at x=0 with f(0)=2. f''(2)=6>0 so local minimum at x=2 with f(2)=-2."
+    },
+    {
+      "problem": "Evaluate the improper integral Integral_0^infinity e^(-2x) dx.",
+      "solution": "Integral_0^infinity e^(-2x) dx = lim_{b->infinity} Integral_0^b e^(-2x) dx = lim_{b->infinity} [-(1/2)e^(-2x)]_0^b = (1/2)(1-e^(-2b)) = 1/2."
+    },
+    {
+      "problem": "Solve the differential equation dy/dx = 3y with y(0)=2.",
+      "solution": "Separate variables: dy/y = 3 dx. Integrate: ln|y| = 3x + C, so y = Ce^(3x). Use y(0)=2 gives C=2. Therefore y=2e^(3x)."
+    }
+  ],
+  "counting-probability": [
     {
       "problem": "Find the mean of: 4, 8, 12, 16, 20",
       "solution": "Mean = (4 + 8 + 12 + 16 + 20)/5\n= 60/5\n= 12"
@@ -521,256 +771,6 @@
     {
       "problem": "A random variable has PMF p(x)=k*x for x in {1,2,3,4}. Find k and E[X].",
       "solution": "Normalization: k(1+2+3+4)=10k=1 => k=0.1. Then E[X]=sum x*p(x)=sum x*(0.1x)=0.1(1^2+2^2+3^2+4^2)=0.1(30)=3."
-    }
-  ],
-  "calculus": [
-    {
-      "problem": "Find the derivative: f(x) = x³",
-      "solution": "f(x) = x³\nf'(x) = 3x⁽³⁻¹⁾\nf'(x) = 3x²"
-    },
-    {
-      "problem": "Find the derivative: f(x) = 5x⁴ - 2x² + 7",
-      "solution": "f(x) = 5x⁴ - 2x² + 7\nf'(x) = 5·4x³ - 2·2x + 0\nf'(x) = 20x³ - 4x"
-    },
-    {
-      "problem": "Evaluate: ∫ x² dx",
-      "solution": "∫ x² dx\n= x⁽²⁺¹⁾/(2+1) + C\n= x³/3 + C"
-    },
-    {
-      "problem": "Find the limit: lim(x→3) (x² - 9)/(x - 3)",
-      "solution": "lim(x→3) (x² - 9)/(x - 3)\n= lim(x→3) (x + 3)(x - 3)/(x - 3)\n= lim(x→3) (x + 3)\n= 3 + 3\n= 6"
-    },
-    {
-      "problem": "Find the derivative: f(x) = (x² + 1)(x³)",
-      "solution": "f(x) = (x² + 1)(x³)\nUsing product rule: f'(x) = u'v + uv'\nu = x² + 1, u' = 2x\nv = x³, v' = 3x²\nf'(x) = (2x)(x³) + (x² + 1)(3x²)\n= 2x⁴ + 3x⁴ + 3x²\n= 5x⁴ + 3x²"
-    },
-    {
-      "problem": "Evaluate: ∫ (3x² + 4x) dx",
-      "solution": "∫ (3x² + 4x) dx\n= 3∫x² dx + 4∫x dx\n= 3(x³/3) + 4(x²/2) + C\n= x³ + 2x² + C"
-    },
-    {
-      "problem": "Find the derivative: f(x) = 7x",
-      "solution": "f(x) = 7x\nf'(x) = 7·1·x⁽¹⁻¹⁾\nf'(x) = 7"
-    },
-    {
-      "problem": "Find the limit: lim(x→2) (x² + 3x - 1)",
-      "solution": "lim(x→2) (x² + 3x - 1)\nDirect substitution:\n= 2² + 3(2) - 1\n= 4 + 6 - 1\n= 9"
-    },
-    {
-      "problem": "Find the derivative using chain rule: f(x) = (2x + 1)³",
-      "solution": "f(x) = (2x + 1)³\nLet u = 2x + 1, then f = u³\ndf/dx = df/du · du/dx\n= 3u² · 2\n= 6(2x + 1)²"
-    },
-    {
-      "problem": "Evaluate: ∫₀² x dx",
-      "solution": "∫₀² x dx\n= [x²/2]₀²\n= (2²/2) - (0²/2)\n= 4/2 - 0\n= 2"
-    },
-    {
-      "problem": "Find the derivative: f(x) = 1/x",
-      "solution": "f(x) = 1/x = x⁻¹\nf'(x) = -1·x⁽⁻¹⁻¹⁾\nf'(x) = -x⁻²\nf'(x) = -1/x²"
-    },
-    {
-      "problem": "Find the limit: lim(x→0) (sin x)/x",
-      "solution": "lim(x→0) (sin x)/x\nThis is a standard limit:\nlim(x→0) (sin x)/x = 1"
-    },
-    {
-      "problem": "Find the derivative: f(x) = (x² + 3)/(x - 1)",
-      "solution": "Use quotient rule: (u/v)' = (u'v - uv')/v²\nu = x² + 3, u' = 2x\nv = x - 1, v' = 1\nf'(x) = [2x(x - 1) - (x² + 3)]/(x - 1)²\n= (2x² - 2x - x² - 3)/(x - 1)²\n= (x² - 2x - 3)/(x - 1)²"
-    },
-    {
-      "problem": "Find the derivative implicitly: x² + y² = 25",
-      "solution": "Differentiate both sides with respect to x:\nd/dx(x²) + d/dx(y²) = d/dx(25)\n2x + 2y(dy/dx) = 0\n2y(dy/dx) = -2x\ndy/dx = -x/y"
-    },
-    {
-      "problem": "Evaluate: ∫(2x + 5) dx",
-      "solution": "∫(2x + 5) dx = ∫2x dx + ∫5 dx\n= 2(x²/2) + 5x + C\n= x² + 5x + C"
-    },
-    {
-      "problem": "Evaluate: ∫₁³ (2x) dx",
-      "solution": "∫₁³ 2x dx = [x²]₁³\n= 3² - 1²\n= 9 - 1\n= 8"
-    },
-    {
-      "problem": "Find the derivative using chain rule: f(x) = √(3x + 1)",
-      "solution": "f(x) = (3x + 1)^(1/2)\nf'(x) = (1/2)(3x + 1)^(-1/2) · 3\n= 3 / (2√(3x + 1))"
-    },
-    {
-      "problem": "Find lim(x->2) (x^2 - 4)/(x - 2).",
-      "solution": "Factor numerator: (x-2)(x+2)/(x-2) = x+2, so the limit is 4."
-    },
-    {
-      "problem": "Is f(x)=|x| continuous at x=0?",
-      "solution": "Yes. Left and right limits at 0 are both 0, and f(0)=0, so f is continuous at 0."
-    },
-    {
-      "problem": "Find the second derivative of f(x)=x^4 - 3x^2 + 2.",
-      "solution": "f'(x)=4x^3-6x and f''(x)=12x^2-6."
-    },
-    {
-      "problem": "Find the tangent line to y=x^2 at x=3.",
-      "solution": "Slope is y'=2x so m=6 at x=3. Point is (3,9). Tangent: y-9=6(x-3)."
-    },
-    {
-      "problem": "Given s(t)=t^3-6t^2+9t, find velocity and acceleration.",
-      "solution": "v(t)=s'(t)=3t^2-12t+9 and a(t)=v'(t)=6t-12."
-    },
-    {
-      "problem": "Find all real values of x where f'(x)=0 for f(x)=x³-3x.",
-      "solution": "f'(x)=3x^2-3=3(x^2-1). Set to zero: x^2=1, so x=-1 or x=1."
-    },
-    {
-      "problem": "Find all real values where f'(x)=0 for f(x)=x^3-12x.",
-      "solution": "f'(x)=3x^2-12=3(x^2-4). So x=-2 or x=2."
-    },
-    {
-      "problem": "Find antiderivative: Integral (5x^4 - 2x + 1) dx.",
-      "solution": "Integral = x^5 - x^2 + x + C."
-    },
-    {
-      "problem": "Evaluate Integral_0^1 (3x^2 + 2) dx.",
-      "solution": "Antiderivative is x^3+2x. Value = (1+2) - (0+0) = 3."
-    },
-    {
-      "problem": "Use FTC: if F(x)=Integral_1^x (t^2+1) dt, find F'(x).",
-      "solution": "By the Fundamental Theorem of Calculus, F'(x)=x^2+1."
-    },
-    {
-      "problem": "Evaluate by substitution: Integral 2x*cos(x^2) dx.",
-      "solution": "Let u=x^2, du=2x dx. Integral becomes Integral cos(u) du = sin(u)+C = sin(x^2)+C."
-    },
-    {
-      "problem": "Evaluate by parts: Integral x*e^x dx.",
-      "solution": "u=x, dv=e^x dx => du=dx, v=e^x. Integral = x e^x - Integral e^x dx = e^x(x-1)+C."
-    },
-    {
-      "problem": "Evaluate using partial fractions: Integral 1/(x^2-1) dx.",
-      "solution": "1/(x^2-1)=1/2[1/(x-1)-1/(x+1)]. Integral = (1/2)ln|x-1|-(1/2)ln|x+1|+C."
-    },
-    {
-      "problem": "Evaluate trigonometric integral: Integral sin(x)cos(x) dx.",
-      "solution": "Let u=sin(x), du=cos(x)dx. Integral = Integral u du = (1/2)sin^2(x)+C."
-    },
-    {
-      "problem": "Determine whether Integral_1^infinity 1/x^2 dx converges.",
-      "solution": "Integral_1^b x^-2 dx = 1-1/b. Limit as b->infinity is 1, so it converges to 1."
-    },
-    {
-      "problem": "Find area under y=x from x=0 to x=4.",
-      "solution": "Area = Integral_0^4 x dx = [x^2/2]_0^4 = 8."
-    },
-    {
-      "problem": "Find volume when y=x is revolved about x-axis on [0,2].",
-      "solution": "Disk method: V=pi Integral_0^2 x^2 dx = pi*(8/3) = 8pi/3."
-    },
-    {
-      "problem": "A variable force F(x)=3x^2 moves an object from x=0 to x=2. Find work.",
-      "solution": "Work = Integral_0^2 3x^2 dx = [x^3]_0^2 = 8."
-    },
-    {
-      "problem": "Find partial derivatives of f(x,y)=x^2 y + e^y.",
-      "solution": "f_x=2xy and f_y=x^2+e^y."
-    },
-    {
-      "problem": "Find grad f for f(x,y,z)=x^2+y^2+z^2.",
-      "solution": "grad f = (2x, 2y, 2z)."
-    },
-    {
-      "problem": "For F=(x^2, y^2, z^2), find divergence.",
-      "solution": "div F = d/dx(x^2)+d/dy(y^2)+d/dz(z^2) = 2x+2y+2z."
-    },
-    {
-      "problem": "For F=(-y, x, 0), find curl.",
-      "solution": "curl F = (0,0, d/dx(x)-d/dy(-y)) = (0,0,2)."
-    },
-    {
-      "problem": "Evaluate double integral Integral_0^1 Integral_0^2 (x+y) dx dy.",
-      "solution": "Inner integral gives [x^2/2 + yx]_0^2 = 2+2y. Outer integral gives Integral_0^1 (2+2y)dy = 3."
-    },
-    {
-      "problem": "Evaluate triple integral Integral_0^1 Integral_0^1 Integral_0^1 xyz dx dy dz.",
-      "solution": "Separable: (Integral_0^1 xdx)(Integral_0^1 ydy)(Integral_0^1 zdz) = (1/2)^3 = 1/8."
-    },
-    {
-      "problem": "Compute line integral Integral_C x ds on line segment from 0 to 2 on x-axis.",
-      "solution": "Here ds=dx and x runs 0 to 2, so Integral_0^2 x dx = 2."
-    },
-    {
-      "problem": "State Green's theorem relation for a positively oriented simple closed curve C.",
-      "solution": "Integral_C (P dx + Q dy) = DoubleIntegral_D (dQ/dx - dP/dy) dA."
-    },
-    {
-      "problem": "State Stokes' theorem.",
-      "solution": "Surface integral of curl F over S equals line integral of F over boundary C: DoubleIntegral_S (curl F·n)dS = Integral_C F·dr."
-    },
-    {
-      "problem": "State Divergence theorem.",
-      "solution": "TripleIntegral_V (div F)dV = SurfaceIntegral_boundary(V) F·n dS."
-    },
-    {
-      "problem": "Determine convergence of geometric series sum from n=0 to infinity of (1/3)^n.",
-      "solution": "It converges since |r|=1/3<1. Sum = 1/(1-1/3)=3/2."
-    },
-    {
-      "problem": "Determine convergence of harmonic series sum from n=1 to infinity of 1/n.",
-      "solution": "The harmonic series diverges."
-    },
-    {
-      "problem": "Find the Maclaurin series for e^x up to x^4 term.",
-      "solution": "e^x = 1 + x + x^2/2! + x^3/3! + x^4/4! + ..."
-    },
-    {
-      "problem": "Find the Taylor series of sin(x) about x=0 up to x^5 term.",
-      "solution": "sin(x)=x - x^3/3! + x^5/5! + ..."
-    },
-    {
-      "problem": "Find radius of convergence for sum from n=0 to infinity of x^n.",
-      "solution": "This is geometric with ratio x, so it converges for |x|<1. Radius R=1."
-    },
-    {
-      "problem": "Find interval of convergence for sum from n=1 to infinity of x^n/n.",
-      "solution": "Radius is 1. At x=1 it diverges (harmonic), at x=-1 it converges (alternating harmonic). Interval is [-1,1)."
-    },
-    {
-      "problem": "Differentiate implicitly: x^2 + xy + y^2 = 7.",
-      "solution": "Differentiate: 2x + (x*y' + y) + 2y*y' = 0 => y' = -(2x+y)/(x+2y)."
-    },
-    {
-      "problem": "Find the third derivative of f(x)=x^5.",
-      "solution": "f'(x)=5x^4, f''(x)=20x^3, f'''(x)=60x^2."
-    },
-    {
-      "problem": "Use FTC to evaluate Integral_2^5 4 dx.",
-      "solution": "Integral_2^5 4 dx = 4(5-2)=12."
-    },
-    {
-      "problem": "Find partial derivatives of f(x,y)=x*e^y + y^3.",
-      "solution": "f_x=e^y and f_y=x*e^y + 3y^2."
-    },
-    {
-      "problem": "Find a power series for 1/(1-x) about x=0.",
-      "solution": "For |x|<1, 1/(1-x) = sum_{n=0}^{infinity} x^n."
-    },
-    {
-      "problem": "Find the Taylor series of e^x about x=1 up to quadratic term.",
-      "solution": "e^x = e + e(x-1) + e(x-1)^2/2 + ..."
-    },
-    {
-      "problem": "Find the Maclaurin series for cos(x) up to x^4 term.",
-      "solution": "cos(x)=1 - x^2/2! + x^4/4! + ..."
-    },
-    {
-      "problem": "Compute surface integral of f(x,y,z)=z over plane z=2 on square 0<=x<=1, 0<=y<=1.",
-      "solution": "Since f=2 is constant and area is 1, the surface integral is 2."
-    },
-    {
-      "problem": "Find and classify critical points of f(x)=x^3-3x^2+2.",
-      "solution": "f'(x)=3x^2-6x=3x(x-2), so critical points are x=0 and x=2. f''(x)=6x-6. f''(0)=-6<0 so local maximum at x=0 with f(0)=2. f''(2)=6>0 so local minimum at x=2 with f(2)=-2."
-    },
-    {
-      "problem": "Evaluate the improper integral Integral_0^infinity e^(-2x) dx.",
-      "solution": "Integral_0^infinity e^(-2x) dx = lim_{b->infinity} Integral_0^b e^(-2x) dx = lim_{b->infinity} [-(1/2)e^(-2x)]_0^b = (1/2)(1-e^(-2b)) = 1/2."
-    },
-    {
-      "problem": "Solve the differential equation dy/dx = 3y with y(0)=2.",
-      "solution": "Separate variables: dy/y = 3 dx. Integrate: ln|y| = 3x + C, so y = Ce^(3x). Use y(0)=2 gives C=2. Therefore y=2e^(3x)."
     }
   ]
 }

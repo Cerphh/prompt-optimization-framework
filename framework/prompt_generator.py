@@ -214,7 +214,7 @@ class PromptGenerator:
         if any(marker in text for marker in advanced_markers):
             complexity += 1
 
-        if subject in {"statistics", "calculus"}:
+        if subject in {"counting-probability", "pre-calculus"}:
             complexity += 1
 
         return max(1, min(3, complexity))
@@ -474,6 +474,77 @@ class PromptGenerator:
 
         return selected
     
+    def classify_subject(self, problem: str) -> str:
+        """
+        Classify and detect the subject of a math problem automatically.
+        
+        Args:
+            problem: The math problem text
+            
+        Returns:
+            Subject category: 'pre-calculus', 'counting-probability', 'algebra', or 'general'
+        """
+        text = problem.lower()
+        scores = {'pre-calculus': 0, 'counting-probability': 0, 'algebra': 0}
+        
+        # Pre-calculus indicators
+        precalculus_keywords = {
+            'derivative', 'differentiate', 'integral', 'integrate', 'limit', 'lim',
+            'd/dx', 'dy/dx', '∫', '∂', 'rate of change', 'optimization', 'concave',
+            'inflection', 'slope', 'curve', 'velocity', 'acceleration', 'extrema',
+            'maximum', 'minimum', 'gradient', 'second derivative', 'critical point',
+            'antiderivative', 'riemann', 'area under', 'taylor', 'maclaurin',
+            'convergence', 'divergence', 'function', 'exponential', 'logarithmic', 'sequence', 'series'
+        }
+        
+        # Counting & Probability keywords
+        counting_probability_keywords = {
+            'probability', 'mean', 'median', 'mode', 'variance', 'standard deviation',
+            'distribution', 'expected value', 'random', 'coin', 'dice', 'die', 'sample',
+            'permutation', 'combination', 'factorial', 'count', 'counting', 'arrange',
+            'arrangement', 'selection', 'flip', 'flipped', 'roll', 'rolled', 'choose',
+            'outcome', 'outcomes', 'event', 'favorable', 'nCr', 'nPr', 'odds', 'chance',
+            'bell curve', 'normal distribution', 'bayes', 'conditional', 'dependent', 'independent'
+        }
+        
+        # Algebra keywords
+        algebra_keywords = {
+            'solve', 'factor', 'factorize', 'simplify', 'expand', 'quadratic',
+            'equation', 'polynomial', 'inequality', 'linear', 'matrix', 'system',
+            'system of equations', 'roots', 'zero', 'parabola', 'binomial', 'trinomial',
+            'monomial', 'rational', 'radical', 'algebraic', 'expression', 'substitute',
+            'evaluate', 'variable', 'coefficient'
+        }
+        
+        # Check for pattern matches
+        if any(kw in text for kw in precalculus_keywords):
+            scores['pre-calculus'] += 2
+        if any(kw in text for kw in counting_probability_keywords):
+            scores['counting-probability'] += 2
+        if any(kw in text for kw in algebra_keywords):
+            scores['algebra'] += 2
+        
+        # Regex pattern checking
+        if re.search(r'\bd/dx\b|\bdy/dx\b|∫|∂|\blimit\b|\blim\b|derivative|integral|optimization', text):
+            scores['pre-calculus'] += 3
+        if re.search(r'\bp\(|probability|permutation|combination|C\(|nCr|counting|factorial', text):
+            scores['counting-probability'] += 3
+        if re.search(r'\bsolve\s+for\b|factor|simplify|expand|quadratic|equation', text):
+            scores['algebra'] += 2
+        
+        # Find the subject with highest score
+        max_score = max(scores.values())
+        if max_score == 0:
+            return 'general'
+        
+        # Return the subject with the highest score
+        if scores['pre-calculus'] == max_score:
+            return 'pre-calculus'
+        elif scores['counting-probability'] == max_score:
+            return 'counting-probability'
+        else:
+            return 'algebra'
+    
     def generate_few_shot(self, problem: str, subject: str = "general", num_examples: int = None) -> str:
         """
         Generate few-shot prompt: includes examples from the specified subject.
@@ -481,7 +552,7 @@ class PromptGenerator:
         
         Args:
             problem: The math problem
-            subject: Subject category (algebra, statistics (Counting & Probability), calculus (Pre-calculus), general)
+            subject: Subject category (algebra, counting-probability (Counting & Probability), pre-calculus (Pre-calculus), general)
             num_examples: Number of examples to include (auto-determined by subject if None)
             
         Returns:

@@ -121,66 +121,174 @@ export default function Home() {
   // Auto-detect subject based on keywords in the problem
   const detectSubject = (text: string): string => {
     const lowerText = text.toLowerCase()
+    let scores = { 'pre-calculus': 0, 'counting-probability': 0, algebra: 0 }
     
-    // Keywords for each subject (ordered by specificity)
-    const calculusKeywords = ['derivative', 'integral', 'limit', 'differentiate', 'integrate', 
-                              'tangent line', 'rate of change', 'optimization', 'concave', 'inflection']
-    const statisticsKeywords = ['probability', 'mean', 'median', 'mode', 'variance', 'standard deviation',
-                                'distribution', 'expected value', 'random', 'coin', 'dice', 'sample']
-    const algebraKeywords = ['solve for', 'factor', 'simplify', 'expand', 'quadratic', 'equation',
-                            'polynomial', 'exponential', 'logarithm', 'inequality']
-    
-    // Check calculus first (most specific)
-    if (calculusKeywords.some(keyword => lowerText.includes(keyword))) {
-      return 'calculus'
+    // Comprehensive keyword lists for each subject
+    const precalculusPatterns = {
+      keywords: ['derivative', 'integral', 'limit', 'differentiate', 'integrate', 'tangent', 
+                 'rate of change', 'optimization', 'concave', 'inflection', 'slope', 'curve',
+                 'velocity', 'acceleration', 'extrema', 'maximum', 'minimum', 'gradient',
+                 'second derivative', 'critical point', 'antiderivative', 'riemann', 'area under',
+                 'function', 'exponential', 'logarithmic', 'sequence', 'series', 'convergence'],
+      patterns: [/d\/dx/, /∫/, /lim|limit/, /derivative|derivatives/, /integral|integrate/i, /exponential|logarithm|log\(/],
+      symbols: ['dx', 'dy', 'dy/dx', '∫', 'e^', 'ln('],
+      operations: ['derivative', 'integral', 'limit', 'exponential growth'],
+      weight: 3
     }
     
-    // Then statistics
-    if (statisticsKeywords.some(keyword => lowerText.includes(keyword))) {
-      return 'statistics'
+    const countingProbabilityPatterns = {
+      keywords: ['probability', 'mean', 'median', 'mode', 'variance', 'standard deviation',
+                 'distribution', 'expected value', 'random', 'coin', 'dice', 'die', 'sample',
+                 'permutation', 'combination', 'count', 'arrangement', 'selection',
+                 'bell curve', 'normal distribution', 'quartile', 'percentile', 'z-score',
+                 'frequency', 'event', 'outcome', 'counting', 'arrange', 'choose',
+                 'factorial', 'nCr', 'nPr', 'odds', 'chance', 'flip', 'flipped', 'roll', 'rolled'],
+      patterns: [/probability|P\(/, /mean|average|median|mode/, /standard deviation|σ|variance/i,
+                 /distribution/, /sample|population/, /permutation|combination|C\(|nCr|nPr/i,
+                 /counting|arrange|flip|roll|die|dice|coin/],
+      symbols: ['μ', 'σ', 'P(', 'C(', 'n!', '!', '±'],
+      operations: ['probability', 'counting', 'arrangement', 'permutation', 'combination'],
+      weight: 2
     }
     
-    // Then algebra
-    if (algebraKeywords.some(keyword => lowerText.includes(keyword))) {
-      return 'algebra'
+    const algebraPatterns = {
+      keywords: ['solve', 'solve for', 'factor', 'factorize', 'simplify', 'expand', 'quadratic', 
+                 'equation', 'polynomial', 'linear', 'matrix', 'system of equations', 'roots', 'zero', 'parabola',
+                 'binomial', 'trinomial', 'monomial', 'rational', 'radical', 'algebraic',
+                 'expression', 'substitute', 'inequality', 'variable', 'coefficient'],
+      patterns: [/solve (for|x|y|z)/, /factor|factorize/, /simplify/, /expand/, /quadratic/i,
+                 /equation(s)?/, /polynomial/, /inequality/, /system.*equation/],
+      symbols: ['=', '≠', '<', '>', '≤', '≥', 'x', 'x²', 'y'],
+      operations: ['factor', 'simplify', 'solve', 'expand'],
+      weight: 1
     }
     
-    // Default to algebra for general math problems
+    // Check patterns for each subject
+    const checkPatterns = (patterns: typeof precalculusPatterns) => {
+      let score = 0
+      
+      // Check keywords
+      if (patterns.keywords.some(kw => lowerText.includes(kw))) {
+        score += patterns.weight
+      }
+      
+      // Check regex patterns
+      if (patterns.patterns.some(pat => pat.test(lowerText))) {
+        score += patterns.weight * 1.5
+      }
+      
+      // Check for common operations mentioned
+      if (patterns.operations.some(op => lowerText.includes(op))) {
+        score += patterns.weight * 1.2
+      }
+      
+      return score
+    }
+    
+    scores['pre-calculus'] = checkPatterns(precalculusPatterns)
+    scores['counting-probability'] = checkPatterns(countingProbabilityPatterns)
+    scores.algebra = checkPatterns(algebraPatterns)
+    
+    // Return subject with highest score, or algebra as default
+    const maxScore = Math.max(scores['pre-calculus'], scores['counting-probability'], scores.algebra)
+    if (maxScore === 0) return 'algebra' // Default if no patterns match
+    
+    if (scores['pre-calculus'] === maxScore) return 'pre-calculus'
+    if (scores['counting-probability'] === maxScore) return 'counting-probability'
     return 'algebra'
   }
 
   const detectDifficulty = (text: string, detectedSubject: string): string => {
     const lowerText = text.toLowerCase()
-
-    const advancedKeywords = [
-      'differentiate', 'derivative', 'integrate', 'integral', 'limit', 'optimization',
-      'proof', 'prove', 'inflection', 'concavity', 'series', 'partial derivative'
-    ]
-    const intermediateKeywords = [
-      'system of equations', 'quadratic', 'factor', 'inequality', 'probability',
-      'permutation', 'combination', 'standard deviation', 'variance', 'word problem'
-    ]
-
     let score = 0
 
-    if (detectedSubject === 'calculus') score += 3
-    if (detectedSubject === 'statistics') score += 1
+    // Subject-based scoring
+    const subjectComplexity = {
+      'pre-calculus': 3,
+      'counting-probability': 1,
+      'algebra': 0
+    }
+    
+    score += subjectComplexity[detectedSubject as keyof typeof subjectComplexity] || 0
 
-    if (advancedKeywords.some((keyword) => lowerText.includes(keyword))) score += 3
-    if (intermediateKeywords.some((keyword) => lowerText.includes(keyword))) score += 2
+    // Advanced pre-calculus indicators
+    const advancedPrecalculusKeywords = [
+      'differentiate', 'derivative', 'partial derivative', 'integrate', 'integral', 
+      'limit', 'optimization', 'inflection', 'concavity', 'series',
+      'taylor', 'maclaurin', 'convergence', 'divergence', 'chain rule',
+      'logarithmic differentiation', 'implicit differentiation', 'riemann sum'
+    ]
+    
+    // Advanced counting & probability indicators
+    const advancedCountingKeywords = [
+      'bayes', 'conditional probability', 'given that', 'dependent', 'independent',
+      'multivariate', 'distribution', 'binomial', 'poisson', 'hypergeometric',
+      'permutation', 'combination', 'multinomial', 'expected value', 'variance'
+    ]
+    
+    // Advanced algebra indicators
+    const advancedAlgebraKeywords = [
+      'system of equations', 'quadratic formula', 'imaginary', 'complex', 'matrix',
+      'determinant', 'eigenvalue', 'eigenvector', 'rational function', 'partial fraction',
+      'asymptote', 'domain', 'range', 'piecewise'
+    ]
+    
+    // Intermediate indicators (common in multiple subjects)
+    const intermediateKeywords = [
+      'quadratic', 'factor', 'inequality', 'probability', 'permutation', 'combination',
+      'standard deviation', 'variance', 'word problem', 'application', 'exponential',
+      'logarithmic', 'solve the system', 'arrangement', 'selection'
+    ]
+    
+    // Basic indicators (simple operations)
+    const basicKeywords = [
+      'add', 'subtract', 'multiply', 'divide', 'plus', 'minus', 'simplify',
+      'evaluate', 'calculate', 'find', 'what is', 'compute', 'solve'
+    ]
 
-    const operatorCount = (text.match(/[+\-*/^=]/g) || []).length
-    if (operatorCount >= 6) score += 2
+    // Check for difficulty keywords
+    if (advancedPrecalculusKeywords.some(kw => lowerText.includes(kw))) score += 3
+    else if (advancedCountingKeywords.some(kw => lowerText.includes(kw))) score += 3
+    else if (advancedAlgebraKeywords.some(kw => lowerText.includes(kw))) score += 3
+    
+    if (intermediateKeywords.some(kw => lowerText.includes(kw))) score += 2
+    if (basicKeywords.some(kw => lowerText.includes(kw))) score += 0.5
+
+    // Structural complexity scoring
+    const operatorCount = (text.match(/[+\-*/^=<>≤≥]/g) || []).length
+    const parenthesesCount = (text.match(/[\(\)\[\]\{}]/g) || []).length
+    const fractionCount = (text.match(/\//g) || []).length
+    
+    if (operatorCount >= 8) score += 2
+    else if (operatorCount >= 5) score += 1.5
     else if (operatorCount >= 3) score += 1
 
+    if (parenthesesCount >= 4) score += 1.5
+    else if (parenthesesCount >= 2) score += 0.5
+
+    if (fractionCount >= 3) score += 1
+    else if (fractionCount >= 1) score += 0.5
+
+    // Number complexity
     const numberCount = (text.match(/\d+/g) || []).length
-    if (numberCount >= 6) score += 1
+    const largeNumbers = text.match(/\d{3,}/g) || []
+    
+    if (largeNumbers.length >= 2) score += 1
+    if (numberCount >= 8) score += 1
+    else if (numberCount >= 5) score += 0.5
 
+    // Text length and complexity
     const wordCount = text.trim().split(/\s+/).filter(Boolean).length
-    if (wordCount >= 25) score += 1
+    if (wordCount >= 40) score += 1
+    else if (wordCount >= 25) score += 0.5
 
-    if (score >= 5) return 'advanced'
-    if (score >= 2) return 'intermediate'
+    // Multiple sentences or complex structure
+    const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0).length
+    if (sentences >= 3) score += 1
+
+    // Determine difficulty tier
+    if (score >= 6) return 'advanced'
+    if (score >= 3) return 'intermediate'
     return 'basic'
   }
 
@@ -511,8 +619,8 @@ export default function Home() {
                     style={{ border: '1px solid var(--border)', color: 'var(--text)', background: 'var(--surface)' }}
                   >
                     <option value="algebra">Algebra</option>
-                    <option value="statistics">Counting &amp; Probability</option>
-                    <option value="calculus">Pre-calculus</option>
+                    <option value="counting-probability">Counting &amp; Probability</option>
+                    <option value="pre-calculus">Pre-calculus</option>
                   </select>
                 </div>
                 <div>
@@ -622,8 +730,8 @@ export default function Home() {
                   }}
                 >
                   <option value="algebra">Algebra</option>
-                  <option value="statistics">Counting &amp; Probability</option>
-                  <option value="calculus">Pre-calculus</option>
+                  <option value="counting-probability">Counting &amp; Probability</option>
+                  <option value="pre-calculus">Pre-calculus</option>
                 </select>
               </div>
 

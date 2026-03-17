@@ -252,7 +252,7 @@ class BenchmarkRequest(BaseModel):
     """Request model for benchmarking."""
     problem: str
     ground_truth: Optional[str] = None
-    subject: Optional[str] = "algebra"  # algebra, statistics (Counting & Probability), or calculus (Pre-calculus)
+    subject: Optional[str] = "algebra"  # algebra, counting-probability, or pre-calculus
     difficulty: Optional[str] = "basic"  # basic, intermediate, advanced
 
 
@@ -370,9 +370,16 @@ async def run_benchmark_stream(request: BenchmarkRequest):
                         },
                     )
                     event["result"] = result
+                elif event.get("type") == "error":
+                    # Ensure error messages are never empty
+                    error_msg = event.get("error", "").strip()
+                    if not error_msg:
+                        error_msg = "Unknown error during benchmark streaming"
+                    event["error"] = error_msg
                 yield json.dumps(event) + "\n"
         except Exception as e:
-            yield json.dumps({"type": "error", "error": str(e)}) + "\n"
+            error_msg = str(e).strip() if str(e) else "Unknown error during benchmark"
+            yield json.dumps({"type": "error", "error": error_msg}) + "\n"
 
     return StreamingResponse(event_stream(), media_type="application/x-ndjson")
 

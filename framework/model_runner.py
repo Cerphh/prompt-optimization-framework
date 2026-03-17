@@ -613,14 +613,20 @@ class ModelRunner:
             else:
                 detail = response_error or response_text or str(e)
 
+            error_message = f"Ollama stream failed ({status_code}): {detail}"
+            # Ensure error message is never empty
+            if not error_message.strip():
+                error_message = "Unknown streaming error from Ollama"
+
             yield {
                 "type": "error",
-                "error": f"Ollama stream failed ({status_code}): {detail}",
+                "error": error_message,
             }
         except Exception as e:
+            error_message = str(e) if str(e).strip() else "Unknown streaming error"
             yield {
                 "type": "error",
-                "error": str(e),
+                "error": error_message,
             }
     
     def test_connection(self) -> bool:
