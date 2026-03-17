@@ -22,8 +22,10 @@ pipeline = BenchmarkPipeline(
 )
 
 # Check connection
-if not pipeline.test_connection():
-    print("✗ Ollama not connected. Please start Ollama first.")
+model_ready, model_error = pipeline.model_runner.validate_model_ready()
+if not model_ready:
+    print("✗ Ollama model is not ready.")
+    print(f"  {model_error}")
     exit(1)
 
 print("✓ Pipeline ready")

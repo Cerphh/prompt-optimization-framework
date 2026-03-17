@@ -40,12 +40,12 @@ print()
 print("-" * 70)
 print("Testing Ollama connection...")
 print("-" * 70)
-if pipeline.test_connection():
+model_ready, model_error = pipeline.model_runner.validate_model_ready()
+if model_ready:
     print("✓ Ollama is connected and ready")
 else:
-    print("⚠ Ollama is not connected. Make sure Ollama is running.")
-    print("  Run: ollama serve")
-    print("  Then: ollama pull llama3")
+    print("⚠ Ollama is reachable but the selected model is not ready.")
+    print(f"  {model_error}")
     exit(1)
 
 # Load sample dataset

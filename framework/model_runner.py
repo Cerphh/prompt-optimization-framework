@@ -83,14 +83,190 @@ class ModelRunner:
             "repeat_penalty": _env_float("MODEL_REPEAT_PENALTY", 1.1, min_value=0.1),
         }
 
-    def _build_payload(self, prompt: str, stream: bool) -> Dict[str, Any]:
+        raw_fallback_models = os.getenv("MODEL_FALLBACK_MODELS", "").strip()
+        self.fallback_models = [
+            item.strip() for item in raw_fallback_models.split(",")
+            if item.strip()
+        ]
+        self.auto_fallback_on_memory_error = _env_bool("MODEL_AUTO_FALLBACK_ON_MEMORY_ERROR", True)
+
+    def _build_payload_for_model(self, model_name: str, prompt: str, stream: bool) -> Dict[str, Any]:
         return {
-            "model": self.model_name,
+            "model": model_name,
             "prompt": prompt,
             "stream": stream,
             "keep_alive": os.getenv("OLLAMA_KEEP_ALIVE", "5m"),
             "options": self.generation_options,
         }
+
+    def _build_payload(self, prompt: str, stream: bool) -> Dict[str, Any]:
+        return self._build_payload_for_model(self.model_name, prompt, stream)
+
+    def _is_memory_error_message(self, message: str) -> bool:
+        return "requires more system memory" in (message or "").lower()
+
+    def _model_name_from_candidate(self, candidate: str, available_models: list) -> Optional[str]:
+        if candidate in available_models:
+            return candidate
+        for model in available_models:
+            if model.startswith(f"{candidate}:"):
+                return model
+        return None
+
+    def _validate_model_ready_for_name(self, model_name: str) -> Tuple[bool, Optional[str]]:
+        if not self.test_connection():
+            return False, f"Could not reach Ollama at {self.base_url}. Start it with: ollama serve"
+
+        available_models = self.get_available_models()
+        if available_models and not any(
+            model == model_name or model.startswith(f"{model_name}:")
+            for model in available_models
+        ):
+            return False, (
+                f"Model '{model_name}' is not installed in Ollama. "
+                f"Available models: {', '.join(available_models)}. "
+                f"Run: ollama pull {model_name}"
+            )
+
+        probe_options = dict(self.generation_options)
+        probe_options["num_predict"] = min(max(1, int(probe_options.get("num_predict", 1))), 8)
+        probe_options["num_ctx"] = min(max(512, int(probe_options.get("num_ctx", 2048))), 2048)
+        probe_payload = self._build_payload_for_model(model_name, prompt="Reply with OK.", stream=False)
+        probe_payload["options"] = probe_options
+
+        try:
+            response = self.session.post(
+                f"{self.base_url}/api/generate",
+                json=probe_payload,
+                timeout=(5, 45),
+            )
+            response.raise_for_status()
+            return True, None
+        except Exception as exc:
+            return False, self._describe_request_exception(exc)
+
+    def _try_fallback_model(self, failure_message: str) -> Tuple[bool, Optional[str]]:
+        if not self.auto_fallback_on_memory_error:
+            return False, None
+        if not self.fallback_models:
+            return False, None
+        if not self._is_memory_error_message(failure_message):
+            return False, None
+
+        available_models = self.get_available_models()
+        if not available_models:
+            return False, None
+
+        last_failure = None
+        for candidate in self.fallback_models:
+            resolved_name = self._model_name_from_candidate(candidate, available_models)
+            if not resolved_name or resolved_name == self.model_name:
+                continue
+
+            ready, detail = self._validate_model_ready_for_name(resolved_name)
+            if ready:
+                previous_model = self.model_name
+                self.model_name = resolved_name
+                return True, (
+                    f"Model '{previous_model}' could not load due to memory. "
+                    f"Switched to fallback model '{resolved_name}'."
+                )
+
+            last_failure = detail
+
+        return False, last_failure
+
+    def _extract_ollama_error_parts(self, response: Optional[requests.Response]) -> Tuple[int, str, str]:
+        if response is None:
+            return 0, "", ""
+
+        status_code = response.status_code or 0
+        response_text = (response.text or "").strip()
+        response_error = ""
+
+        try:
+            payload = response.json() or {}
+        except Exception:
+            payload = {}
+
+        if isinstance(payload, dict):
+            response_error = str(payload.get("error", "") or "").strip()
+
+        return status_code, response_text, response_error
+
+    def _format_ollama_http_error(self, response: Optional[requests.Response], stream: bool) -> str:
+        status_code, response_text, response_error = self._extract_ollama_error_parts(response)
+        combined_error = response_error or response_text
+        normalized_error = combined_error.lower()
+
+        if status_code == 404:
+            if "model" in normalized_error and "not found" in normalized_error:
+                return (
+                    f"Model '{self.model_name}' not found in Ollama. "
+                    f"Run: ollama pull {self.model_name}"
+                )
+            return (
+                f"Ollama endpoint '/api/generate' not found at {self.base_url}. "
+                "Verify Ollama is running on this URL and supports the Ollama API."
+            )
+
+        if "requires more system memory" in normalized_error:
+            return (
+                f"Model '{self.model_name}' cannot start in Ollama: {combined_error}. "
+                "Free RAM, close other applications, reduce MODEL_NUM_CTX, or switch to a smaller model."
+            )
+
+        prefix = "Ollama stream failed" if stream else "Ollama request failed"
+        detail = combined_error or f"HTTP {status_code}"
+        return f"{prefix} ({status_code}): {detail}"
+
+    def _enrich_generic_ollama_error(self, message: str, stream: bool = False) -> str:
+        """Replace opaque HTTP 500 errors with a best-effort readiness diagnosis."""
+        normalized = (message or "").lower()
+        if "http 500" not in normalized:
+            return message
+        if "requires more system memory" in normalized:
+            return message
+
+        try:
+            ready, detail = self.validate_model_ready()
+        except Exception:
+            return message
+
+        if ready or not detail:
+            return message
+
+        if "ollama stream failed" in detail.lower() or "ollama request failed" in detail.lower():
+            return detail
+
+        prefix = "Ollama stream failed" if stream else "Ollama request failed"
+        return f"{prefix}: {detail}"
+
+    def _describe_request_exception(self, exc: Exception, stream: bool = False) -> str:
+        if isinstance(exc, requests.HTTPError):
+            return self._format_ollama_http_error(exc.response, stream=stream)
+
+        if isinstance(exc, requests.RequestException):
+            action = "stream from" if stream else "reach"
+            detail = str(exc).strip() or "Unknown connection error"
+            return f"Failed to {action} Ollama at {self.base_url}: {detail}"
+
+        default_message = "Unknown streaming error from Ollama" if stream else "Unknown Ollama error"
+        return str(exc).strip() or default_message
+
+    def _model_name_matches(self, available_model: str) -> bool:
+        return available_model == self.model_name or available_model.startswith(f"{self.model_name}:")
+
+    def validate_model_ready(self) -> Tuple[bool, Optional[str]]:
+        """Check that Ollama is reachable, the target model exists, and a tiny generation can start."""
+        ready, detail = self._validate_model_ready_for_name(self.model_name)
+        if ready:
+            return True, None
+
+        switched, switch_note = self._try_fallback_model(detail or "")
+        if switched:
+            return True, switch_note
+        return False, detail
 
     def _merge_with_overlap(self, existing_text: str, new_text: str) -> str:
         """Merge text chunks while removing duplicated overlap at boundaries."""
@@ -147,12 +323,12 @@ class ModelRunner:
                 response = self.session.post(
                     f"{self.base_url}/api/generate",
                     json=self._build_payload(prompt=continuation_prompt, stream=False),
-                    timeout=(5, 180),
+                    timeout=(5, 600),
                 )
                 response.raise_for_status()
                 continuation_result = response.json()
             except Exception as exc:
-                continuation_error = str(exc)
+                continuation_error = self._describe_request_exception(exc)
                 break
 
             continuation_text = continuation_result.get("response", "")
@@ -216,7 +392,7 @@ class ModelRunner:
         target["prompt_eval_time"] += float(source.get("prompt_eval_time", 0.0) or 0.0)
         target["eval_time"] += float(source.get("eval_time", 0.0) or 0.0)
 
-    def _run_generation_once(self, prompt: str, timeout: Tuple[int, int] = (5, 180)) -> Dict[str, Any]:
+    def _run_generation_once(self, prompt: str, timeout: Tuple[int, int] = (5, 600)) -> Dict[str, Any]:
         response = self.session.post(
             f"{self.base_url}/api/generate",
             json=self._build_payload(prompt=prompt, stream=False),
@@ -300,7 +476,7 @@ class ModelRunner:
             response = self.session.post(
                 f"{self.base_url}/api/generate",
                 json=payload,
-                timeout=(5, 120),
+                timeout=(5, 600),
             )
             response.raise_for_status()
             verifier_result = response.json()
@@ -314,7 +490,7 @@ class ModelRunner:
 
             return verdict, self._extract_metrics(verifier_result), None
         except Exception as exc:
-            return None, self._empty_metrics(), str(exc)
+            return None, self._empty_metrics(), self._describe_request_exception(exc)
 
     def _build_retry_prompt(self, original_prompt: str, candidate_response: str) -> str:
         return (
@@ -371,9 +547,9 @@ class ModelRunner:
                 candidate_response=generation.get("response", ""),
             )
             try:
-                regenerated = self._run_generation_once(retry_prompt, timeout=(5, 240))
+                regenerated = self._run_generation_once(retry_prompt, timeout=(5, 600))
             except Exception as exc:
-                verifier_state["retry_error"] = str(exc)
+                verifier_state["retry_error"] = self._describe_request_exception(exc)
                 break
 
             self._combine_metrics(overhead_metrics, regenerated.get("metrics", self._empty_metrics()))
@@ -398,7 +574,16 @@ class ModelRunner:
         start_time = time.time()
         
         try:
-            generation = self._run_generation_once(prompt=prompt, timeout=(5, 180))
+            try:
+                generation = self._run_generation_once(prompt=prompt, timeout=(5, 600))
+            except requests.HTTPError as primary_error:
+                primary_message = self._describe_request_exception(primary_error)
+                switched, _ = self._try_fallback_model(primary_message)
+                if switched:
+                    generation = self._run_generation_once(prompt=prompt, timeout=(5, 600))
+                else:
+                    raise
+
             generation, overhead_metrics, verifier_state = self._maybe_retry_with_verifier(
                 original_prompt=prompt,
                 generation=generation,
@@ -436,32 +621,10 @@ class ModelRunner:
             return result_dict
         except requests.HTTPError as e:
             end_time = time.time()
-            status_code = e.response.status_code if e.response is not None else None
-            response_text = ""
-            response_error = ""
-
-            if e.response is not None:
-                response_text = (e.response.text or "").strip()
-                try:
-                    response_error = (e.response.json() or {}).get("error", "")
-                except Exception:
-                    response_error = ""
-
-            if status_code == 404:
-                combined_error = (response_error or response_text).lower()
-                if "model" in combined_error and "not found" in combined_error:
-                    error_message = (
-                        f"Model '{self.model_name}' not found in Ollama. "
-                        f"Run: ollama pull {self.model_name}"
-                    )
-                else:
-                    error_message = (
-                        f"Ollama endpoint '/api/generate' not found at {self.base_url}. "
-                        "Verify Ollama is running on this URL and supports the Ollama API."
-                    )
-            else:
-                detail = response_error or response_text or str(e)
-                error_message = f"Ollama request failed ({status_code}): {detail}"
+            error_message = self._enrich_generic_ollama_error(
+                self._describe_request_exception(e),
+                stream=False,
+            )
 
             return {
                 "response": "",
@@ -481,7 +644,7 @@ class ModelRunner:
                 "response": "",
                 "model": self.model_name,
                 "success": False,
-                "error": str(e),
+                "error": self._describe_request_exception(e),
                 "metrics": {
                     "elapsed_time": end_time - start_time,
                     "prompt_tokens": 0,
@@ -491,6 +654,9 @@ class ModelRunner:
             }
 
     def run_stream(self, prompt: str) -> Generator[Dict[str, Any], None, None]:
+        yield from self._run_stream(prompt=prompt, allow_fallback=True)
+
+    def _run_stream(self, prompt: str, allow_fallback: bool) -> Generator[Dict[str, Any], None, None]:
         """
         Stream tokens from Ollama and emit structured events.
 
@@ -507,7 +673,7 @@ class ModelRunner:
                 f"{self.base_url}/api/generate",
                 json=self._build_payload(prompt=prompt, stream=True),
                 stream=True,
-                timeout=(5, 300),
+                timeout=(5, 600),
             ) as response:
                 response.raise_for_status()
 
@@ -587,33 +753,22 @@ class ModelRunner:
             }
             yield {"type": "done", "result": result}
         except requests.HTTPError as e:
-            status_code = e.response.status_code if e.response is not None else None
-            response_text = ""
-            response_error = ""
+            error_message = self._enrich_generic_ollama_error(
+                self._describe_request_exception(e, stream=True),
+                stream=True,
+            )
 
-            if e.response is not None:
-                response_text = (e.response.text or "").strip()
-                try:
-                    response_error = (e.response.json() or {}).get("error", "")
-                except Exception:
-                    response_error = ""
+            if allow_fallback:
+                switched, note = self._try_fallback_model(error_message)
+                if switched:
+                    yield {
+                        "type": "status",
+                        "message": note or f"Switched to fallback model '{self.model_name}'.",
+                        "technique": "model_fallback",
+                    }
+                    yield from self._run_stream(prompt=prompt, allow_fallback=False)
+                    return
 
-            if status_code == 404:
-                combined_error = (response_error or response_text).lower()
-                if "model" in combined_error and "not found" in combined_error:
-                    detail = (
-                        f"Model '{self.model_name}' not found in Ollama. "
-                        f"Run: ollama pull {self.model_name}"
-                    )
-                else:
-                    detail = (
-                        f"Ollama endpoint '/api/generate' not found at {self.base_url}. "
-                        "Verify Ollama is running on this URL and supports the Ollama API."
-                    )
-            else:
-                detail = response_error or response_text or str(e)
-
-            error_message = f"Ollama stream failed ({status_code}): {detail}"
             # Ensure error message is never empty
             if not error_message.strip():
                 error_message = "Unknown streaming error from Ollama"
@@ -623,7 +778,7 @@ class ModelRunner:
                 "error": error_message,
             }
         except Exception as e:
-            error_message = str(e) if str(e).strip() else "Unknown streaming error"
+            error_message = self._describe_request_exception(e, stream=True)
             yield {
                 "type": "error",
                 "error": error_message,
