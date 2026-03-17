@@ -772,5 +772,67 @@
       "problem": "A random variable has PMF p(x)=k*x for x in {1,2,3,4}. Find k and E[X].",
       "solution": "Normalization: k(1+2+3+4)=10k=1 => k=0.1. Then E[X]=sum x*p(x)=sum x*(0.1x)=0.1(1^2+2^2+3^2+4^2)=0.1(30)=3."
     }
+  ],
+  "calculus": [
+    {
+      "problem": "Find the derivative: f(x) = x³",
+      "solution": "f(x) = x³\nf'(x) = 3x²"
+    },
+    {
+      "problem": "Find the derivative: f(x) = 5x⁴ - 2x² + 7",
+      "solution": "f(x) = 5x⁴ - 2x² + 7\nf'(x) = 20x³ - 4x"
+    },
+    {
+      "problem": "Find derivative of x^4",
+      "solution": "f'(x) = 4x³"
+    },
+    {
+      "problem": "Use chain rule on (2x+1)^5",
+      "solution": "f'(x) = 5(2x+1)^4 · 2 = 10(2x+1)^4"
+    },
+    {
+      "problem": "Find limit of (sin x)/x",
+      "solution": "lim(x→0) (sin x)/x = 1"
+    },
+    {
+      "problem": "Evaluate integral of x^2",
+      "solution": "∫ x² dx = x³/3 + C"
+    },
+    {
+      "problem": "Find derivative of e^(3x)",
+      "solution": "f'(x) = 3e^(3x)"
+    },
+    {
+      "problem": "Find all real values of x where f'(x)=0 for f(x)=x³-3x.",
+      "solution": "f'(x) = 3x² - 3 = 3(x² - 1)\nSet to zero: x² = 1\nSolutions: x = -1 or x = 1"
+    },
+    {
+      "problem": "Find the derivative using chain rule: f(x) = (2x + 1)³",
+      "solution": "Let u = 2x + 1, then f = u³\nf'(x) = 3u² · 2 = 6(2x + 1)²"
+    },
+    {
+      "problem": "Find lim(x->2) (x^2 - 4)/(x - 2).",
+      "solution": "Factor numerator: (x-2)(x+2)/(x-2) = x+2, so the limit is 4."
+    },
+    {
+      "problem": "Find the second derivative of f(x)=x^4 - 3x^2 + 2.",
+      "solution": "f'(x)=4x^3-6x and f''(x)=12x^2-6."
+    },
+    {
+      "problem": "Find the tangent line to y=x^2 at x=3.",
+      "solution": "Slope is y'=2x so m=6 at x=3. Point is (3,9). Tangent: y-9=6(x-3)."
+    },
+    {
+      "problem": "Find all real values where f'(x)=0 for f(x)=x^3-12x.",
+      "solution": "f'(x)=3x^2-12=3(x^2-4). So x=-2 or x=2."
+    },
+    {
+      "problem": "Find antiderivative: Integral (5x^4 - 2x + 1) dx.",
+      "solution": "Integral = x^5 - x^2 + x + C."
+    },
+    {
+      "problem": "Solve the differential equation dy/dx = 3y with y(0)=2.",
+      "solution": "Separate variables: dy/y = 3 dx. Integrate: ln|y| = 3x + C, so y = Ce^(3x). Use y(0)=2 gives C=2. Therefore y=2e^(3x)."
+    }
   ]
 }
