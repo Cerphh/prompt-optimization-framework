@@ -13,25 +13,25 @@ PROBLEM_KEYWORDS = {
     'solve', 'find', 'calculate', 'determine', 'equation', 'equals', '=',
     # Algebra - operations
     'factor', 'expand', 'simplify', 'system',
-    # Calculus
+    # Pre-calculus
     'derivative', 'differentiate', 'integrate', 'integral', 'limit', 'lim',
     'd/dx', 'dy/dx', '∫', '∂',
-    # Statistics - central tendency
+    # Counting & Probability - central tendency
     'mean', 'median', 'mode', 'average',
-    # Statistics - spread
+    # Counting & Probability - spread
     'variance', 'standard deviation', 'range', 'deviation',
-    # Probability - general
+    # Counting & Probability - general
     'probability', 'p(', 'chance', 'odds', 'likely',
-    # Probability - conditional
+    # Counting & Probability - conditional
     'given that', 'given', '|', 'conditional',
-    # Probability - objects
+    # Counting & Probability - objects
     'coin', 'coins', 'dice', 'die', 'card', 'ball', 'balls', 'bag',
-    # Probability - concepts
+    # Counting & Probability - concepts
     'flip', 'flipped', 'roll', 'rolled', 'draw', 'drawn',
     'heads', 'tails', 'outcome', 'outcomes', 'event', 'favorable',
-    # Combinatorics
+    # Combinatorics (Counting)
     'combinations', 'permutations', 'c(', 'factorial',
-    # Distributions
+    # Distributions (Counting & Probability)
     'random', 'distribution', 'expected value', 'sample'
 }
 
@@ -481,7 +481,7 @@ class PromptGenerator:
         
         Args:
             problem: The math problem
-            subject: Subject category (algebra, statistics, calculus, general)
+            subject: Subject category (algebra, statistics (Counting & Probability), calculus (Pre-calculus), general)
             num_examples: Number of examples to include (auto-determined by subject if None)
             
         Returns:

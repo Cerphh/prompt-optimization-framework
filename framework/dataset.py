@@ -20,7 +20,7 @@ class MathDataset:
         Args:
             problem: The math problem text
             answer: Ground truth answer
-            category: Problem category (arithmetic, algebra, calculus, etc.)
+            category: Problem category (arithmetic, algebra, pre-calculus, counting & probability, etc.)
         """
         record = {
             "problem": problem,

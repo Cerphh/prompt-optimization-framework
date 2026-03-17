@@ -102,7 +102,7 @@ class BenchmarkPipeline:
         Args:
             problem: The math problem to solve
             ground_truth: Expected answer for accuracy evaluation
-            subject: Subject category for few-shot examples (algebra, statistics, calculus, general)
+            subject: Subject category for few-shot examples (algebra, statistics (Counting & Probability), calculus (Pre-calculus), general)
             
         Returns:
             Dictionary with results for all techniques and best selection

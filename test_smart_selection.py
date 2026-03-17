@@ -3,11 +3,11 @@ from framework.prompt_generator import PromptGenerator
 gen = PromptGenerator()
 
 test_cases = [
-    ("Find the derivative of x³ + 2x", "calculus"),
-    ("What is the mean of 5, 10, 15, 20?", "statistics"),
+    ("Find the derivative of x³ + 2x", "calculus"),  # Pre-calculus
+    ("What is the mean of 5, 10, 15, 20?", "statistics"),  # Counting & Probability
     ("Solve for x: 2x + 5 = 13", "algebra"),
-    ("Calculate the integral of 3x²", "calculus"),
-    ("Find the probability of rolling a 6", "statistics"),
+    ("Calculate the integral of 3x²", "calculus"),  # Pre-calculus
+    ("Find the probability of rolling a 6", "statistics"),  # Counting & Probability
     ("Factor x² - 16", "algebra")
 ]
 

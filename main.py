@@ -252,7 +252,7 @@ class BenchmarkRequest(BaseModel):
     """Request model for benchmarking."""
     problem: str
     ground_truth: Optional[str] = None
-    subject: Optional[str] = "algebra"  # algebra, statistics, or calculus
+    subject: Optional[str] = "algebra"  # algebra, statistics (Counting & Probability), or calculus (Pre-calculus)
     difficulty: Optional[str] = "basic"  # basic, intermediate, advanced
 
 
@@ -305,6 +305,8 @@ async def health_check():
 async def run_benchmark(request: BenchmarkRequest):
     """
     Run comprehensive benchmark on a problem.
+    
+    Subjects: algebra, statistics (Counting & Probability), calculus (Pre-calculus)
     
     Evaluates all prompting techniques:
     - Zero-shot
@@ -394,8 +396,8 @@ async def get_subjects():
         "subjects": pipeline.prompt_generator.get_available_subjects(),
         "descriptions": {
             "algebra": "Linear equations, quadratic equations, factoring, systems",
-            "statistics": "Mean, median, mode, variance, probability, combinations",
-            "calculus": "Derivatives, integrals, limits",
+            "statistics": "Counting, combinations, permutations, probability distributions",
+            "calculus": "Limits, functions, transformations, sequences",
             "general": "Basic arithmetic problems"
         }
     }
