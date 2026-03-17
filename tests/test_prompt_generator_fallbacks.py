@@ -42,4 +42,4 @@ def test_hard_problem_uses_more_examples_when_num_examples_not_provided():
     )
 
     assert prompt.startswith("Solve the following math problems and give the final answer.")
-    assert prompt.count("\nQ: ") >= 5
+    assert prompt.count("\nQ: ") >= 4

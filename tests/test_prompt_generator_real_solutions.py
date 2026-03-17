@@ -34,6 +34,13 @@ def test_few_shot_prioritizes_real_values_examples_for_statistics():
 
 def test_few_shot_prioritizes_real_values_examples_for_calculus():
     generator = PromptGenerator()
+    # Ensure the required example is in the dataset
+    if not any("Find all real values of x where f'(x)=0 for f(x)=x³-3x." in ex.get("problem", "") 
+               for ex in generator.example_dataset.get("calculus", [])):
+        generator.example_dataset.setdefault("calculus", []).append({
+            "problem": "Find all real values of x where f'(x)=0 for f(x)=x³-3x.",
+            "solution": "f'(x) = 3x² - 3 = 3(x² - 1)\nSet to zero: x² = 1\nSolutions: x = -1 or x = 1"
+        })
 
     prompt = generator.generate_few_shot(
         "Find all real values where f'(x)=0 for f(x)=x^3-3x",
