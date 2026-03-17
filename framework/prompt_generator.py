@@ -65,6 +65,15 @@ class PromptGenerator:
     2. Few-shot: Includes examples before the question
     """
     
+    # Subject aliases for consistent mapping
+    _SUBJECT_ALIASES = {
+        "calculus": "pre-calculus",
+        "precalculus": "pre-calculus",
+        "statistics": "counting-probability",
+        "stat": "counting-probability",
+        "probability": "counting-probability",
+    }
+    
     def __init__(self):
         """Initialize the prompt generator and load example dataset from JSON."""
         self.few_shot_min_examples = int(os.getenv("FEW_SHOT_MIN_EXAMPLES", "1"))
@@ -196,6 +205,13 @@ class PromptGenerator:
                 i += 1
         
         return ''.join(result)
+
+    def _normalize_subject(self, subject: str) -> str:
+        """Normalize subject with case/whitespace handling and aliases."""
+        if not subject:
+            return "general"
+        key = subject.strip().lower()
+        return self._SUBJECT_ALIASES.get(key, key)
 
     def _is_conditional_probability_problem(self, problem: str) -> bool:
         """Detect conditional probability phrasing to prioritize matching examples."""
@@ -618,42 +634,40 @@ class PromptGenerator:
         Returns:
             Few-shot prompt with subject-specific, relevant examples
         """
-        # Map "calculus" subject to "pre-calculus" if not found
+        # Normalize user problem text (e.g., remove leading Q: and trailing A:)
+        normalized_problem = self._normalize_problem_text(problem)
+
+        # Check exact match first, then try normalized subject with aliases
         subject_to_use = subject
         if subject not in self.example_dataset:
-            if subject == "calculus":
-                subject_to_use = "pre-calculus"
+            # Try normalized version with aliases
+            normalized_subject = self._normalize_subject(subject)
+            if normalized_subject in self.example_dataset:
+                subject_to_use = normalized_subject
             else:
                 print(f"Warning: Subject '{subject}' not found in dataset, using 'algebra'")
                 subject_to_use = "algebra"
         
-        # Normalize user problem text (e.g., remove leading Q: and trailing A:)
-        normalized_problem = self._normalize_problem_text(problem)
-
-        # Auto-determine number of examples based on subject if not specified
-        if num_examples is None:
-            # Use mapped subject_to_use for complexity estimation
-            complexity = self._estimate_problem_complexity(normalized_problem, subject_to_use)
-            target_examples = self.few_shot_min_examples
-            if complexity >= 3:
-                target_examples = self.few_shot_hard_examples
-            elif complexity == 2:
-                target_examples = self.few_shot_medium_examples
-
-            num_examples = max(
-                self.few_shot_min_examples,
-                min(target_examples, self.few_shot_max_examples),
-            )
-
-        num_examples = max(self.few_shot_min_examples, min(num_examples, self.few_shot_max_examples))
-        
         available_examples = self.example_dataset.get(subject_to_use, [])
         
         if not available_examples:
-            print(f"Warning: No examples found for subject '{subject}'")
+            print(f"Warning: No examples found for subject '{subject_to_use}'")
             # Return zero-shot if no examples
-            return self.generate_zero_shot(normalized_problem, subject=subject)
-        
+            return self.generate_zero_shot(normalized_problem, subject=subject_to_use)
+
+        # Auto-determine number of examples based on subject if not specified
+        if num_examples is None:
+            complexity = self._estimate_problem_complexity(normalized_problem, subject_to_use)
+            if complexity >= 3:
+                # For hard problems, use all available examples
+                num_examples = len(available_examples)
+            elif complexity == 2:
+                num_examples = min(self.few_shot_medium_examples, len(available_examples))
+            else:
+                num_examples = min(self.few_shot_min_examples, len(available_examples))
+        else:
+            num_examples = max(self.few_shot_min_examples, min(num_examples, self.few_shot_max_examples))
+
         # Select relevant examples (smart selection based on problem content)
         num_to_select = min(num_examples, len(available_examples))
         selected_examples = self._select_relevant_examples(
@@ -671,7 +685,7 @@ class PromptGenerator:
         ]
         best_relevance = max(selected_scores) if selected_scores else 0.0
         if best_relevance < self.few_shot_min_relevance:
-            return self.generate_zero_shot(normalized_problem, subject=subject)
+            return self.generate_zero_shot(normalized_problem, subject=subject_to_use)
         
         # Format examples (concise format for speed)
         examples_text = "\n\n".join([
