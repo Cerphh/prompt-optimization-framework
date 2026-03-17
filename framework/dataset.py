@@ -3,7 +3,8 @@ Dataset Module
 Manages math problems with ground truth answers for benchmarking.
 """
 
-from typing import List, Dict, Any, Optional
+from pathlib import Path
+from typing import Iterable, List, Dict, Any, Optional
 import json
 
 class MathDataset:
@@ -13,7 +14,13 @@ class MathDataset:
         self.problems: List[Dict[str, Any]] = []
         self._problems_by_id: Dict[int, Dict[str, Any]] = {}
     
-    def add_problem(self, problem: str, answer: str, category: str = "general"):
+    def add_problem(
+        self,
+        problem: str,
+        answer: str,
+        category: str = "general",
+        difficulty: Optional[str] = None,
+    ):
         """
         Add a math problem to the dataset.
         
@@ -28,6 +35,8 @@ class MathDataset:
             "category": category,
             "id": len(self.problems)
         }
+        if difficulty is not None:
+            record["difficulty"] = difficulty
         self.problems.append(record)
         self._problems_by_id[record["id"]] = record
     
@@ -39,28 +48,69 @@ class MathDataset:
         """Get a specific problem by ID."""
         return self._problems_by_id.get(problem_id)
     
-    def load_from_dict(self, data: List[Dict[str, str]]):
+    def _iter_problem_records(self, data: Any) -> Iterable[Dict[str, Any]]:
+        """Flatten old and new dataset JSON shapes into normalized problem records."""
+        if isinstance(data, list):
+            for item in data:
+                if isinstance(item, dict):
+                    yield item
+            return
+
+        if not isinstance(data, dict):
+            raise ValueError("Dataset must be a list of problems or a category mapping")
+
+        for category, category_value in data.items():
+            if isinstance(category_value, list):
+                for item in category_value:
+                    if isinstance(item, dict):
+                        yield {
+                            **item,
+                            "category": item.get("category", category),
+                        }
+                continue
+
+            if not isinstance(category_value, dict):
+                continue
+
+            for difficulty, problems in category_value.items():
+                if not isinstance(problems, list):
+                    continue
+
+                for item in problems:
+                    if isinstance(item, dict):
+                        yield {
+                            **item,
+                            "category": item.get("category", category),
+                            "difficulty": item.get("difficulty", difficulty),
+                        }
+
+    def load_from_dict(self, data: Any):
         """
-        Load problems from a list of dictionaries.
+        Load problems from JSON-like structures.
         
         Args:
-            data: List of dicts with 'problem', 'answer', and optional 'category'
+            data: List of problem dicts or category/difficulty mapping
         """
-        for item in data:
+        for item in self._iter_problem_records(data):
+            answer = item.get("answer") or item.get("solution")
+            if not item.get("problem") or answer is None:
+                continue
+
             self.add_problem(
                 problem=item["problem"],
-                answer=item["answer"],
-                category=item.get("category", "general")
+                answer=answer,
+                category=item.get("category", "general"),
+                difficulty=item.get("difficulty"),
             )
     
     def save_to_file(self, filepath: str):
         """Save dataset to JSON file."""
-        with open(filepath, 'w') as f:
+        with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(self.problems, f, indent=2)
     
     def load_from_file(self, filepath: str):
         """Load dataset from JSON file."""
-        with open(filepath, 'r') as f:
+        with open(filepath, 'r', encoding='utf-8') as f:
             data = json.load(f)
             self.load_from_dict(data)
     
@@ -77,6 +127,11 @@ def get_sample_dataset() -> MathDataset:
         MathDataset with sample problems
     """
     dataset = MathDataset()
+
+    json_path = Path(__file__).with_name("example_problems.json")
+    if json_path.exists():
+        dataset.load_from_file(str(json_path))
+        return dataset
     
     # Arithmetic problems
     dataset.add_problem("What is 15 + 27?", "42", "arithmetic")
