@@ -16,6 +16,10 @@ PROBLEM_KEYWORDS = {
     # Pre-calculus
     'derivative', 'differentiate', 'integrate', 'integral', 'limit', 'lim',
     'd/dx', 'dy/dx', '∫', '∂',
+    'sin', 'cos', 'tan', 'sec', 'csc', 'cot',
+    'arcsin', 'arccos', 'arctan',
+    'polar', 'rectangular', 'complex', 'vector',
+    'sequence', 'series', 'domain', 'range', 'asymptote',
     # Counting & Probability - central tendency
     'mean', 'median', 'mode', 'average',
     # Counting & Probability - spread
@@ -31,15 +35,20 @@ PROBLEM_KEYWORDS = {
     'heads', 'tails', 'outcome', 'outcomes', 'event', 'favorable',
     # Combinatorics (Counting)
     'combinations', 'permutations', 'c(', 'factorial',
+    'how many', 'number of ways', 'arrangement', 'arrangements', 'choose', 'select',
+    'without replacement', 'with replacement',
     # Distributions (Counting & Probability)
-    'random', 'distribution', 'expected value', 'sample'
+    'random', 'distribution', 'expected value', 'expectation', 'sample'
 }
 
 OPERATION_WORDS = {
     'solve', 'find', 'calculate', 'factor', 'expand', 'simplify',
     'derivative', 'integrate', 'limit',
     'mean', 'median', 'mode', 'probability', 'variance',
-    'roll', 'flip', 'draw', 'combinations', 'permutations'
+    'roll', 'flip', 'draw', 'combinations', 'permutations',
+    'arrange', 'arrangement', 'choose', 'select',
+    'expected value', 'expectation',
+    'sin', 'cos', 'tan', 'domain', 'range', 'sequence', 'series'
 }
 
 SPECIFIC_OBJECTS = ('dice', 'die', 'coin', 'ball', 'card', 'bag')
@@ -54,6 +63,17 @@ STRATEGY_PAIRS = (
     ("system", "system"),
     ("mean", "mean"),
     ("variance", "variance"),
+    ("how many", "how many"),
+    ("number of ways", "number of ways"),
+    ("arrange", "arrange"),
+    ("choose", "choose"),
+    ("expected value", "expected value"),
+    ("sin", "sin"),
+    ("cos", "cos"),
+    ("tan", "tan"),
+    ("sequence", "sequence"),
+    ("series", "series"),
+    ("polar", "polar"),
 )
 
 class PromptGenerator:
@@ -90,12 +110,12 @@ class PromptGenerator:
         # Load examples from JSON file
         try:
             with open(json_path, 'r', encoding='utf-8') as f:
-                self.example_dataset = json.load(f)
+                self.example_dataset = self._normalize_example_dataset(json.load(f))
             print(f"Loaded example dataset from {json_path}")
         except FileNotFoundError:
             print(f"Warning: Could not find {json_path}, using minimal fallback examples")
             # Fallback to minimal examples if JSON file not found
-            self.example_dataset = {
+            self.example_dataset = self._normalize_example_dataset({
                 "general": [
                     {"problem": "What is 12 + 8?", "solution": "12 + 8 = 20"},
                     {"problem": "Calculate 3 × 7", "solution": "3 × 7 = 21"}
@@ -109,15 +129,58 @@ class PromptGenerator:
                 "pre-calculus": [
                     {"problem": "Find the derivative: f(x) = x³", "solution": "f(x) = x³\nf'(x) = 3x⁽³⁻¹⁾\nf'(x) = 3x²"}
                 ]
-            }
+            })
         except json.JSONDecodeError as e:
             print(f"Warning: Error parsing JSON file: {e}")
             # Use minimal fallback if JSON is malformed
-            self.example_dataset = {
+            self.example_dataset = self._normalize_example_dataset({
                 "general": [
                     {"problem": "What is 12 + 8?", "solution": "12 + 8 = 20"}
                 ]
-            }
+            })
+
+    def _normalize_example_dataset(self, raw_data: object) -> Dict[str, List[Dict[str, str]]]:
+        """Flatten subject->difficulty->examples JSON into subject->examples."""
+        normalized: Dict[str, List[Dict[str, str]]] = {}
+
+        if not isinstance(raw_data, dict):
+            return normalized
+
+        for subject, subject_value in raw_data.items():
+            subject_examples: List[Dict[str, str]] = []
+
+            if isinstance(subject_value, list):
+                source_groups = [(None, subject_value)]
+            elif isinstance(subject_value, dict):
+                source_groups = list(subject_value.items())
+            else:
+                continue
+
+            for difficulty, examples in source_groups:
+                if not isinstance(examples, list):
+                    continue
+
+                for example in examples:
+                    if not isinstance(example, dict):
+                        continue
+
+                    problem = example.get("problem")
+                    solution = example.get("solution") or example.get("answer")
+                    if not problem or not solution:
+                        continue
+
+                    normalized_example = {
+                        "problem": str(problem),
+                        "solution": str(solution),
+                    }
+                    if difficulty is not None:
+                        normalized_example["difficulty"] = str(example.get("difficulty") or difficulty)
+
+                    subject_examples.append(normalized_example)
+
+            normalized[str(subject)] = subject_examples
+
+        return normalized
     
     def generate_zero_shot(self, problem: str, subject: str = "general") -> str:
         """
@@ -325,16 +388,32 @@ class PromptGenerator:
         if any(marker in value for marker in real_solution_markers):
             return "real_solutions"
 
+        if any(marker in value for marker in ["how many", "number of ways", "arrange", "arrangement", "permutation", "combination", "choose", "select"]):
+            return "counting_arrangements"
+        if "expected value" in value or "expectation" in value:
+            return "expected_value"
+
         if "conditional" in value or "given that" in value or "|" in value:
             return "conditional_probability"
         if "probability" in value or " p(" in value:
             return "probability"
+
+        trig_markers = ["sin", "cos", "tan", "sec", "csc", "cot", "arcsin", "arccos", "arctan", "radian", "degrees"]
+        if any(re.search(rf"\b{re.escape(marker)}\b", value) for marker in trig_markers):
+            return "trigonometric"
+
         if "derivative" in value or "differentiate" in value:
             return "derivative"
         if "integral" in value or "integrate" in value or "∫" in value:
             return "integral"
         if "limit" in value or "lim(" in value or "lim" in value:
             return "limit"
+        if any(marker in value for marker in ["sequence", "series", "nth term", "geometric sequence", "arithmetic sequence"]):
+            return "sequence_series"
+        if any(marker in value for marker in ["domain", "range", "asymptote", "vertex", "turning point", "increasing", "decreasing"]):
+            return "function_analysis"
+        if any(marker in value for marker in ["polar", "rectangular", "cartesian", "complex plane"]):
+            return "coordinate_conversion"
         if "variance" in value:
             return "variance"
         if "mean" in value:
@@ -464,6 +543,15 @@ class PromptGenerator:
             if len(conditional_examples) >= num_examples:
                 return conditional_examples[:num_examples]
 
+        problem_intent = self._detect_primary_intent(problem)
+        if problem_intent == "real_solutions":
+            real_solution_examples = [
+                ex for ex in available_examples
+                if isinstance(ex, dict) and self._detect_primary_intent(ex.get("problem", "")) == "real_solutions"
+            ]
+            if len(real_solution_examples) >= num_examples:
+                return real_solution_examples[:num_examples]
+
         # Extract keywords from the problem
         problem_keywords = self._detect_problem_keywords(problem)
         
@@ -570,7 +658,11 @@ class PromptGenerator:
             'inflection', 'slope', 'curve', 'velocity', 'acceleration', 'extrema',
             'maximum', 'minimum', 'gradient', 'second derivative', 'critical point',
             'antiderivative', 'riemann', 'area under', 'taylor', 'maclaurin',
-            'convergence', 'divergence', 'function', 'exponential', 'logarithmic', 'sequence', 'series'
+            'convergence', 'divergence', 'function', 'exponential', 'logarithmic',
+            'sequence', 'series', 'sin', 'cos', 'tan', 'sec', 'csc', 'cot',
+            'arcsin', 'arccos', 'arctan', 'radian', 'degrees',
+            'polar', 'rectangular', 'complex', 'vector', 'matrix', 'determinant',
+            'domain', 'range', 'asymptote'
         }
         
         # Counting & Probability keywords
@@ -580,7 +672,8 @@ class PromptGenerator:
             'permutation', 'combination', 'factorial', 'count', 'counting', 'arrange',
             'arrangement', 'selection', 'flip', 'flipped', 'roll', 'rolled', 'choose',
             'outcome', 'outcomes', 'event', 'favorable', 'nCr', 'nPr', 'odds', 'chance',
-            'bell curve', 'normal distribution', 'bayes', 'conditional', 'dependent', 'independent'
+            'bell curve', 'normal distribution', 'bayes', 'conditional', 'dependent', 'independent',
+            'without replacement', 'with replacement', 'how many', 'number of ways', 'at least', 'at most'
         }
         
         # Algebra keywords
@@ -592,18 +685,18 @@ class PromptGenerator:
             'evaluate', 'variable', 'coefficient'
         }
         
-        # Check for pattern matches
-        if any(kw in text for kw in precalculus_keywords):
-            scores['pre-calculus'] += 2
-        if any(kw in text for kw in counting_probability_keywords):
-            scores['counting-probability'] += 2
-        if any(kw in text for kw in algebra_keywords):
-            scores['algebra'] += 2
+        def _keyword_hits(keywords: set) -> int:
+            return sum(1 for kw in keywords if kw in text)
+
+        # Check for keyword pattern density
+        scores['pre-calculus'] += _keyword_hits(precalculus_keywords)
+        scores['counting-probability'] += _keyword_hits(counting_probability_keywords)
+        scores['algebra'] += _keyword_hits(algebra_keywords)
         
         # Regex pattern checking
-        if re.search(r'\bd/dx\b|\bdy/dx\b|∫|∂|\blimit\b|\blim\b|derivative|integral|optimization', text):
+        if re.search(r'\bd/dx\b|\bdy/dx\b|∫|∂|\blimit\b|\blim\b|derivative|integral|optimization|\bsin\b|\bcos\b|\btan\b|\barcsin\b|\barccos\b|\barctan\b|\bpolar\b|\brectangular\b', text):
             scores['pre-calculus'] += 3
-        if re.search(r'\bp\(|probability|permutation|combination|C\(|nCr|counting|factorial', text):
+        if re.search(r'\bp\(|probability|permutation|combination|C\(|nCr|counting|factorial|how many|number of ways|without replacement|with replacement|expected value', text):
             scores['counting-probability'] += 3
         if re.search(r'\bsolve\s+for\b|factor|simplify|expand|quadratic|equation', text):
             scores['algebra'] += 2
@@ -640,12 +733,14 @@ class PromptGenerator:
         auto_mode = num_examples is None
 
         # --- Apply subject aliases, but check existence in dataset first ---
+        self.example_dataset = self._normalize_example_dataset(self.example_dataset)
         aliased_subject = self._SUBJECT_ALIASES.get(subject, subject)
-        
-        # Use aliased subject if it exists, otherwise use original
-        if aliased_subject in self.example_dataset:
+
+        if subject in self.example_dataset:
+            pass
+        elif aliased_subject in self.example_dataset:
             subject = aliased_subject
-        elif subject not in self.example_dataset:
+        else:
             print(f"Warning: Subject '{subject}' not found in dataset, using 'general'")
             subject = "general"
 

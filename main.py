@@ -6,6 +6,7 @@ Research Benchmarking API for comparative prompt evaluation.
 import os
 import json
 import hashlib
+from datetime import datetime, timezone
 from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -102,6 +103,40 @@ firestore_store = FirestoreStore(
     enabled=os.getenv("ENABLE_FIRESTORE", "true").lower() == "true",
     required=os.getenv("FIRESTORE_REQUIRED", "false").lower() == "true"
 )
+
+model_startup_check: Dict[str, Any] = {
+    "checked_at": None,
+    "ready": None,
+    "message": None,
+    "active_model": pipeline.model_runner.model_name,
+}
+
+
+def _refresh_model_startup_check() -> Dict[str, Any]:
+    ready, detail = pipeline.model_runner.validate_model_ready()
+    checked_at = datetime.now(timezone.utc).isoformat()
+
+    model_startup_check.update(
+        {
+            "checked_at": checked_at,
+            "ready": ready,
+            "message": detail,
+            "active_model": pipeline.model_runner.model_name,
+        }
+    )
+    return dict(model_startup_check)
+
+
+@app.on_event("startup")
+async def startup_model_readiness_check():
+    info = _refresh_model_startup_check()
+    if info.get("ready"):
+        print(f"[startup] model ready: {info.get('active_model')}")
+    else:
+        print(
+            "[startup] model not ready: "
+            f"{info.get('active_model')} - {info.get('message')}"
+        )
 
 
 def _persist_and_attach_storage(
@@ -292,9 +327,14 @@ async def root():
 async def health_check():
     """Check if the API and model are operational."""
     model_connected = pipeline.test_connection()
+    startup_info = dict(model_startup_check)
+    if startup_info.get("checked_at") is None:
+        startup_info = _refresh_model_startup_check()
+
     return {
         "status": "healthy" if model_connected else "degraded",
         "model_connected": model_connected,
+        "model_readiness": startup_info,
         "dataset_size": dataset.size(),
         "weights": pipeline.weights,
         "firestore": firestore_store.get_status()

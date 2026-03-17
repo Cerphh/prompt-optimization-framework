@@ -43,3 +43,28 @@ def test_hard_problem_uses_more_examples_when_num_examples_not_provided():
 
     assert prompt.startswith("Solve the following math problems and give the final answer.")
     assert prompt.count("\nQ: ") >= 4
+
+
+def test_few_shot_accepts_nested_subject_difficulty_examples():
+    generator = PromptGenerator()
+    generator.example_dataset = {
+        "algebra": {
+            "basic": [
+                {"problem": "Solve for x: x + 2 = 5", "solution": "x = 3"},
+                {"problem": "Expand (x + 1)^2", "solution": "x^2 + 2x + 1"},
+            ]
+        },
+        "general": [
+            {"problem": "What is 1 + 1?", "solution": "2"}
+        ],
+    }
+
+    prompt = generator.generate_few_shot(
+        "Solve for x: x + 4 = 7",
+        subject="algebra",
+        num_examples=1,
+    )
+
+    assert prompt.startswith("Solve the following math problems and give the final answer.")
+    assert "Q: Solve for x: x + 2 = 5" in prompt
+    assert "Q: Solve for x: x + 4 = 7" in prompt
