@@ -82,6 +82,9 @@ class ModelRunner:
             "top_p": _env_float("MODEL_TOP_P", 0.9, min_value=0.0),
             "repeat_penalty": _env_float("MODEL_REPEAT_PENALTY", 1.1, min_value=0.1),
         }
+        raw_num_gpu = os.getenv("MODEL_NUM_GPU")
+        if raw_num_gpu is not None:
+            self.generation_options["num_gpu"] = _env_int("MODEL_NUM_GPU", 0, min_value=0)
 
         raw_fallback_models = os.getenv("MODEL_FALLBACK_MODELS", "").strip()
         self.fallback_models = [
@@ -89,6 +92,7 @@ class ModelRunner:
             if item.strip()
         ]
         self.auto_fallback_on_memory_error = _env_bool("MODEL_AUTO_FALLBACK_ON_MEMORY_ERROR", True)
+        self.auto_cpu_fallback_on_cuda_error = _env_bool("MODEL_AUTO_CPU_FALLBACK_ON_CUDA_ERROR", True)
 
     def _build_payload_for_model(self, model_name: str, prompt: str, stream: bool) -> Dict[str, Any]:
         return {
@@ -104,6 +108,41 @@ class ModelRunner:
 
     def _is_memory_error_message(self, message: str) -> bool:
         return "requires more system memory" in (message or "").lower()
+
+    def _is_cuda_error_message(self, message: str) -> bool:
+        normalized = (message or "").lower()
+        cuda_markers = (
+            "cuda error",
+            "ggml-cuda",
+            "shared object initialization failed",
+            "cudafuncsetattribute",
+            "current device:",
+            "llama runner process has terminated: cuda error",
+        )
+        return any(marker in normalized for marker in cuda_markers)
+
+    def _is_recoverable_load_error_message(self, message: str) -> bool:
+        return self._is_memory_error_message(message) or self._is_cuda_error_message(message)
+
+    def _try_cpu_fallback_on_cuda_error(self, failure_message: str) -> Tuple[bool, Optional[str]]:
+        if not self.auto_cpu_fallback_on_cuda_error:
+            return False, None
+        if not self._is_cuda_error_message(failure_message):
+            return False, None
+
+        current_num_gpu = self.generation_options.get("num_gpu")
+        if current_num_gpu is not None:
+            try:
+                if int(current_num_gpu) == 0:
+                    return False, None
+            except (TypeError, ValueError):
+                pass
+
+        self.generation_options["num_gpu"] = 0
+        return True, (
+            "Detected CUDA initialization error from Ollama; retrying in CPU mode "
+            "(options.num_gpu=0)."
+        )
 
     def _model_name_from_candidate(self, candidate: str, available_models: list) -> Optional[str]:
         if candidate in available_models:
@@ -150,7 +189,7 @@ class ModelRunner:
             return False, None
         if not self.fallback_models:
             return False, None
-        if not self._is_memory_error_message(failure_message):
+        if not self._is_recoverable_load_error_message(failure_message):
             return False, None
 
         available_models = self.get_available_models()
@@ -216,6 +255,13 @@ class ModelRunner:
                 "Free RAM, close other applications, reduce MODEL_NUM_CTX, or switch to a smaller model."
             )
 
+        if self._is_cuda_error_message(combined_error):
+            return (
+                f"Model '{self.model_name}' failed to initialize CUDA in Ollama: {combined_error}. "
+                "Retry with CPU by setting MODEL_NUM_GPU=0 (or OLLAMA_NO_GPU=1), "
+                "update GPU drivers/CUDA runtime, or configure MODEL_FALLBACK_MODELS."
+            )
+
         prefix = "Ollama stream failed" if stream else "Ollama request failed"
         detail = combined_error or f"HTTP {status_code}"
         return f"{prefix} ({status_code}): {detail}"
@@ -262,6 +308,10 @@ class ModelRunner:
         ready, detail = self._validate_model_ready_for_name(self.model_name)
         if ready:
             return True, None
+
+        cpu_switched, cpu_note = self._try_cpu_fallback_on_cuda_error(detail or "")
+        if cpu_switched:
+            return True, cpu_note
 
         switched, switch_note = self._try_fallback_model(detail or "")
         if switched:
@@ -572,17 +622,33 @@ class ModelRunner:
             Dictionary with response, metrics, and metadata
         """
         start_time = time.time()
+        cpu_fallback_applied = False
+        cpu_fallback_note = None
         
         try:
             try:
                 generation = self._run_generation_once(prompt=prompt, timeout=(5, 600))
             except requests.HTTPError as primary_error:
                 primary_message = self._describe_request_exception(primary_error)
-                switched, _ = self._try_fallback_model(primary_message)
-                if switched:
-                    generation = self._run_generation_once(prompt=prompt, timeout=(5, 600))
+                cpu_switched, cpu_note = self._try_cpu_fallback_on_cuda_error(primary_message)
+                if cpu_switched:
+                    cpu_fallback_applied = True
+                    cpu_fallback_note = cpu_note
+                    try:
+                        generation = self._run_generation_once(prompt=prompt, timeout=(5, 600))
+                    except requests.HTTPError as cpu_retry_error:
+                        cpu_retry_message = self._describe_request_exception(cpu_retry_error)
+                        switched, _ = self._try_fallback_model(cpu_retry_message)
+                        if switched:
+                            generation = self._run_generation_once(prompt=prompt, timeout=(5, 600))
+                        else:
+                            raise
                 else:
-                    raise
+                    switched, _ = self._try_fallback_model(primary_message)
+                    if switched:
+                        generation = self._run_generation_once(prompt=prompt, timeout=(5, 600))
+                    else:
+                        raise
 
             generation, overhead_metrics, verifier_state = self._maybe_retry_with_verifier(
                 original_prompt=prompt,
@@ -615,6 +681,8 @@ class ModelRunner:
                     "verifier_heuristic_weak": verifier_state["heuristic_weak"],
                     "verifier_error": verifier_state["verifier_error"],
                     "verifier_retry_error": verifier_state["retry_error"],
+                    "cpu_fallback_applied": cpu_fallback_applied,
+                    "cpu_fallback_note": cpu_fallback_note,
                 }
             }
             
@@ -635,7 +703,9 @@ class ModelRunner:
                     "elapsed_time": end_time - start_time,
                     "prompt_tokens": 0,
                     "completion_tokens": 0,
-                    "total_tokens": 0
+                    "total_tokens": 0,
+                    "cpu_fallback_applied": cpu_fallback_applied,
+                    "cpu_fallback_note": cpu_fallback_note,
                 }
             }
         except Exception as e:
@@ -649,14 +719,16 @@ class ModelRunner:
                     "elapsed_time": end_time - start_time,
                     "prompt_tokens": 0,
                     "completion_tokens": 0,
-                    "total_tokens": 0
+                    "total_tokens": 0,
+                    "cpu_fallback_applied": cpu_fallback_applied,
+                    "cpu_fallback_note": cpu_fallback_note,
                 }
             }
 
     def run_stream(self, prompt: str) -> Generator[Dict[str, Any], None, None]:
-        yield from self._run_stream(prompt=prompt, allow_fallback=True)
+        yield from self._run_stream(prompt=prompt, allow_fallback=True, allow_cpu_fallback=True)
 
-    def _run_stream(self, prompt: str, allow_fallback: bool) -> Generator[Dict[str, Any], None, None]:
+    def _run_stream(self, prompt: str, allow_fallback: bool, allow_cpu_fallback: bool) -> Generator[Dict[str, Any], None, None]:
         """
         Stream tokens from Ollama and emit structured events.
 
@@ -758,6 +830,21 @@ class ModelRunner:
                 stream=True,
             )
 
+            if allow_cpu_fallback:
+                cpu_switched, cpu_note = self._try_cpu_fallback_on_cuda_error(error_message)
+                if cpu_switched:
+                    yield {
+                        "type": "status",
+                        "message": cpu_note or "Retrying in CPU mode (options.num_gpu=0).",
+                        "technique": "cpu_fallback",
+                    }
+                    yield from self._run_stream(
+                        prompt=prompt,
+                        allow_fallback=allow_fallback,
+                        allow_cpu_fallback=False,
+                    )
+                    return
+
             if allow_fallback:
                 switched, note = self._try_fallback_model(error_message)
                 if switched:
@@ -766,7 +853,11 @@ class ModelRunner:
                         "message": note or f"Switched to fallback model '{self.model_name}'.",
                         "technique": "model_fallback",
                     }
-                    yield from self._run_stream(prompt=prompt, allow_fallback=False)
+                    yield from self._run_stream(
+                        prompt=prompt,
+                        allow_fallback=False,
+                        allow_cpu_fallback=allow_cpu_fallback,
+                    )
                     return
 
             # Ensure error message is never empty

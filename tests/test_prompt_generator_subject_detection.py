@@ -44,3 +44,34 @@ def test_detect_primary_intent_precalculus_goal_patterns():
         generator._detect_primary_intent("Find the 12th term of a geometric sequence.")
         == "sequence_series"
     )
+
+
+def test_detect_primary_intent_rate_word_problem_maps_to_ratio_proportion():
+    generator = PromptGenerator()
+
+    question = (
+        "A freight train travels 1 mile in 1 minute 30 seconds. "
+        "At this rate, how many miles will the train travel in 1 hour?"
+    )
+
+    assert generator._detect_primary_intent(question) == "ratio_proportion"
+
+
+def test_classify_subject_rate_word_problem_as_algebra():
+    generator = PromptGenerator()
+
+    question = (
+        "A freight train travels 1 mile in 1 minute 30 seconds. "
+        "At this rate, how many miles will the train travel in 1 hour?"
+    )
+
+    assert generator.classify_subject(question) == "algebra"
+
+
+def test_detect_primary_intent_compare_values_multiple_choice():
+    generator = PromptGenerator()
+
+    question = "Which of the following has the least value? A = 2, B = 4/4, C = 8/8."
+
+    assert generator._detect_primary_intent(question) == "compare_values"
+    assert generator.classify_subject(question) == "algebra"

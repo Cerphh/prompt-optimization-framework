@@ -1,0 +1,772 @@
+﻿{
+  "algebra": {
+    "basic": [
+      {
+        "problem": "Which option has the least value? A = 3/4, B = 5/6, C = 2/3.",
+        "solution": "Convert to decimals: A = 0.75, B = 0.833..., C = 0.666.... The least value is C.",
+        "type": "compare_values",
+        "concept": "value_comparison",
+        "skills": [
+          "fraction_comparison",
+          "value_evaluation"
+        ],
+        "format": {
+          "template": "multiple_choice_labeled_values",
+          "equation_count": 3,
+          "has_assignment": true,
+          "has_fraction": true,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "basic",
+        "tags": [
+          "compare_values",
+          "labeled_options",
+          "fraction"
+        ],
+        "anchor_priority": 0.98
+      },
+      {
+        "problem": "Which of the following has the greatest value? A = 2^3, B = 3^2, C = 5 + 3.",
+        "solution": "Evaluate each option: A = 8, B = 9, C = 8. The greatest value is B.",
+        "type": "compare_values",
+        "concept": "value_comparison",
+        "skills": [
+          "exponent_rules",
+          "value_evaluation"
+        ],
+        "format": {
+          "template": "multiple_choice_labeled_values",
+          "equation_count": 3,
+          "has_assignment": true,
+          "has_fraction": false,
+          "has_exponent": true,
+          "has_system": false
+        },
+        "difficulty": "basic",
+        "tags": [
+          "compare_values",
+          "labeled_options",
+          "exponent"
+        ],
+        "anchor_priority": 0.97
+      },
+      {
+        "problem": "Among the choices, which has the largest value? A = -1/2, B = -3/4, C = -2/3.",
+        "solution": "Compare the negatives: A = -0.5, B = -0.75, C = -0.666.... The largest value is A.",
+        "type": "compare_values",
+        "concept": "value_comparison",
+        "skills": [
+          "signed_number_comparison",
+          "fraction_comparison"
+        ],
+        "format": {
+          "template": "multiple_choice_labeled_values",
+          "equation_count": 3,
+          "has_assignment": true,
+          "has_fraction": true,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "basic",
+        "tags": [
+          "compare_values",
+          "labeled_options",
+          "negative_numbers"
+        ],
+        "anchor_priority": 0.96
+      },
+      {
+        "problem": "Solve for all real solutions: x^2 - 5x + 6 = 0.",
+        "solution": "Factor: (x - 2)(x - 3) = 0, so x = 2 or x = 3.",
+        "type": "real_solutions",
+        "concept": "quadratic_real_roots",
+        "skills": [
+          "factoring",
+          "equation_solving"
+        ],
+        "format": {
+          "template": "single_polynomial_equation",
+          "equation_count": 1,
+          "has_assignment": false,
+          "has_fraction": false,
+          "has_exponent": true,
+          "has_system": false
+        },
+        "difficulty": "basic",
+        "tags": [
+          "real_solutions",
+          "quadratic"
+        ],
+        "anchor_priority": 0.95,
+        "constraints": [
+          "real_solutions"
+        ]
+      },
+      {
+        "problem": "Solve for all real solutions: x^4 - 13x^2 + 36 = 0.",
+        "solution": "Let u = x^2. Then u^2 - 13u + 36 = 0 = (u - 9)(u - 4). So u = 9 or 4, giving x = plus or minus 3, plus or minus 2.",
+        "type": "real_solutions",
+        "concept": "quartic_via_substitution",
+        "skills": [
+          "quadratic_substitution",
+          "factoring"
+        ],
+        "format": {
+          "template": "single_polynomial_equation",
+          "equation_count": 1,
+          "has_assignment": false,
+          "has_fraction": false,
+          "has_exponent": true,
+          "has_system": false
+        },
+        "difficulty": "basic",
+        "tags": [
+          "real_solutions",
+          "quartic",
+          "quadratic_substitution"
+        ],
+        "anchor_priority": 0.97,
+        "constraints": [
+          "real_solutions"
+        ]
+      },
+      {
+        "problem": "Solve for all real solutions: sqrt(x + 5) = x - 1.",
+        "solution": "Domain gives x >= 1. Square both sides: x + 5 = x^2 - 2x + 1, so x^2 - 3x - 4 = 0 = (x - 4)(x + 1). Candidates are x = 4 and x = -1, but only x = 4 satisfies x >= 1.",
+        "type": "real_solutions",
+        "concept": "radical_equation",
+        "skills": [
+          "domain_check",
+          "radical_equation",
+          "factoring"
+        ],
+        "format": {
+          "template": "single_equation_with_radical",
+          "equation_count": 1,
+          "has_assignment": false,
+          "has_fraction": false,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "basic",
+        "tags": [
+          "real_solutions",
+          "radical_equation"
+        ],
+        "anchor_priority": 0.96,
+        "constraints": [
+          "real_solutions"
+        ]
+      },
+      {
+        "problem": "y varies directly as x. If y = 18 when x = 6, find y when x = 10.",
+        "solution": "Direct variation means y = kx. From 18 = 6k, k = 3. Then y = 3(10) = 30.",
+        "type": "variation",
+        "concept": "direct_variation",
+        "skills": [
+          "direct_variation",
+          "constant_of_variation"
+        ],
+        "format": {
+          "template": "variation_word_problem",
+          "equation_count": 3,
+          "has_assignment": true,
+          "has_fraction": false,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "basic",
+        "tags": [
+          "variation",
+          "direct_variation"
+        ],
+        "anchor_priority": 0.93
+      }
+    ],
+    "intermediate": [
+      {
+        "problem": "Which option has the smallest value? A = (3/5)^2, B = 2/7, C = 1/4.",
+        "solution": "Compute each value: A = 9/25 = 0.36, B = 2/7 about 0.2857, C = 0.25. The smallest value is C.",
+        "type": "compare_values",
+        "concept": "value_comparison",
+        "skills": [
+          "fraction_comparison",
+          "exponent_rules"
+        ],
+        "format": {
+          "template": "multiple_choice_labeled_values",
+          "equation_count": 3,
+          "has_assignment": true,
+          "has_fraction": true,
+          "has_exponent": true,
+          "has_system": false
+        },
+        "difficulty": "intermediate",
+        "tags": [
+          "compare_values",
+          "labeled_options",
+          "fraction",
+          "exponent"
+        ],
+        "anchor_priority": 0.98
+      },
+      {
+        "problem": "Which of the following has the greatest value? A = sqrt(50), B = 7, C = 20/3.",
+        "solution": "Approximate: A about 7.071, B = 7, C about 6.667. The greatest value is A.",
+        "type": "compare_values",
+        "concept": "value_comparison",
+        "skills": [
+          "radical_approximation",
+          "fraction_comparison"
+        ],
+        "format": {
+          "template": "multiple_choice_labeled_values",
+          "equation_count": 3,
+          "has_assignment": true,
+          "has_fraction": true,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "intermediate",
+        "tags": [
+          "compare_values",
+          "labeled_options",
+          "radical"
+        ],
+        "anchor_priority": 0.97
+      },
+      {
+        "problem": "Which choice has the least value? A = 2 - sqrt(3), B = 1/5, C = (3/4)^2.",
+        "solution": "Evaluate: A about 0.268, B = 0.2, C = 0.5625. The least value is B.",
+        "type": "compare_values",
+        "concept": "value_comparison",
+        "skills": [
+          "radical_approximation",
+          "fraction_comparison"
+        ],
+        "format": {
+          "template": "multiple_choice_labeled_values",
+          "equation_count": 3,
+          "has_assignment": true,
+          "has_fraction": true,
+          "has_exponent": true,
+          "has_system": false
+        },
+        "difficulty": "intermediate",
+        "tags": [
+          "compare_values",
+          "labeled_options",
+          "radical",
+          "fraction"
+        ],
+        "anchor_priority": 0.96
+      },
+      {
+        "problem": "y varies inversely as x. If y = 12 when x = 5, find y when x = 8.",
+        "solution": "Inverse variation means y = k/x. From 12 = k/5, k = 60. Then y = 60/8 = 7.5.",
+        "type": "variation",
+        "concept": "inverse_variation",
+        "skills": [
+          "inverse_variation",
+          "constant_of_variation"
+        ],
+        "format": {
+          "template": "variation_word_problem",
+          "equation_count": 3,
+          "has_assignment": true,
+          "has_fraction": false,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "intermediate",
+        "tags": [
+          "variation",
+          "inverse_variation"
+        ],
+        "anchor_priority": 0.94
+      }
+    ],
+    "advanced": [
+      {
+        "problem": "Which option has the greatest value? A = log_2(20), B = 4.2, C = 13/3.",
+        "solution": "Approximate: A about 4.322, B = 4.2, C about 4.333. The greatest value is C.",
+        "type": "compare_values",
+        "concept": "value_comparison",
+        "skills": [
+          "logarithm_evaluation",
+          "fraction_comparison"
+        ],
+        "format": {
+          "template": "multiple_choice_labeled_values",
+          "equation_count": 3,
+          "has_assignment": true,
+          "has_fraction": true,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "advanced",
+        "tags": [
+          "compare_values",
+          "labeled_options",
+          "logarithm"
+        ],
+        "anchor_priority": 0.98
+      },
+      {
+        "problem": "Which of the following has the least value? A = ln(7), B = 2 - 1/3, C = e/2.",
+        "solution": "Approximate: A about 1.946, B about 1.667, C about 1.359. The least value is C.",
+        "type": "compare_values",
+        "concept": "value_comparison",
+        "skills": [
+          "logarithm_evaluation",
+          "constant_approximation"
+        ],
+        "format": {
+          "template": "multiple_choice_labeled_values",
+          "equation_count": 3,
+          "has_assignment": true,
+          "has_fraction": true,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "advanced",
+        "tags": [
+          "compare_values",
+          "labeled_options",
+          "logarithm",
+          "e_constant"
+        ],
+        "anchor_priority": 0.97
+      },
+      {
+        "problem": "Among the choices, which has the smallest value? A = (1/3)^(-1), B = sqrt(10), C = 3.05.",
+        "solution": "Evaluate: A = 3, B about 3.162, C = 3.05. The smallest value is A.",
+        "type": "compare_values",
+        "concept": "value_comparison",
+        "skills": [
+          "negative_exponent",
+          "radical_approximation"
+        ],
+        "format": {
+          "template": "multiple_choice_labeled_values",
+          "equation_count": 3,
+          "has_assignment": true,
+          "has_fraction": true,
+          "has_exponent": true,
+          "has_system": false
+        },
+        "difficulty": "advanced",
+        "tags": [
+          "compare_values",
+          "labeled_options",
+          "exponent",
+          "radical"
+        ],
+        "anchor_priority": 0.96
+      },
+      {
+        "problem": "z varies directly as x and inversely as y. If z = 15 when x = 6 and y = 4, find z when x = 10 and y = 8.",
+        "solution": "Model: z = kx/y. Use 15 = k*6/4 to get k = 10. Then z = 10*10/8 = 12.5.",
+        "type": "variation",
+        "concept": "joint_variation",
+        "skills": [
+          "joint_variation",
+          "constant_of_variation"
+        ],
+        "format": {
+          "template": "variation_word_problem",
+          "equation_count": 5,
+          "has_assignment": true,
+          "has_fraction": false,
+          "has_exponent": false,
+          "has_system": true
+        },
+        "difficulty": "advanced",
+        "tags": [
+          "variation",
+          "joint_variation"
+        ],
+        "anchor_priority": 0.95
+      }
+    ]
+  },
+  "counting-probability": {
+    "basic": [
+      {
+        "problem": "Find the population variance of the data set: 2, 4, 4, 6.",
+        "solution": "Mean is 4. Squared deviations are 4, 0, 0, 4 with sum 8. Population variance is 8/4 = 2.",
+        "type": "variance",
+        "concept": "dispersion",
+        "skills": [
+          "mean_computation",
+          "variance_computation"
+        ],
+        "format": {
+          "template": "statistics_dataset",
+          "equation_count": 0,
+          "has_assignment": false,
+          "has_fraction": false,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "basic",
+        "tags": [
+          "variance",
+          "descriptive_statistics",
+          "population_variance"
+        ],
+        "anchor_priority": 0.95
+      },
+      {
+        "problem": "Find the mean of 6, 8, 11, 15.",
+        "solution": "Add the numbers: 6 + 8 + 11 + 15 = 40. Divide by 4: mean = 10.",
+        "type": "mean",
+        "concept": "central_tendency",
+        "skills": [
+          "mean_computation"
+        ],
+        "format": {
+          "template": "statistics_dataset",
+          "equation_count": 0,
+          "has_assignment": false,
+          "has_fraction": false,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "basic",
+        "tags": [
+          "mean",
+          "descriptive_statistics"
+        ],
+        "anchor_priority": 0.92
+      },
+      {
+        "problem": "A fair coin is flipped twice. What is P(two heads | at least one head)?",
+        "solution": "Outcomes are HH, HT, TH, TT. Given at least one head, possible outcomes are HH, HT, TH. Only HH satisfies two heads, so probability is 1/3.",
+        "type": "conditional_probability",
+        "concept": "conditional_event",
+        "skills": [
+          "sample_space",
+          "conditional_probability"
+        ],
+        "format": {
+          "template": "conditional_probability_word_problem",
+          "equation_count": 0,
+          "has_assignment": false,
+          "has_fraction": false,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "basic",
+        "tags": [
+          "conditional_probability",
+          "coins"
+        ],
+        "anchor_priority": 0.97
+      },
+      {
+        "problem": "A bag has 3 red and 2 blue marbles. One marble is drawn. What is P(red | not blue)?",
+        "solution": "If the marble is not blue, it must be red. So P(red | not blue) = 1.",
+        "type": "conditional_probability",
+        "concept": "conditional_event",
+        "skills": [
+          "event_definition",
+          "conditional_probability"
+        ],
+        "format": {
+          "template": "conditional_probability_word_problem",
+          "equation_count": 0,
+          "has_assignment": false,
+          "has_fraction": false,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "basic",
+        "tags": [
+          "conditional_probability",
+          "marbles"
+        ],
+        "anchor_priority": 0.94
+      },
+      {
+        "problem": "A card is drawn from a standard deck. What is P(heart | red)?",
+        "solution": "There are 26 red cards, of which 13 are hearts. So P(heart | red) = 13/26 = 1/2.",
+        "type": "conditional_probability",
+        "concept": "conditional_event",
+        "skills": [
+          "conditional_probability",
+          "fraction_simplification"
+        ],
+        "format": {
+          "template": "conditional_probability_word_problem",
+          "equation_count": 0,
+          "has_assignment": false,
+          "has_fraction": false,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "basic",
+        "tags": [
+          "conditional_probability",
+          "cards"
+        ],
+        "anchor_priority": 0.96
+      }
+    ],
+    "intermediate": [
+      {
+        "problem": "Find the sample variance of the data set: 1, 3, 5, 7, 9.",
+        "solution": "Mean is 5. Squared deviations are 16, 4, 0, 4, 16 with sum 40. Sample variance is 40/(5-1) = 10.",
+        "type": "variance",
+        "concept": "dispersion",
+        "skills": [
+          "mean_computation",
+          "sample_variance"
+        ],
+        "format": {
+          "template": "statistics_dataset",
+          "equation_count": 0,
+          "has_assignment": false,
+          "has_fraction": false,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "intermediate",
+        "tags": [
+          "variance",
+          "descriptive_statistics",
+          "sample_variance"
+        ],
+        "anchor_priority": 0.95
+      },
+      {
+        "problem": "Find the median of 3, 5, 7, 9, 11, 13.",
+        "solution": "There are 6 values, so take the average of the 3rd and 4th values: (7 + 9)/2 = 8. Median = 8.",
+        "type": "median",
+        "concept": "central_tendency",
+        "skills": [
+          "ordering_data",
+          "median_computation"
+        ],
+        "format": {
+          "template": "statistics_dataset",
+          "equation_count": 0,
+          "has_assignment": false,
+          "has_fraction": false,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "intermediate",
+        "tags": [
+          "median",
+          "descriptive_statistics"
+        ],
+        "anchor_priority": 0.92
+      }
+    ],
+    "advanced": [
+      {
+        "problem": "A random variable X takes values 0, 1, 2 with probabilities 0.2, 0.5, 0.3. Find Var(X).",
+        "solution": "E[X] = 0(0.2) + 1(0.5) + 2(0.3) = 1.1. E[X^2] = 0 + 1(0.5) + 4(0.3) = 1.7. Var(X) = E[X^2] - (E[X])^2 = 1.7 - 1.21 = 0.49.",
+        "type": "variance",
+        "concept": "random_variable_dispersion",
+        "skills": [
+          "expected_value",
+          "variance_identity"
+        ],
+        "format": {
+          "template": "discrete_distribution",
+          "equation_count": 0,
+          "has_assignment": false,
+          "has_fraction": false,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "advanced",
+        "tags": [
+          "variance",
+          "discrete_random_variable",
+          "expected_value"
+        ],
+        "anchor_priority": 0.96
+      },
+      {
+        "problem": "Find the mode of 12, 14, 14, 15, 15, 15, 18, 18, 18, 18.",
+        "solution": "Count frequencies: 12(1), 14(2), 15(3), 18(4). The mode is 18.",
+        "type": "mode",
+        "concept": "central_tendency",
+        "skills": [
+          "frequency_counting",
+          "mode_computation"
+        ],
+        "format": {
+          "template": "statistics_dataset",
+          "equation_count": 0,
+          "has_assignment": false,
+          "has_fraction": false,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "advanced",
+        "tags": [
+          "mode",
+          "descriptive_statistics"
+        ],
+        "anchor_priority": 0.92
+      }
+    ]
+  },
+  "pre-calculus": {
+    "basic": [
+      {
+        "problem": "Find the derivative of f(x) = x^3 - 4x.",
+        "solution": "Apply the power rule: d/dx(x^3) = 3x^2 and d/dx(-4x) = -4. So f'(x) = 3x^2 - 4.",
+        "type": "derivative",
+        "concept": "basic_differentiation",
+        "skills": [
+          "power_rule",
+          "polynomial_derivative"
+        ],
+        "format": {
+          "template": "single_function_derivative",
+          "equation_count": 1,
+          "has_assignment": false,
+          "has_fraction": false,
+          "has_exponent": true,
+          "has_system": false
+        },
+        "difficulty": "basic",
+        "tags": [
+          "derivative",
+          "polynomial"
+        ],
+        "anchor_priority": 0.94
+      },
+      {
+        "problem": "Find the indefinite integral: integral (3x^2 - 4) dx.",
+        "solution": "Integrate term by term: integral 3x^2 dx = x^3 and integral -4 dx = -4x. So the result is x^3 - 4x + C.",
+        "type": "integral",
+        "concept": "basic_antiderivative",
+        "skills": [
+          "power_rule_antiderivative"
+        ],
+        "format": {
+          "template": "single_function_integral",
+          "equation_count": 0,
+          "has_assignment": false,
+          "has_fraction": false,
+          "has_exponent": true,
+          "has_system": false
+        },
+        "difficulty": "basic",
+        "tags": [
+          "integral",
+          "polynomial"
+        ],
+        "anchor_priority": 0.94
+      }
+    ],
+    "intermediate": [
+      {
+        "problem": "Find the derivative of f(x) = (2x - 1)(x^2 + 3).",
+        "solution": "Use product rule: f'(x) = 2(x^2 + 3) + (2x - 1)(2x) = 2x^2 + 6 + 4x^2 - 2x = 6x^2 - 2x + 6.",
+        "type": "derivative",
+        "concept": "product_rule",
+        "skills": [
+          "product_rule",
+          "algebraic_simplification"
+        ],
+        "format": {
+          "template": "single_function_derivative",
+          "equation_count": 1,
+          "has_assignment": false,
+          "has_fraction": false,
+          "has_exponent": true,
+          "has_system": false
+        },
+        "difficulty": "intermediate",
+        "tags": [
+          "derivative",
+          "product_rule"
+        ],
+        "anchor_priority": 0.95
+      },
+      {
+        "problem": "Find the indefinite integral: integral (2x + 1/x) dx.",
+        "solution": "Integrate each part: integral 2x dx = x^2 and integral 1/x dx = ln|x|. Result: x^2 + ln|x| + C.",
+        "type": "integral",
+        "concept": "log_antiderivative",
+        "skills": [
+          "power_rule_antiderivative",
+          "log_antiderivative"
+        ],
+        "format": {
+          "template": "single_function_integral",
+          "equation_count": 0,
+          "has_assignment": false,
+          "has_fraction": true,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "intermediate",
+        "tags": [
+          "integral",
+          "logarithm"
+        ],
+        "anchor_priority": 0.95
+      }
+    ],
+    "advanced": [
+      {
+        "problem": "Find the derivative of f(x) = (5x^2 - 1)^4.",
+        "solution": "Use chain rule: f'(x) = 4(5x^2 - 1)^3 * (10x) = 40x(5x^2 - 1)^3.",
+        "type": "derivative",
+        "concept": "chain_rule",
+        "skills": [
+          "chain_rule",
+          "power_rule"
+        ],
+        "format": {
+          "template": "single_function_derivative",
+          "equation_count": 1,
+          "has_assignment": false,
+          "has_fraction": false,
+          "has_exponent": true,
+          "has_system": false
+        },
+        "difficulty": "advanced",
+        "tags": [
+          "derivative",
+          "chain_rule"
+        ],
+        "anchor_priority": 0.96
+      },
+      {
+        "problem": "Find the indefinite integral: integral x*e^(x^2) dx.",
+        "solution": "Let u = x^2, so du = 2x dx and x dx = du/2. Then integral x*e^(x^2) dx = (1/2) integral e^u du = (1/2)e^u + C = (1/2)e^(x^2) + C.",
+        "type": "integral",
+        "concept": "u_substitution",
+        "skills": [
+          "u_substitution",
+          "exponential_antiderivative"
+        ],
+        "format": {
+          "template": "single_function_integral",
+          "equation_count": 0,
+          "has_assignment": false,
+          "has_fraction": false,
+          "has_exponent": true,
+          "has_system": false
+        },
+        "difficulty": "advanced",
+        "tags": [
+          "integral",
+          "u_substitution",
+          "exponential"
+        ],
+        "anchor_priority": 0.97
+      }
+    ]
+  }
+}

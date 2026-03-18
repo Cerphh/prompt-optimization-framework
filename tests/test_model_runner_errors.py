@@ -4,6 +4,7 @@ from framework.model_runner import ModelRunner
 
 
 MEMORY_ERROR = "model requires more system memory (4.6 GiB) than is available (3.8 GiB)"
+CUDA_ERROR = "llama runner process has terminated: CUDA error"
 
 
 class FakeErrorResponse:
@@ -125,6 +126,54 @@ class FakeFallbackSession:
         return FakeTagsResponse(["llama3:latest", "phi3:mini"])
 
 
+class FakeCudaRecoverySession:
+    def __init__(self):
+        self.post_calls = 0
+        self.last_num_gpu = None
+
+    def post(self, url, json=None, stream=False, timeout=None):
+        _ = (url, timeout)
+        self.post_calls += 1
+
+        if self.post_calls == 1:
+            return FakeErrorResponse(500, {"error": CUDA_ERROR})
+
+        self.last_num_gpu = (json or {}).get("options", {}).get("num_gpu")
+
+        if stream:
+            return FakeSuccessStreamResponse(
+                [
+                    {"response": "cpu ", "done": False},
+                    {
+                        "response": "fallback",
+                        "done": True,
+                        "done_reason": "stop",
+                        "prompt_eval_count": 3,
+                        "eval_count": 4,
+                        "load_duration": 0,
+                        "prompt_eval_duration": 0,
+                        "eval_duration": 0,
+                    },
+                ]
+            )
+
+        return FakeSuccessJsonResponse(
+            {
+                "response": "Final Answer: 4",
+                "done_reason": "stop",
+                "prompt_eval_count": 3,
+                "eval_count": 4,
+                "load_duration": 0,
+                "prompt_eval_duration": 0,
+                "eval_duration": 0,
+            }
+        )
+
+    def get(self, url, timeout=None):
+        _ = (url, timeout)
+        return FakeTagsResponse(["llama3:latest"])
+
+
 class FakeTagsResponse:
     def __init__(self, model_names):
         self.status_code = 200
@@ -162,6 +211,47 @@ def test_run_stream_surfaces_insufficient_memory_error():
             ),
         }
     ]
+
+
+def test_run_surfaces_cuda_error_guidance_when_cpu_fallback_disabled():
+    runner = ModelRunner(model_name="llama3")
+    runner.auto_cpu_fallback_on_cuda_error = False
+    runner.session = FakeSession([FakeErrorResponse(500, {"error": CUDA_ERROR})])
+
+    result = runner.run("Solve 2 + 2")
+
+    assert result["success"] is False
+    assert "failed to initialize CUDA" in result["error"]
+    assert "MODEL_NUM_GPU=0" in result["error"]
+
+
+def test_run_retries_in_cpu_mode_on_cuda_error():
+    runner = ModelRunner(model_name="llama3")
+    session = FakeCudaRecoverySession()
+    runner.session = session
+    runner.verifier_retry_enabled = False
+
+    result = runner.run("What is 2 + 2?")
+
+    assert result["success"] is True
+    assert result["response"] == "Final Answer: 4"
+    assert session.last_num_gpu == 0
+    assert result["metrics"]["cpu_fallback_applied"] is True
+
+
+def test_run_stream_retries_in_cpu_mode_on_cuda_error():
+    runner = ModelRunner(model_name="llama3")
+    session = FakeCudaRecoverySession()
+    runner.session = session
+
+    events = list(runner.run_stream("What is 2 + 2?"))
+
+    assert any(event.get("technique") == "cpu_fallback" for event in events)
+    done_events = [event for event in events if event.get("type") == "done"]
+    assert done_events
+    assert done_events[-1]["result"]["success"] is True
+    assert "cpu fallback" in done_events[-1]["result"]["response"]
+    assert session.last_num_gpu == 0
 
 
 def test_validate_model_ready_reports_generation_failure():
