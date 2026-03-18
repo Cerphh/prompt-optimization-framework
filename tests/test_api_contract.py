@@ -95,12 +95,11 @@ def _mock_no_history(*args, **kwargs):
     }
 
 
-def test_benchmark_response_includes_storage(monkeypatch):
+def test_benchmark_response_does_not_include_storage_until_manual_save(monkeypatch):
     def fake_benchmark(problem: str, ground_truth=None, subject: str = "general"):
         return _mock_benchmark_result(problem=problem, ground_truth=ground_truth)
 
     monkeypatch.setattr(main.pipeline, "benchmark", fake_benchmark)
-    monkeypatch.setattr(main.firestore_store, "save_benchmark_result", _mock_storage)
     monkeypatch.setattr(main.firestore_store, "get_best_technique_by_domain", _mock_no_history)
 
     client = TestClient(main.app)
@@ -111,11 +110,10 @@ def test_benchmark_response_includes_storage(monkeypatch):
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["storage"]["success"] is True
-    assert payload["storage"]["document_id"] == "doc_123"
+    assert "storage" not in payload
 
 
-def test_stream_complete_event_includes_storage(monkeypatch):
+def test_stream_complete_event_does_not_include_storage_until_manual_save(monkeypatch):
     def fake_stream_events(problem: str, ground_truth=None, subject: str = "general"):
         yield {
             "type": "complete",
@@ -123,7 +121,6 @@ def test_stream_complete_event_includes_storage(monkeypatch):
         }
 
     monkeypatch.setattr(main.pipeline, "benchmark_stream_events", fake_stream_events)
-    monkeypatch.setattr(main.firestore_store, "save_benchmark_result", _mock_storage)
     monkeypatch.setattr(main.firestore_store, "get_best_technique_by_domain", _mock_no_history)
 
     client = TestClient(main.app)
@@ -136,7 +133,7 @@ def test_stream_complete_event_includes_storage(monkeypatch):
     events = [json.loads(line) for line in response.text.splitlines() if line.strip()]
     assert events
     assert events[-1]["type"] == "complete"
-    assert events[-1]["result"]["storage"]["success"] is True
+    assert "storage" not in events[-1]["result"]
 
 
 def test_benchmark_tolerates_invalid_db_policy_env_values(monkeypatch):
@@ -144,7 +141,6 @@ def test_benchmark_tolerates_invalid_db_policy_env_values(monkeypatch):
         return _mock_benchmark_result(problem=problem, ground_truth=ground_truth)
 
     monkeypatch.setattr(main.pipeline, "benchmark", fake_benchmark)
-    monkeypatch.setattr(main.firestore_store, "save_benchmark_result", _mock_storage)
     monkeypatch.setattr(main.firestore_store, "get_best_technique_by_domain", _mock_no_history)
 
     monkeypatch.setenv("DB_MIN_SAMPLES_PER_TECHNIQUE", "invalid")
@@ -159,4 +155,23 @@ def test_benchmark_tolerates_invalid_db_policy_env_values(monkeypatch):
 
     assert response.status_code == 200
     payload = response.json()
+    assert "storage" not in payload
+
+
+def test_manual_save_persists_result(monkeypatch):
+    monkeypatch.setattr(main.firestore_store, "save_benchmark_result", _mock_storage)
+
+    client = TestClient(main.app)
+    response = client.post(
+        "/results/save",
+        json={
+            "result": _mock_benchmark_result(problem="What is 2 + 2?"),
+            "source": "frontend_manual_save",
+            "metadata": {"subject": "algebra", "difficulty": "basic"},
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
     assert payload["storage"]["success"] is True
+    assert payload["storage"]["document_id"] == "doc_123"

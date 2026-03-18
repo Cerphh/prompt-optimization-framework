@@ -177,28 +177,6 @@ async def startup_model_readiness_check():
         )
 
 
-def _persist_and_attach_storage(
-    result: Dict[str, Any],
-    source: str,
-    metadata: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
-    """Persist benchmark result to Firestore and attach storage status to result payload."""
-    storage = firestore_store.save_benchmark_result(
-        benchmark_result=result,
-        source=source,
-        metadata=metadata or {},
-    )
-    result["storage"] = storage
-
-    if firestore_store.required and not storage.get("success", False):
-        raise HTTPException(
-            status_code=500,
-            detail=f"Firestore write failed: {storage.get('error', 'Unknown error')}",
-        )
-
-    return result
-
-
 def _apply_db_based_selection(result: Dict[str, Any], domain: str, difficulty: str) -> Dict[str, Any]:
     """Apply DB-based greedy selection from historical Firestore results."""
     successful_techniques = [
@@ -297,10 +275,8 @@ def _finalize_benchmark_result(
     *,
     domain: str,
     difficulty: str,
-    source: str,
-    metadata: Dict[str, Any],
 ) -> Dict[str, Any]:
-    """Apply selection strategy, validate winner, and persist storage status."""
+    """Apply selection strategy and validate winner without persisting."""
     result = _apply_db_based_selection(
         result=result,
         domain=domain,
@@ -314,11 +290,7 @@ def _finalize_benchmark_result(
             detail=best_result.get("error", "Benchmark failed"),
         )
 
-    return _persist_and_attach_storage(
-        result=result,
-        source=source,
-        metadata=metadata,
-    )
+    return result
 
 
 class BenchmarkRequest(BaseModel):
@@ -407,12 +379,6 @@ async def run_benchmark(request: BenchmarkRequest):
             result=result,
             domain=request.subject or "general",
             difficulty=request.difficulty or "basic",
-            source="benchmark_api",
-            metadata={
-                "subject": request.subject,
-                "difficulty": request.difficulty,
-                "speed_profile": speed_profile,
-            },
         )
         
         return result
@@ -449,12 +415,6 @@ async def run_benchmark_stream(request: BenchmarkRequest):
                         result=result,
                         domain=request.subject or "general",
                         difficulty=request.difficulty or "basic",
-                        source="benchmark_stream_api",
-                        metadata={
-                            "subject": request.subject,
-                            "difficulty": request.difficulty,
-                            "speed_profile": speed_profile,
-                        },
                     )
                     event["result"] = result
                 elif event.get("type") == "error":
@@ -583,11 +543,6 @@ async def benchmark_dataset_problem(problem_id: int):
             result=result,
             domain=problem_data.get("category", "general"),
             difficulty="basic",
-            source="benchmark_dataset_api",
-            metadata={
-                "category": problem_data.get("category", "general"),
-                "difficulty": "basic",
-            },
         )
         
         return result
