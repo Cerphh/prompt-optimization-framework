@@ -111,7 +111,7 @@ def main() -> None:
     parser.add_argument("--show", type=int, default=20, help="How many sample edits to display")
     args = parser.parse_args()
 
-    raw = json.loads(TARGET_PATH.read_text(encoding="utf-8"))
+    data = json.loads(TARGET_PATH.read_text(encoding="utf-8-sig"))
     if not isinstance(raw, dict):
         raise ValueError("Expected top-level object in example bank JSON")
 

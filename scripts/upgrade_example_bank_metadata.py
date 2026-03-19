@@ -310,7 +310,7 @@ def _iter_subject_groups(raw_data: Dict[str, Any]) -> Iterable[Tuple[str, Option
 
 
 def main() -> None:
-    data = json.loads(TARGET_PATH.read_text(encoding="utf-8"))
+    data = json.loads(TARGET_PATH.read_text(encoding="utf-8-sig"))
     if not isinstance(data, dict):
         raise ValueError("Expected top-level object in example bank JSON")
 
