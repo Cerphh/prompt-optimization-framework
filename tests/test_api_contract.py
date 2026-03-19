@@ -178,3 +178,85 @@ def test_manual_save_persists_result(monkeypatch):
     payload = response.json()
     assert payload["storage"]["success"] is True
     assert payload["storage"]["document_id"] == "doc_123"
+
+
+def test_benchmark_skips_weakest_technique_when_history_has_15_samples(monkeypatch):
+    captured = {}
+
+    def fake_benchmark(problem: str, ground_truth=None, subject: str = "general", techniques_to_run=None):
+        captured["techniques_to_run"] = techniques_to_run
+        result = _mock_benchmark_result(problem=problem, ground_truth=ground_truth)
+        if techniques_to_run:
+            allowed = set(techniques_to_run)
+            result["all_results"] = {
+                technique: payload
+                for technique, payload in result["all_results"].items()
+                if technique in allowed
+            }
+            result["comparison"] = [
+                record for record in result["comparison"] if record["technique"] in allowed
+            ]
+            best = next(iter(result["all_results"]))
+            result["best_technique"] = best
+            result["best_result"] = result["all_results"][best]
+        return result
+
+    monkeypatch.setattr(main.pipeline, "benchmark", fake_benchmark)
+    monkeypatch.setattr(main.firestore_store, "get_best_technique_by_profile", _mock_no_history)
+    monkeypatch.setattr(
+        main.firestore_store,
+        "get_best_technique_by_domain",
+        lambda *args, **kwargs: {
+            "success": True,
+            "best_technique": "few_shot",
+            "ranking": [
+                {"technique": "few_shot", "average_overall": 0.91, "samples": 15},
+                {"technique": "zero_shot", "average_overall": 0.82, "samples": 15},
+            ],
+        },
+    )
+
+    client = TestClient(main.app)
+    response = client.post(
+        "/benchmark",
+        json={"problem": "What is 2 + 2?", "subject": "algebra", "difficulty": "basic"},
+    )
+
+    assert response.status_code == 200
+    assert captured["techniques_to_run"] == ["few_shot"]
+    payload = response.json()
+    assert payload["pre_execution_policy"]["skipped_technique"] == "zero_shot"
+
+
+def test_benchmark_does_not_skip_weakest_technique_when_samples_below_15(monkeypatch):
+    captured = {}
+
+    def fake_benchmark(problem: str, ground_truth=None, subject: str = "general", techniques_to_run=None):
+        captured["techniques_to_run"] = techniques_to_run
+        return _mock_benchmark_result(problem=problem, ground_truth=ground_truth)
+
+    monkeypatch.setattr(main.pipeline, "benchmark", fake_benchmark)
+    monkeypatch.setattr(main.firestore_store, "get_best_technique_by_profile", _mock_no_history)
+    monkeypatch.setattr(
+        main.firestore_store,
+        "get_best_technique_by_domain",
+        lambda *args, **kwargs: {
+            "success": True,
+            "best_technique": "few_shot",
+            "ranking": [
+                {"technique": "few_shot", "average_overall": 0.91, "samples": 14},
+                {"technique": "zero_shot", "average_overall": 0.82, "samples": 14},
+            ],
+        },
+    )
+
+    client = TestClient(main.app)
+    response = client.post(
+        "/benchmark",
+        json={"problem": "What is 2 + 2?", "subject": "algebra", "difficulty": "basic"},
+    )
+
+    assert response.status_code == 200
+    assert captured["techniques_to_run"] is None
+    payload = response.json()
+    assert payload["pre_execution_policy"]["reason"] == "insufficient_samples"

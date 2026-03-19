@@ -93,7 +93,13 @@ class BenchmarkPipeline:
             },
         }
     
-    def benchmark(self, problem: str, ground_truth: str = None, subject: str = "general") -> Dict[str, Any]:
+    def benchmark(
+        self,
+        problem: str,
+        ground_truth: str = None,
+        subject: str = "general",
+        techniques_to_run: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
         """
         Run comprehensive benchmark on a single problem.
         
@@ -109,6 +115,13 @@ class BenchmarkPipeline:
         """
         # Step 1: Generate prompts using all techniques
         prompts = self.prompt_generator.generate_all_techniques(problem, subject=subject)
+        if techniques_to_run:
+            allowed = set(techniques_to_run)
+            prompts = {
+                technique_name: prompt
+                for technique_name, prompt in prompts.items()
+                if technique_name in allowed
+            }
         if not prompts:
             raise ValueError("No prompting techniques available.")
         
@@ -160,6 +173,7 @@ class BenchmarkPipeline:
         problem: str,
         ground_truth: str = None,
         subject: str = "general",
+        techniques_to_run: Optional[List[str]] = None,
     ):
         """
         Stream benchmark progress and partial output events.
@@ -171,6 +185,13 @@ class BenchmarkPipeline:
         - error: terminal error event
         """
         prompts = self.prompt_generator.generate_all_techniques(problem, subject=subject)
+        if techniques_to_run:
+            allowed = set(techniques_to_run)
+            prompts = {
+                technique_name: prompt
+                for technique_name, prompt in prompts.items()
+                if technique_name in allowed
+            }
         if not prompts:
             yield {"type": "error", "error": "No prompting techniques available."}
             return

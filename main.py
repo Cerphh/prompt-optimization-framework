@@ -280,6 +280,88 @@ def _evaluate_selection_confidence(
     return True, "ok"
 
 
+def _resolve_pre_execution_techniques(
+    *,
+    request_pipeline: BenchmarkPipeline,
+    problem: str,
+    domain: str,
+    difficulty: str,
+) -> Tuple[Optional[List[str]], Dict[str, Any]]:
+    """Optionally skip the historically weakest technique before execution."""
+    technique_names = request_pipeline.prompt_generator.get_technique_names()
+    details: Dict[str, Any] = {
+        "enabled": False,
+        "reason": "disabled",
+        "selected_techniques": technique_names,
+        "skipped_technique": None,
+        "selection": None,
+        "min_samples_per_technique": None,
+        "min_average_gap": None,
+    }
+
+    if len(technique_names) < 2:
+        details["reason"] = "single_technique"
+        return None, details
+
+    enabled = os.getenv("DB_SKIP_LEAST_TECHNIQUE_ENABLED", "true").lower() == "true"
+    details["enabled"] = enabled
+    if not enabled:
+        return None, details
+
+    min_samples = _get_env_int(
+        "DB_SKIP_LEAST_MIN_SAMPLES_PER_TECHNIQUE",
+        default=15,
+        min_value=1,
+    )
+    min_gap = _get_env_float(
+        "DB_SKIP_LEAST_MIN_AVG_SCORE_GAP",
+        default=0.0,
+        min_value=0.0,
+    )
+    details["min_samples_per_technique"] = min_samples
+    details["min_average_gap"] = min_gap
+
+    selection = firestore_store.get_best_technique_by_domain(
+        domain=domain,
+        difficulty=difficulty,
+        available_techniques=technique_names,
+    )
+    details["selection"] = selection
+
+    if not isinstance(selection, dict):
+        details["reason"] = "invalid_selection_payload"
+        return None, details
+
+    can_skip, reason = _evaluate_selection_confidence(
+        selection,
+        min_samples=min_samples,
+        min_gap=min_gap,
+    )
+    details["reason"] = reason
+    if not can_skip:
+        return None, details
+
+    ranking = selection.get("ranking", [])
+    if not isinstance(ranking, list) or len(ranking) < 2:
+        details["reason"] = "insufficient_ranking"
+        return None, details
+
+    weakest = ranking[-1].get("technique") if isinstance(ranking[-1], dict) else None
+    if not weakest or weakest not in technique_names:
+        details["reason"] = "invalid_weakest_technique"
+        return None, details
+
+    selected_techniques = [technique for technique in technique_names if technique != weakest]
+    if not selected_techniques:
+        details["reason"] = "no_techniques_remaining"
+        return None, details
+
+    details["selected_techniques"] = selected_techniques
+    details["skipped_technique"] = weakest
+    details["reason"] = "skip_weakest_technique"
+    return selected_techniques, details
+
+
 def _apply_db_based_selection(result: Dict[str, Any], domain: str, difficulty: str) -> Dict[str, Any]:
     """Apply profile-rule selection first, then domain-average fallback, else runtime greedy."""
     result = _attach_problem_profile(result=result, domain=domain, difficulty=difficulty)
@@ -539,17 +621,29 @@ async def run_benchmark(request: BenchmarkRequest):
         speed_profile = _resolve_speed_profile(request.speed_profile)
         request_pipeline = pipeline if speed_profile == "balanced" else _build_fast_pipeline_from_defaults()
 
-        result = request_pipeline.benchmark(
+        techniques_to_run, pre_execution_policy = _resolve_pre_execution_techniques(
+            request_pipeline=request_pipeline,
             problem=request.problem,
-            ground_truth=request.ground_truth,
-            subject=request.subject
+            domain=request.subject or "general",
+            difficulty=request.difficulty or "basic",
         )
+
+        benchmark_kwargs: Dict[str, Any] = {
+            "problem": request.problem,
+            "ground_truth": request.ground_truth,
+            "subject": request.subject,
+        }
+        if techniques_to_run:
+            benchmark_kwargs["techniques_to_run"] = techniques_to_run
+
+        result = request_pipeline.benchmark(**benchmark_kwargs)
 
         result = _finalize_benchmark_result(
             result=result,
             domain=request.subject or "general",
             difficulty=request.difficulty or "basic",
         )
+        result["pre_execution_policy"] = pre_execution_policy
         
         return result
     except HTTPException:
@@ -571,14 +665,24 @@ async def run_benchmark_stream(request: BenchmarkRequest):
     """
     speed_profile = _resolve_speed_profile(request.speed_profile)
     request_pipeline = pipeline if speed_profile == "balanced" else _build_fast_pipeline_from_defaults()
+    techniques_to_run, pre_execution_policy = _resolve_pre_execution_techniques(
+        request_pipeline=request_pipeline,
+        problem=request.problem,
+        domain=request.subject or "general",
+        difficulty=request.difficulty or "basic",
+    )
 
     def event_stream():
         try:
-            for event in request_pipeline.benchmark_stream_events(
-                problem=request.problem,
-                ground_truth=request.ground_truth,
-                subject=request.subject,
-            ):
+            stream_kwargs: Dict[str, Any] = {
+                "problem": request.problem,
+                "ground_truth": request.ground_truth,
+                "subject": request.subject,
+            }
+            if techniques_to_run:
+                stream_kwargs["techniques_to_run"] = techniques_to_run
+
+            for event in request_pipeline.benchmark_stream_events(**stream_kwargs):
                 if event.get("type") == "complete":
                     result = event.get("result", {})
                     result = _finalize_benchmark_result(
@@ -586,6 +690,7 @@ async def run_benchmark_stream(request: BenchmarkRequest):
                         domain=request.subject or "general",
                         difficulty=request.difficulty or "basic",
                     )
+                    result["pre_execution_policy"] = pre_execution_policy
                     event["result"] = result
                 elif event.get("type") == "error":
                     # Ensure error messages are never empty
@@ -704,16 +809,28 @@ async def benchmark_dataset_problem(problem_id: int):
         raise HTTPException(status_code=404, detail="Problem not found")
     
     try:
-        result = pipeline.benchmark(
+        techniques_to_run, pre_execution_policy = _resolve_pre_execution_techniques(
+            request_pipeline=pipeline,
             problem=problem_data["problem"],
-            ground_truth=problem_data["answer"]
+            domain=problem_data.get("category", "general"),
+            difficulty="basic",
         )
+
+        benchmark_kwargs: Dict[str, Any] = {
+            "problem": problem_data["problem"],
+            "ground_truth": problem_data["answer"],
+        }
+        if techniques_to_run:
+            benchmark_kwargs["techniques_to_run"] = techniques_to_run
+
+        result = pipeline.benchmark(**benchmark_kwargs)
 
         result = _finalize_benchmark_result(
             result=result,
             domain=problem_data.get("category", "general"),
             difficulty="basic",
         )
+        result["pre_execution_policy"] = pre_execution_policy
         
         return result
     except HTTPException:
