@@ -68,6 +68,9 @@ export default function Home() {
   const [subject, setSubject] = useState('algebra')
   const [difficulty, setDifficulty] = useState('basic')
   const [difficultyManualOverride, setDifficultyManualOverride] = useState(false)
+  const [showBenchmarkOptions, setShowBenchmarkOptions] = useState(false)
+  const [groundTruth, setGroundTruth] = useState('')
+  const [lastRunUsedGroundTruth, setLastRunUsedGroundTruth] = useState(false)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<BenchmarkResult | null>(null)
   const [error, setError] = useState('')
@@ -453,6 +456,9 @@ export default function Home() {
         throw new Error('⚠️ System offline: Make sure Ollama is running (ollama serve) and the backend API is started')
       }
 
+      const groundTruthValue = groundTruth.trim()
+      setLastRunUsedGroundTruth(Boolean(groundTruthValue))
+
       const response = await fetch(apiUrl('/benchmark/stream'), {
         method: 'POST',
         headers: {
@@ -463,6 +469,7 @@ export default function Home() {
           subject,
           difficulty,
           speed_profile: 'fast',
+          ...(groundTruthValue ? { ground_truth: groundTruthValue } : {}),
         }),
       })
 
@@ -735,6 +742,44 @@ export default function Home() {
                 </div>
               </div>
 
+              {/* Advanced benchmark options */}
+              <div className="mb-4">
+                <button
+                  type="button"
+                  onClick={() => setShowBenchmarkOptions((value) => !value)}
+                  className="text-xs font-mono font-medium hover:underline"
+                  style={{ color: 'var(--blue)' }}
+                >
+                  {showBenchmarkOptions ? 'Hide' : 'Show'} advanced benchmark options
+                </button>
+
+                {showBenchmarkOptions && (
+                  <div
+                    className="mt-2 p-3 rounded-md"
+                    style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}
+                  >
+                    <label htmlFor="ground-truth-landing" className="block text-sm font-medium mb-1.5">
+                      Expected Answer (optional)
+                    </label>
+                    <input
+                      id="ground-truth-landing"
+                      value={groundTruth}
+                      onChange={(e) => setGroundTruth(e.target.value)}
+                      placeholder="e.g., x = 4 or x = 5"
+                      className="w-full px-3 py-2 rounded-md text-sm font-mono outline-none"
+                      style={{
+                        border: '1px solid var(--border)',
+                        color: 'var(--text)',
+                        background: 'var(--surface)',
+                      }}
+                    />
+                    <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                      Leave blank for normal user solving. Fill this in for stronger benchmark accuracy scoring.
+                    </p>
+                  </div>
+                )}
+              </div>
+
               {/* Textarea */}
               <textarea
                 value={problem}
@@ -853,6 +898,45 @@ export default function Home() {
                   <option value="intermediate">Intermediate</option>
                   <option value="advanced">Advanced</option>
                 </select>
+              </div>
+
+              {/* Advanced benchmark options */}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowBenchmarkOptions((value) => !value)}
+                  className="text-xs font-mono font-medium hover:underline"
+                  style={{ color: 'var(--blue)' }}
+                >
+                  {showBenchmarkOptions ? 'Hide' : 'Show'} advanced benchmark options
+                </button>
+
+                {showBenchmarkOptions && (
+                  <div
+                    className="mt-2 p-3 rounded-md"
+                    style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}
+                  >
+                    <label htmlFor="ground-truth" className="block text-sm font-medium mb-1.5">
+                      Expected Answer (optional)
+                    </label>
+                    <input
+                      id="ground-truth"
+                      value={groundTruth}
+                      onChange={(e) => setGroundTruth(e.target.value)}
+                      disabled={loading}
+                      placeholder="e.g., x = 4 or x = 5"
+                      className="w-full px-3 py-2 rounded-md text-sm font-mono outline-none transition"
+                      style={{
+                        border: '1px solid var(--border)',
+                        color: 'var(--text)',
+                        background: loading ? 'var(--bg)' : 'var(--surface)',
+                      }}
+                    />
+                    <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                      Leave blank for normal user solving. Fill this in for stronger benchmark accuracy scoring.
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Problem */}
@@ -1095,10 +1179,23 @@ export default function Home() {
                 style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
               >
                 <h2 className="text-lg font-semibold mb-4">Performance Scores</h2>
+
+                {!lastRunUsedGroundTruth && (
+                  <div
+                    className="mb-4 px-3 py-2 rounded-md text-xs"
+                    style={{ background: '#fffbeb', border: '1px solid #fde68a', color: 'var(--amber)' }}
+                  >
+                    Accuracy is heuristic for this run because no expected answer was provided.
+                  </div>
+                )}
+
                 <div className="grid grid-cols-4 gap-4">
                   {[
                     { label: 'OVERALL', value: result.best_result?.scores?.overall },
-                    { label: 'ACCURACY', value: result.best_result?.scores?.accuracy },
+                    {
+                      label: !lastRunUsedGroundTruth ? 'ACCURACY*' : 'ACCURACY',
+                      value: result.best_result?.scores?.accuracy,
+                    },
                     { label: 'COMPLETENESS', value: result.best_result?.scores?.completeness },
                     { label: 'EFFICIENCY', value: result.best_result?.scores?.efficiency },
                   ].map((s) => (
@@ -1122,6 +1219,12 @@ export default function Home() {
                     </div>
                   ))}
                 </div>
+
+                {!lastRunUsedGroundTruth && (
+                  <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                    * Heuristic accuracy can be directionally useful, but is less reliable than ground-truth scoring.
+                  </p>
+                )}
               </div>
 
               {/* ── Technique Comparison ── */}

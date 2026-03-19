@@ -50,23 +50,28 @@ class AccuracyScorer:
         if expected is None:
             # Heuristic scoring when no ground truth
             return self._heuristic_score(response, problem)
+
+        expected_str = str(expected).strip()
+
+        # Prefer explicit/final answer lines over intermediate reasoning steps.
+        # This avoids false positives where a correct intermediate number appears
+        # before an incorrect final answer.
+        priority_candidates = self._extract_priority_answers(response)
+        if priority_candidates and self._has_explicit_answer_signal(response):
+            for candidate in priority_candidates:
+                if self._strong_match(candidate, expected_str):
+                    return 1.0
+
+            # Explicit final-answer signaling exists but none matched strongly.
+            # Do not award partial credit from intermediate overlaps.
+            return 0.0
         
         # Extract candidate answers from response
         candidates = self._extract_answers(response)
-        expected_str = str(expected).strip()
         
         # Try multiple matching strategies
         for candidate in candidates:
-            # Strategy 1: Exact match
-            if self._exact_match(candidate, expected_str):
-                return 1.0
-            
-            # Strategy 2: Numeric match
-            if self._numeric_match(candidate, expected_str):
-                return 1.0
-            
-            # Strategy 3: Symbolic math match
-            if self._symbolic_match(candidate, expected_str):
+            if self._strong_match(candidate, expected_str):
                 return 1.0
         
         # Partial credit for close matches
@@ -75,6 +80,70 @@ class AccuracyScorer:
                 return 0.5
         
         return 0.0
+
+    def _strong_match(self, candidate: str, expected: str) -> bool:
+        """Apply strict match strategies in priority order."""
+        if self._exact_match(candidate, expected):
+            return True
+        if self._numeric_match(candidate, expected):
+            return True
+        if self._symbolic_match(candidate, expected):
+            return True
+        return False
+
+    def _unique_preserve_order(self, values: list) -> list:
+        """Remove duplicates while preserving order."""
+        seen = set()
+        unique_values = []
+        for value in values:
+            item = str(value).strip()
+            if item and item not in seen:
+                seen.add(item)
+                unique_values.append(item)
+        return unique_values
+
+    def _extract_priority_answers(self, response: str) -> list:
+        """Extract high-confidence final-answer candidates from response text."""
+        candidates = []
+
+        # Explicit answer lines have highest confidence.
+        answer_pattern = r'(?im)^\s*(?:final\s+answer|answer|result|solution)\s*[:\-=]\s*([^\n]+)'
+        matches = re.findall(answer_pattern, response, re.IGNORECASE)
+        candidates.extend(match.strip() for match in matches if str(match).strip())
+
+        lines = [line.strip() for line in response.split('\n') if line.strip()]
+        if lines:
+            candidates.append(lines[-1])
+
+            # Include a penultimate line if it looks like a concluding statement.
+            if len(lines) >= 2 and re.search(r'(?i)\b(therefore|thus|hence|so|final)\b', lines[-2]):
+                candidates.append(lines[-2])
+
+        return self._unique_preserve_order(candidates)
+
+    def _has_explicit_answer_signal(self, response: str) -> bool:
+        """Determine whether response provides an explicit final-answer target."""
+        if re.search(r'(?im)^\s*(?:final\s+answer|answer|result|solution)\s*[:\-=]', response):
+            return True
+
+        lines = [line.strip() for line in response.split('\n') if line.strip()]
+        if not lines:
+            return False
+
+        return self._looks_like_answer_candidate(lines[-1])
+
+    def _looks_like_answer_candidate(self, text: str) -> bool:
+        """Heuristic check for whether a line resembles a final answer."""
+        value = (text or "").strip().lower()
+        if not value:
+            return False
+
+        if "=" in value:
+            return True
+        if re.search(r'-?\d', value):
+            return True
+
+        return False
     
     def _auto_solve_simple_problem(self, problem: str) -> Optional[str]:
         """
@@ -154,6 +223,9 @@ class AccuracyScorer:
         - Mathematical expressions
         """
         candidates = []
+
+        # Start with high-confidence final candidates.
+        candidates.extend(self._extract_priority_answers(response))
         
         # Look for "Answer:" pattern
         answer_pattern = r'(?:answer|result|solution)\s*[:\-=]\s*([^\n]+)'
@@ -169,15 +241,7 @@ class AccuracyScorer:
         if lines:
             candidates.append(lines[-1])
         
-        # Remove duplicates while preserving order
-        seen = set()
-        unique_candidates = []
-        for c in candidates:
-            if c and c not in seen:
-                seen.add(c)
-                unique_candidates.append(c)
-        
-        return unique_candidates
+        return self._unique_preserve_order(candidates)
     
     def _exact_match(self, candidate: str, expected: str) -> bool:
         """Check if candidate exactly matches expected (case-insensitive)."""
@@ -186,18 +250,63 @@ class AccuracyScorer:
     def _numeric_match(self, candidate: str, expected: str) -> bool:
         """Check if candidate numerically matches expected."""
         try:
-            # Extract numbers
-            candidate_nums = re.findall(r'-?\d+\.?\d*', candidate)
-            expected_nums = re.findall(r'-?\d+\.?\d*', expected)
-            
-            if candidate_nums and expected_nums:
-                c_val = float(candidate_nums[0])
-                e_val = float(expected_nums[0])
+            c_val = self._parse_numeric_value(candidate)
+            e_val = self._parse_numeric_value(expected)
+
+            if c_val is not None and e_val is not None:
                 # Allow small floating point differences
                 return abs(c_val - e_val) < 0.0001
         except (ValueError, IndexError):
             pass
         return False
+
+    def _parse_numeric_value(self, text: str) -> Optional[float]:
+        """Parse a likely numeric answer (integer/decimal/fraction) from text."""
+        if text is None:
+            return None
+
+        value = str(text).strip()
+        if not value:
+            return None
+
+        # Strip common answer prefixes.
+        value = re.sub(
+            r'(?i)^\s*(?:final\s+answer|answer|result|solution)\s*[:\-=]\s*',
+            '',
+            value,
+        ).strip()
+
+        # Prefer the right-hand side for assignments like "x = 5".
+        if '=' in value:
+            value = value.split('=')[-1].strip()
+
+        fraction_pattern = r'[-+]?\d+(?:\.\d+)?\s*/\s*[-+]?\d+(?:\.\d+)?'
+        decimal_pattern = r'[-+]?\d+(?:\.\d+)?'
+
+        if re.fullmatch(fraction_pattern, value):
+            left, right = re.split(r'\s*/\s*', value, maxsplit=1)
+            denominator = float(right)
+            if abs(denominator) < 1e-12:
+                return None
+            return float(left) / denominator
+
+        if re.fullmatch(decimal_pattern, value):
+            return float(value)
+
+        # Fallback: use a single numeric token when unambiguous.
+        tokens = re.findall(rf'{fraction_pattern}|{decimal_pattern}', value)
+        if len(tokens) != 1:
+            return None
+
+        token = tokens[0].strip()
+        if '/' in token:
+            left, right = re.split(r'\s*/\s*', token, maxsplit=1)
+            denominator = float(right)
+            if abs(denominator) < 1e-12:
+                return None
+            return float(left) / denominator
+
+        return float(token)
     
     def _symbolic_match(self, candidate: str, expected: str) -> bool:
         """
