@@ -436,8 +436,8 @@ class PromptGenerator:
                         continue
 
                     normalized_example: Dict[str, Any] = {
-                        "problem": str(problem),
-                        "solution": str(solution),
+                        "problem": self._normalize_example_entry_text(str(problem), is_solution=False),
+                        "solution": self._normalize_example_entry_text(str(solution), is_solution=True),
                     }
 
                     self._add_optional_metadata(normalized_example, example, difficulty)
@@ -483,6 +483,116 @@ class PromptGenerator:
         normalized = self._convert_caret_to_superscripts(normalized)
         
         return normalized
+
+    def _is_fragmented_line_layout(self, lines: List[str]) -> bool:
+        """Detect OCR-like token-per-line formatting that should be flattened."""
+        if len(lines) < 6:
+            return False
+
+        compact = [re.sub(r"\s+", "", line) for line in lines if line]
+        if not compact:
+            return False
+
+        short_tokens = sum(1 for token in compact if len(token) <= 3)
+        symbol_only = sum(
+            1 for token in compact
+            if re.fullmatch(r"[0-9a-zA-Z+\-*/=^().,%]+", token) is not None
+        )
+
+        short_ratio = short_tokens / len(compact)
+        symbol_ratio = symbol_only / len(compact)
+        return short_ratio >= 0.55 or (len(compact) >= 8 and symbol_ratio >= 0.75)
+
+    def _normalize_example_entry_text(self, text: str, *, is_solution: bool) -> str:
+        """Normalize stored example text while preserving mathematical content."""
+        value = str(text).replace("\r\n", "\n").replace("\r", "\n")
+        value = re.sub(r"[\u200b\u200c\u200d\ufeff]", "", value).strip()
+
+        if is_solution:
+            value = re.sub(r"^\s*(?:a|answer)\s*:\s*", "", value, flags=re.IGNORECASE)
+        else:
+            value = re.sub(r"^\s*(?:q|question)\s*:\s*", "", value, flags=re.IGNORECASE)
+
+        normalized_lines: List[str] = []
+        for line in value.splitlines():
+            cleaned_line = re.sub(r"[ \t]+", " ", line).strip()
+            if not cleaned_line:
+                continue
+            if normalized_lines and normalized_lines[-1] == cleaned_line:
+                continue
+            normalized_lines.append(cleaned_line)
+
+        if not normalized_lines:
+            return value
+
+        if self._is_fragmented_line_layout(normalized_lines):
+            value = " ".join(normalized_lines)
+        else:
+            value = "\n".join(normalized_lines)
+
+        value = re.sub(r"\n{3,}", "\n\n", value)
+        return value.strip()
+
+    def _convert_latex_fractions(self, text: str) -> str:
+        """Convert common LaTeX fraction forms into plain-text divisions."""
+        value = text
+        brace_fraction = re.compile(r"\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}")
+        while True:
+            value, count = brace_fraction.subn(r"(\1)/(\2)", value)
+            if count == 0:
+                break
+
+        # Support shorthand forms like '\frac 12' while avoiding greedy token capture.
+        return re.sub(r"\\frac\s+([0-9A-Za-z])\s*([0-9A-Za-z])", r"(\1)/(\2)", value)
+
+    def _simplify_latex_for_prompt(self, text: str) -> str:
+        """Simplify high-noise LaTeX markup for readable few-shot prompt text."""
+        value = text
+        value = self._convert_latex_fractions(value)
+        value = value.replace("\\displaystyle", "")
+        value = value.replace("\\left", "")
+        value = value.replace("\\right", "")
+        value = value.replace("\\times", " x ")
+        value = value.replace("\\cdot", " * ")
+        value = value.replace("\\div", " / ")
+        value = value.replace("\\quad", " ")
+        value = value.replace("\\qquad", " ")
+        value = value.replace("\\,", " ")
+        value = value.replace("\\!", " ")
+        value = re.sub(r"\\begin\{align\*?\}", "", value)
+        value = re.sub(r"\\end\{align\*?\}", "", value)
+        value = value.replace("\\\\", " ; ")
+        value = value.replace("\\[", " ")
+        value = value.replace("\\]", " ")
+        value = value.replace("\\(", " ")
+        value = value.replace("\\)", " ")
+        value = re.sub(r"\\boxed\{([^{}]+)\}", r"\1", value)
+        value = re.sub(r"\^\{([^{}]+)\}", r"^\1", value)
+        value = self._convert_latex_fractions(value)
+        return value
+
+    def _prepare_example_text_for_prompt(self, text: str, *, is_solution: bool) -> str:
+        """Render example text into a concise, readable few-shot format."""
+        value = self._normalize_example_entry_text(text, is_solution=is_solution)
+        value = re.sub(r"\[asy\].*?\[/asy\]", " ", value, flags=re.IGNORECASE | re.DOTALL)
+        value = re.sub(r"\\begin\{asy\}.*?\\end\{asy\}", " ", value, flags=re.IGNORECASE | re.DOTALL)
+        value = re.sub(r"```(?:[a-zA-Z0-9_+\-]+)?\s*[\s\S]*?```", " ", value)
+        value = self._simplify_latex_for_prompt(value)
+
+        cleaned_lines = [re.sub(r"[ \t]+", " ", line).strip() for line in value.splitlines()]
+        cleaned_lines = [line for line in cleaned_lines if line]
+        if not cleaned_lines:
+            return ""
+
+        if self._is_fragmented_line_layout(cleaned_lines):
+            value = " ".join(cleaned_lines)
+        else:
+            value = "\n".join(cleaned_lines)
+
+        value = re.sub(r"\n{3,}", "\n\n", value)
+        value = re.sub(r"[ \t]{2,}", " ", value)
+        value = re.sub(r"\s+([,.;:!?])", r"\1", value)
+        return value.strip()
     
     def _convert_caret_to_superscripts(self, text: str) -> str:
         """Convert x^n notation to Unicode superscripts (x³, x², etc.)."""
@@ -1699,6 +1809,17 @@ class PromptGenerator:
         max_score = max(scores.values())
         if max_score == 0:
             return 'general'
+
+        # Break algebra/pre-calculus ties toward algebra for equation-solving prompts
+        # unless explicit calculus/trig markers are present.
+        if (
+            scores['algebra'] == max_score
+            and scores['pre-calculus'] == max_score
+            and '=' in text
+            and re.search(r'\breal\s+solutions?\b|\breal\s+roots?\b|\bsolve\b|\bquadratic\b|\bequation\b|\bpolynomial\b', text)
+            and not re.search(r'\bd/dx\b|\bdy/dx\b|∫|∂|\blimit\b|\bderivative\b|\bintegral\b|\bsin\b|\bcos\b|\btan\b|\bsequence\b|\bseries\b', text)
+        ):
+            return 'algebra'
         
         # Return the subject with the highest score
         if scores['pre-calculus'] == max_score:
@@ -1801,10 +1922,13 @@ class PromptGenerator:
         
         # Format examples (concise format for speed)
         examples_text = "\n\n".join([
-            f"Q: {ex['problem']}\nA: {ex['solution']}"
+            (
+                f"Q: {self._prepare_example_text_for_prompt(ex.get('problem', ''), is_solution=False)}\n"
+                f"A: {self._prepare_example_text_for_prompt(ex.get('solution', ''), is_solution=True)}"
+            )
             for ex in selected_examples
         ])
-        
+
         return (
             "Solve the following math problems and give the final answer.\n\n"
             f"{examples_text}\n\n"

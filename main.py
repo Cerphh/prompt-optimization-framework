@@ -12,7 +12,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import Optional, List, Any, Dict
+from typing import Optional, List, Any, Dict, Tuple
 from framework.pipeline import BenchmarkPipeline
 from framework.dataset import get_sample_dataset
 from framework.firestore_store import FirestoreStore
@@ -177,13 +177,201 @@ async def startup_model_readiness_check():
         )
 
 
+def _normalize_key(value: Any, default: str = "") -> str:
+    if value is None:
+        return default
+    normalized = str(value).strip().lower().replace(" ", "_")
+    return normalized or default
+
+
+def _build_problem_profile(problem: str, domain: str, difficulty: str) -> Dict[str, Any]:
+    """Build normalized problem profile for rule-mined IF-THEN selection."""
+    profile: Dict[str, Any] = {
+        "subject": _normalize_key(domain, default="general"),
+        "difficulty": _normalize_key(difficulty, default="basic"),
+    }
+
+    text = str(problem or "").strip()
+    if not text:
+        return profile
+
+    prompt_generator = pipeline.prompt_generator
+    try:
+        normalized_text = prompt_generator._normalize_problem_text(text)
+        lowered = normalized_text.lower()
+
+        intent = prompt_generator._normalize_type_label(prompt_generator._detect_primary_intent(lowered))
+        if intent:
+            profile["intent"] = intent
+
+        features = sorted(prompt_generator._extract_math_features(lowered))
+        if features:
+            profile["features"] = features
+
+        format_labels = sorted(prompt_generator._extract_problem_format_labels(lowered))
+        if format_labels:
+            profile["format_labels"] = format_labels
+
+        constraints = sorted(prompt_generator._extract_constraints_from_text(lowered))
+        if constraints:
+            profile["constraints"] = constraints
+    except Exception:
+        # Keep profile generation best-effort so benchmarking never fails on metadata extraction.
+        pass
+
+    return profile
+
+
+def _attach_problem_profile(result: Dict[str, Any], domain: str, difficulty: str) -> Dict[str, Any]:
+    """Attach profile metadata used by historical pattern-rule mining."""
+    if not isinstance(result, dict):
+        return result
+
+    problem = str(result.get("problem", "") or "")
+    if not problem:
+        return result
+
+    result["problem_profile"] = _build_problem_profile(problem=problem, domain=domain, difficulty=difficulty)
+    return result
+
+
+def _evaluate_selection_confidence(
+    selection: Dict[str, Any],
+    min_samples: int,
+    min_gap: float,
+) -> Tuple[bool, str]:
+    """Apply confidence gates to historical selection ranking."""
+    if not isinstance(selection, dict):
+        return False, "invalid_selection_payload"
+
+    if not selection.get("success", False):
+        return False, str(selection.get("reason") or "selection_failed")
+
+    ranking = selection.get("ranking", [])
+    if not isinstance(ranking, list) or not ranking:
+        return False, "no_ranking"
+
+    top = ranking[0] if isinstance(ranking[0], dict) else {}
+    try:
+        top_samples = max(0, int(top.get("samples", 0) or 0))
+        top_average = float(top.get("average_overall", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        return False, "invalid_ranking_data"
+
+    if top_samples < min_samples:
+        return False, "insufficient_samples"
+
+    if len(ranking) < 2:
+        return True, "ok_single_technique"
+
+    second = ranking[1] if isinstance(ranking[1], dict) else {}
+    try:
+        second_samples = max(0, int(second.get("samples", 0) or 0))
+        second_average = float(second.get("average_overall", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        return False, "invalid_ranking_data"
+
+    if min(top_samples, second_samples) < min_samples:
+        return False, "insufficient_samples"
+
+    if (top_average - second_average) < min_gap:
+        return False, "low_confidence_gap"
+
+    return True, "ok"
+
+
 def _apply_db_based_selection(result: Dict[str, Any], domain: str, difficulty: str) -> Dict[str, Any]:
-    """Apply DB-based greedy selection from historical Firestore results."""
+    """Apply profile-rule selection first, then domain-average fallback, else runtime greedy."""
+    result = _attach_problem_profile(result=result, domain=domain, difficulty=difficulty)
+
     successful_techniques = [
         technique
         for technique, technique_result in result.get("all_results", {}).items()
         if technique_result.get("success", False)
     ]
+
+    min_samples = _get_env_int("DB_MIN_SAMPLES_PER_TECHNIQUE", default=5, min_value=1)
+    min_gap = _get_env_float("DB_MIN_AVG_SCORE_GAP", default=0.03, min_value=0.0)
+    profile_min_samples = _get_env_int(
+        "DB_PROFILE_MIN_SAMPLES_PER_TECHNIQUE",
+        default=max(2, min_samples),
+        min_value=1,
+    )
+    profile_min_gap = _get_env_float(
+        "DB_PROFILE_MIN_AVG_SCORE_GAP",
+        default=max(0.01, min_gap / 2),
+        min_value=0.0,
+    )
+    profile_min_similarity = _get_env_float(
+        "DB_PROFILE_MIN_SIMILARITY",
+        default=0.35,
+        min_value=0.0,
+        max_value=1.0,
+    )
+    exploration_rate = _get_env_float(
+        "DB_EXPLORATION_RATE",
+        default=0.15,
+        min_value=0.0,
+        max_value=1.0,
+    )
+
+    problem_profile = result.get("problem_profile") if isinstance(result.get("problem_profile"), dict) else None
+
+    profile_selection = firestore_store.get_best_technique_by_profile(
+        domain=domain,
+        difficulty=difficulty,
+        problem_profile=problem_profile,
+        available_techniques=successful_techniques,
+        min_similarity=profile_min_similarity,
+    )
+
+    if not isinstance(profile_selection, dict):
+        profile_selection = {
+            "success": False,
+            "reason": "invalid_selection_payload",
+            "error": "Profile selection payload must be a dictionary.",
+        }
+
+    can_use_profile, profile_decision_reason = _evaluate_selection_confidence(
+        profile_selection,
+        min_samples=profile_min_samples,
+        min_gap=profile_min_gap,
+    )
+
+    if can_use_profile and exploration_rate > 0:
+        profile_intent = ""
+        if isinstance(problem_profile, dict):
+            profile_intent = str(problem_profile.get("intent", "") or "")
+        exploration_key = f"profile|{domain}|{difficulty}|{profile_intent}|{result.get('problem', '')}"
+        bucket = int(hashlib.sha256(exploration_key.encode("utf-8")).hexdigest()[:8], 16)
+        ratio = bucket / 0xFFFFFFFF
+        if ratio < exploration_rate:
+            can_use_profile = False
+            profile_decision_reason = "exploration_runtime"
+
+    if can_use_profile:
+        profile_best = profile_selection.get("best_technique")
+        if profile_best in result.get("all_results", {}):
+            result["best_technique"] = profile_best
+            result["best_result"] = result["all_results"][profile_best]
+            result["selection_source"] = "db_profile_rules"
+            result["selection_details"] = {
+                "profile_selection": profile_selection,
+                "domain_selection": None,
+                "profile_decision_reason": profile_decision_reason,
+                "db_confidence_rules": {
+                    "profile_min_samples_per_technique": profile_min_samples,
+                    "profile_min_average_gap": profile_min_gap,
+                    "profile_min_similarity": profile_min_similarity,
+                    "min_samples_per_technique": min_samples,
+                    "min_average_gap": min_gap,
+                    "exploration_rate": exploration_rate,
+                },
+            }
+            return result
+
+        can_use_profile = False
+        profile_decision_reason = "profile_best_missing_result"
 
     selection = firestore_store.get_best_technique_by_domain(
         domain=domain,
@@ -198,39 +386,11 @@ def _apply_db_based_selection(result: Dict[str, Any], domain: str, difficulty: s
             "error": "Selection payload must be a dictionary.",
         }
 
-    min_samples = _get_env_int("DB_MIN_SAMPLES_PER_TECHNIQUE", default=5, min_value=1)
-    min_gap = _get_env_float("DB_MIN_AVG_SCORE_GAP", default=0.03, min_value=0.0)
-    exploration_rate = _get_env_float(
-        "DB_EXPLORATION_RATE",
-        default=0.15,
-        min_value=0.0,
-        max_value=1.0,
+    can_use_db, db_decision_reason = _evaluate_selection_confidence(
+        selection,
+        min_samples=min_samples,
+        min_gap=min_gap,
     )
-
-    ranking = selection.get("ranking", [])
-    can_use_db = bool(selection.get("success", False))
-    db_decision_reason = "ok"
-
-    if can_use_db and len(ranking) >= 2:
-        top = ranking[0] if isinstance(ranking[0], dict) else {}
-        second = ranking[1] if isinstance(ranking[1], dict) else {}
-
-        try:
-            top_samples = max(0, int(top.get("samples", 0) or 0))
-            second_samples = max(0, int(second.get("samples", 0) or 0))
-            top_average = float(top.get("average_overall", 0.0) or 0.0)
-            second_average = float(second.get("average_overall", 0.0) or 0.0)
-            score_gap = top_average - second_average
-        except (TypeError, ValueError):
-            can_use_db = False
-            db_decision_reason = "invalid_ranking_data"
-        else:
-            if min(top_samples, second_samples) < min_samples:
-                can_use_db = False
-                db_decision_reason = "insufficient_samples"
-            elif score_gap < min_gap:
-                can_use_db = False
-                db_decision_reason = "low_confidence_gap"
 
     if can_use_db and exploration_rate > 0:
         exploration_key = f"{domain}|{result.get('problem', '')}"
@@ -247,9 +407,14 @@ def _apply_db_based_selection(result: Dict[str, Any], domain: str, difficulty: s
             result["best_result"] = result["all_results"][best_technique]
             result["selection_source"] = "db_history"
             result["selection_details"] = {
-                **selection,
+                "profile_selection": profile_selection,
+                "domain_selection": selection,
+                "profile_decision_reason": profile_decision_reason,
                 "db_decision_reason": db_decision_reason,
                 "db_confidence_rules": {
+                    "profile_min_samples_per_technique": profile_min_samples,
+                    "profile_min_average_gap": profile_min_gap,
+                    "profile_min_similarity": profile_min_similarity,
                     "min_samples_per_technique": min_samples,
                     "min_average_gap": min_gap,
                     "exploration_rate": exploration_rate,
@@ -259,9 +424,14 @@ def _apply_db_based_selection(result: Dict[str, Any], domain: str, difficulty: s
 
     result["selection_source"] = "runtime_scores"
     result["selection_details"] = {
-        **selection,
+        "profile_selection": profile_selection,
+        "domain_selection": selection,
+        "profile_decision_reason": profile_decision_reason,
         "db_decision_reason": db_decision_reason,
         "db_confidence_rules": {
+            "profile_min_samples_per_technique": profile_min_samples,
+            "profile_min_average_gap": profile_min_gap,
+            "profile_min_similarity": profile_min_similarity,
             "min_samples_per_technique": min_samples,
             "min_average_gap": min_gap,
             "exploration_rate": exploration_rate,
@@ -556,10 +726,21 @@ async def benchmark_dataset_problem(problem_id: int):
 async def save_result(request: SaveResultRequest):
     """Manually save an existing benchmark result to Firestore."""
     try:
+        metadata = dict(request.metadata or {})
+        domain = metadata.get("domain") or metadata.get("subject") or metadata.get("category") or "general"
+        difficulty = metadata.get("difficulty") or request.result.get("difficulty") or "basic"
+
+        benchmark_result = _attach_problem_profile(
+            result=dict(request.result),
+            domain=str(domain),
+            difficulty=str(difficulty),
+        )
+        metadata["problem_profile"] = benchmark_result.get("problem_profile")
+
         storage = firestore_store.save_benchmark_result(
-            benchmark_result=request.result,
+            benchmark_result=benchmark_result,
             source=request.source or "manual_save",
-            metadata=request.metadata or {}
+            metadata=metadata
         )
 
         if firestore_store.required and not storage.get("success", False):

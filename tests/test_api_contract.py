@@ -100,6 +100,7 @@ def test_benchmark_response_does_not_include_storage_until_manual_save(monkeypat
         return _mock_benchmark_result(problem=problem, ground_truth=ground_truth)
 
     monkeypatch.setattr(main.pipeline, "benchmark", fake_benchmark)
+    monkeypatch.setattr(main.firestore_store, "get_best_technique_by_profile", _mock_no_history)
     monkeypatch.setattr(main.firestore_store, "get_best_technique_by_domain", _mock_no_history)
 
     client = TestClient(main.app)
@@ -121,6 +122,7 @@ def test_stream_complete_event_does_not_include_storage_until_manual_save(monkey
         }
 
     monkeypatch.setattr(main.pipeline, "benchmark_stream_events", fake_stream_events)
+    monkeypatch.setattr(main.firestore_store, "get_best_technique_by_profile", _mock_no_history)
     monkeypatch.setattr(main.firestore_store, "get_best_technique_by_domain", _mock_no_history)
 
     client = TestClient(main.app)
@@ -141,6 +143,7 @@ def test_benchmark_tolerates_invalid_db_policy_env_values(monkeypatch):
         return _mock_benchmark_result(problem=problem, ground_truth=ground_truth)
 
     monkeypatch.setattr(main.pipeline, "benchmark", fake_benchmark)
+    monkeypatch.setattr(main.firestore_store, "get_best_technique_by_profile", _mock_no_history)
     monkeypatch.setattr(main.firestore_store, "get_best_technique_by_domain", _mock_no_history)
 
     monkeypatch.setenv("DB_MIN_SAMPLES_PER_TECHNIQUE", "invalid")

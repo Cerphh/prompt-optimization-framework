@@ -75,3 +75,12 @@ def test_detect_primary_intent_compare_values_multiple_choice():
 
     assert generator._detect_primary_intent(question) == "compare_values"
     assert generator.classify_subject(question) == "algebra"
+
+
+def test_classify_subject_quadratic_real_solutions_prompt_as_algebra():
+    generator = PromptGenerator()
+
+    question = "Solve for all real solutions: x^2 - 9x + 20 = 0."
+
+    assert generator._detect_primary_intent(question) == "real_solutions"
+    assert generator.classify_subject(question) == "algebra"
