@@ -954,9 +954,76 @@ class PromptGenerator:
             or (has_travel_context and has_distance_unit and has_time_unit and "how many" in value)
         )
 
+    def _normalize_detection_text(self, text: str) -> str:
+        """Normalize unicode math glyphs so intent and subject rules stay stable."""
+        value = str(text or "")
+        replacements = {
+            "−": "-",
+            "–": "-",
+            "×": "*",
+            "÷": "/",
+            "⁰": "^0",
+            "¹": "^1",
+            "²": "^2",
+            "³": "^3",
+            "⁴": "^4",
+            "⁵": "^5",
+            "⁶": "^6",
+            "⁷": "^7",
+            "⁸": "^8",
+            "⁹": "^9",
+        }
+        for source, target in replacements.items():
+            value = value.replace(source, target)
+
+        return re.sub(r"\s+", " ", value).strip().lower()
+
+    def _looks_like_algebraic_equation_problem(self, text: str) -> bool:
+        """Detect equation-solving prompts that should map to algebra by default."""
+        value = self._normalize_detection_text(text)
+
+        if "=" not in value:
+            return False
+
+        has_variable = bool(re.search(r"\b[a-z]\b|\d+[a-z]|[a-z]\d", value))
+        if not has_variable:
+            return False
+
+        if re.search(
+            r"\bd/dx\b|\bdy/dx\b|∫|\\int\b|\bderivative\b|\bdifferentiate\b|\bintegral\b|\bintegrate\b|\blimit\b|\blim\b|\bsin\b|\bcos\b|\btan\b|\bsec\b|\bcsc\b|\bcot\b|\barcsin\b|\barccos\b|\barctan\b",
+            value,
+        ):
+            return False
+
+        solve_markers = [
+            "solve",
+            "solution",
+            "solutions",
+            "root",
+            "roots",
+            "equation",
+            "polynomial",
+            "factor",
+            "zero",
+            "zeros",
+            "find x",
+            "solve for",
+        ]
+        if any(marker in value for marker in solve_markers):
+            return True
+
+        if re.search(r"\b[a-z]\^?\d", value):
+            return True
+        if re.search(r"[-+]?\d+[a-z]", value):
+            return True
+        if re.search(r"\b[a-z]\s*[+\-*/]\s*[a-z0-9]", value):
+            return True
+
+        return False
+
     def _detect_primary_intent(self, text: str) -> str:
         """Detect primary solve intent from problem text."""
-        value = text.lower()
+        value = self._normalize_detection_text(text)
         has_equation = "=" in value and bool(re.search(r"\b[a-z]\b|\d+[a-z]|[a-z]\d+", value))
         assignment_count = len(
             re.findall(r"\b[a-z]\s*=\s*[-+]?\d+(?:\.\d+)?(?:\s*/\s*[-+]?\d+(?:\.\d+)?)?", value)
@@ -1041,6 +1108,8 @@ class PromptGenerator:
         if has_equation and any(marker in value for marker in ["calculate", "find", "determine", "what is"]):
             return "solve_equation"
         if "solve" in value or "find x" in value or "solve for x" in value:
+            return "solve_equation"
+        if self._looks_like_algebraic_equation_problem(value):
             return "solve_equation"
         return "general"
 
@@ -1713,7 +1782,7 @@ class PromptGenerator:
         Returns:
             Subject category: 'pre-calculus', 'counting-probability', 'algebra', or 'general'
         """
-        text = problem.lower()
+        text = self._normalize_detection_text(problem)
 
         intent = self._detect_primary_intent(text)
         if intent in {
@@ -1751,6 +1820,9 @@ class PromptGenerator:
             "ratio_proportion",
             "variation",
         }:
+            return "algebra"
+
+        if self._looks_like_algebraic_equation_problem(text):
             return "algebra"
 
         scores = {'pre-calculus': 0, 'counting-probability': 0, 'algebra': 0}

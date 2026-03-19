@@ -84,3 +84,30 @@ def test_classify_subject_quadratic_real_solutions_prompt_as_algebra():
 
     assert generator._detect_primary_intent(question) == "real_solutions"
     assert generator.classify_subject(question) == "algebra"
+
+
+def test_classify_subject_unicode_quadratic_real_solutions_as_algebra():
+    generator = PromptGenerator()
+
+    question = "Solve for all real solutions: x² - 9x + 20 = 0."
+
+    assert generator._detect_primary_intent(question) == "real_solutions"
+    assert generator.classify_subject(question) == "algebra"
+
+
+def test_classify_subject_equation_only_prompt_defaults_to_algebra():
+    generator = PromptGenerator()
+
+    question = "x² - 9x + 20 = 0"
+
+    assert generator._detect_primary_intent(question) == "solve_equation"
+    assert generator.classify_subject(question) == "algebra"
+
+
+def test_classify_subject_function_analysis_prompt_stays_precalculus():
+    generator = PromptGenerator()
+
+    question = "Find the domain and range of f(x) = (x^2 - 9x + 20)/(x - 4)."
+
+    assert generator._detect_primary_intent(question) == "function_analysis"
+    assert generator.classify_subject(question) == "pre-calculus"
