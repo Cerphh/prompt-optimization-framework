@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import hashlib
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional, List, Set, Tuple
 
@@ -115,26 +116,43 @@ class FirestoreStore:
             metadata = metadata or {}
             domain = self._resolve_domain(benchmark_result=benchmark_result, metadata=metadata)
             difficulty = self._resolve_difficulty(benchmark_result=benchmark_result, metadata=metadata)
+            problem_text = self._resolve_problem_text(benchmark_result=benchmark_result, metadata=metadata)
+            problem_id = self._build_problem_document_id(problem_text)
 
             payload = self._build_storage_document(
                 benchmark_result=benchmark_result,
                 metadata=metadata,
+                source=source,
             )
 
             doc_ref = (
                 self.db.collection(self.collection_name)
                 .document(domain)
                 .collection(difficulty)
-                .document()
+                .document(problem_id)
             )
-            doc_ref.set(payload)
+            doc_ref.set(
+                {
+                    "domain": domain,
+                    "difficulty": difficulty,
+                    "problem": problem_text,
+                    "problem_normalized": self._normalize_problem_text(problem_text),
+                    "problem_id": problem_id,
+                    "updated_at": firestore.SERVER_TIMESTAMP,
+                    "result_count": firestore.Increment(1),
+                    "results": firestore.ArrayUnion([payload]),
+                },
+                merge=True,
+            )
 
             return {
                 "success": True,
                 "collection": self.collection_name,
                 "domain": domain,
                 "difficulty": difficulty,
+                "problem_id": problem_id,
                 "document_id": doc_ref.id,
+                "result_id": payload.get("result_id"),
             }
         except Exception as exc:
             return {
@@ -143,17 +161,32 @@ class FirestoreStore:
                 "error": str(exc),
             }
 
+    def _resolve_problem_text(self, benchmark_result: Dict[str, Any], metadata: Dict[str, Any]) -> str:
+        problem = metadata.get("problem") or benchmark_result.get("problem") or ""
+        text = str(problem).strip()
+        return text or "unknown_problem"
+
+    def _normalize_problem_text(self, problem: str) -> str:
+        return " ".join(str(problem or "").strip().lower().split())
+
+    def _build_problem_document_id(self, problem: str) -> str:
+        normalized_problem = self._normalize_problem_text(problem)
+        digest = hashlib.sha1(normalized_problem.encode("utf-8")).hexdigest()
+        return f"problem_{digest}"
+
     def _build_storage_document(
         self,
         benchmark_result: Dict[str, Any],
         metadata: Dict[str, Any],
+        source: str,
     ) -> Dict[str, Any]:
-        """Build compact Firestore document with only required fields."""
+        """Build compact result payload for a problem-level results list."""
         best_result = benchmark_result.get("best_result", {})
         scores = best_result.get("scores", {})
 
         domain = self._resolve_domain(benchmark_result=benchmark_result, metadata=metadata)
         difficulty = self._resolve_difficulty(benchmark_result=benchmark_result, metadata=metadata)
+        problem_text = self._resolve_problem_text(benchmark_result=benchmark_result, metadata=metadata)
 
         raw_profile = metadata.get("problem_profile")
         if raw_profile is None:
@@ -161,8 +194,11 @@ class FirestoreStore:
         normalized_profile = self._normalize_problem_profile(raw_profile)
 
         document = {
+            "result_id": datetime.now(timezone.utc).isoformat(),
+            "source": source,
             "domain": domain,
             "difficulty": difficulty,
+            "problem": problem_text,
             "prompt_used": best_result.get("prompt"),
             "model_response": best_result.get("response"),
             "performance_score": scores.get("overall"),
@@ -173,6 +209,21 @@ class FirestoreStore:
             document["problem_profile"] = normalized_profile
 
         return document
+
+    def _extract_result_entries(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Return result entries for both new grouped schema and legacy flat schema."""
+        entries: List[Dict[str, Any]] = []
+
+        nested_results = data.get("results")
+        if isinstance(nested_results, list):
+            entries.extend(item for item in nested_results if isinstance(item, dict))
+
+        # Backward compatibility: older schema stored one result per document.
+        legacy_comparisons = data.get("technique_comparison")
+        if isinstance(legacy_comparisons, list):
+            entries.append(data)
+
+        return entries
 
     def _normalize_profile_labels(self, value: Any) -> List[str]:
         if value is None:
@@ -331,25 +382,26 @@ class FirestoreStore:
             )
             for doc in query.stream():
                 data = doc.to_dict() or {}
-                comparisons = data.get("technique_comparison", [])
-                if not isinstance(comparisons, list):
-                    continue
-
-                for comparison in comparisons:
-                    if not isinstance(comparison, dict):
+                for entry in self._extract_result_entries(data):
+                    comparisons = entry.get("technique_comparison", [])
+                    if not isinstance(comparisons, list):
                         continue
 
-                    technique = comparison.get("technique")
-                    overall = comparison.get("overall")
+                    for comparison in comparisons:
+                        if not isinstance(comparison, dict):
+                            continue
 
-                    if not technique or not isinstance(overall, (int, float)):
-                        continue
+                        technique = comparison.get("technique")
+                        overall = comparison.get("overall")
 
-                    if allowed and technique not in allowed:
-                        continue
+                        if not technique or not isinstance(overall, (int, float)):
+                            continue
 
-                    totals[technique] = totals.get(technique, 0.0) + float(overall)
-                    counts[technique] = counts.get(technique, 0) + 1
+                        if allowed and technique not in allowed:
+                            continue
+
+                        totals[technique] = totals.get(technique, 0.0) + float(overall)
+                        counts[technique] = counts.get(technique, 0) + 1
 
             if not counts:
                 return {
@@ -441,35 +493,38 @@ class FirestoreStore:
 
             for doc in query.stream():
                 data = doc.to_dict() or {}
-                historical_profile = self._normalize_problem_profile(data.get("problem_profile"))
-                if not historical_profile:
-                    continue
-
-                similarity = self._profile_similarity(normalized_profile, historical_profile)
-                if similarity < min_similarity:
-                    continue
-
-                matched_documents += 1
-                similarities.append(similarity)
-
-                comparisons = data.get("technique_comparison", [])
-                if not isinstance(comparisons, list):
-                    continue
-
-                for comparison in comparisons:
-                    if not isinstance(comparison, dict):
+                for entry in self._extract_result_entries(data):
+                    historical_profile = self._normalize_problem_profile(
+                        entry.get("problem_profile") or data.get("problem_profile")
+                    )
+                    if not historical_profile:
                         continue
 
-                    technique = comparison.get("technique")
-                    overall = comparison.get("overall")
-
-                    if not technique or not isinstance(overall, (int, float)):
-                        continue
-                    if allowed and technique not in allowed:
+                    similarity = self._profile_similarity(normalized_profile, historical_profile)
+                    if similarity < min_similarity:
                         continue
 
-                    totals[technique] = totals.get(technique, 0.0) + float(overall)
-                    counts[technique] = counts.get(technique, 0) + 1
+                    matched_documents += 1
+                    similarities.append(similarity)
+
+                    comparisons = entry.get("technique_comparison", [])
+                    if not isinstance(comparisons, list):
+                        continue
+
+                    for comparison in comparisons:
+                        if not isinstance(comparison, dict):
+                            continue
+
+                        technique = comparison.get("technique")
+                        overall = comparison.get("overall")
+
+                        if not technique or not isinstance(overall, (int, float)):
+                            continue
+                        if allowed and technique not in allowed:
+                            continue
+
+                        totals[technique] = totals.get(technique, 0.0) + float(overall)
+                        counts[technique] = counts.get(technique, 0) + 1
 
             if not counts:
                 return {
