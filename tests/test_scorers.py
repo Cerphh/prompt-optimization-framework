@@ -25,6 +25,18 @@ def test_accuracy_numeric_match_does_not_use_fraction_numerator_only():
     assert score == 0.0
 
 
+def test_accuracy_uses_previous_math_line_when_final_answer_payload_is_blank():
+    scorer = AccuracyScorer()
+    response = (
+        "(m - 4)(2n + 7) = m(2n + 7) - 4(2n + 7)\n"
+        "= 2mn + 7m - 8n - 28\n"
+        "Final answer:"
+    )
+
+    score = scorer.score(response=response, expected="2mn + 7m - 8n - 28")
+    assert score == 1.0
+
+
 def test_efficiency_score_is_bounded():
     scorer = EfficiencyScorer()
     score = scorer.score(

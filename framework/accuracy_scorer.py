@@ -113,6 +113,14 @@ class AccuracyScorer:
 
         lines = [line.strip() for line in response.split('\n') if line.strip()]
         if lines:
+            if self._is_blank_explicit_answer_line(lines[-1]):
+                # If model ends with "Final answer:" but no payload, salvage
+                # the nearest prior math-like line as the likely final expression.
+                for previous_line in reversed(lines[:-1]):
+                    if self._looks_like_answer_candidate(previous_line):
+                        candidates.append(previous_line)
+                        break
+
             candidates.append(lines[-1])
 
             # Include a penultimate line if it looks like a concluding statement.
@@ -131,6 +139,15 @@ class AccuracyScorer:
             return False
 
         return self._looks_like_answer_candidate(lines[-1])
+
+    def _is_blank_explicit_answer_line(self, line: str) -> bool:
+        """Check whether a line is an explicit answer label with empty payload."""
+        return bool(
+            re.match(
+                r'(?i)^\s*(?:final\s+answer|answer|result|solution)\s*[:\-=]\s*$',
+                line or "",
+            )
+        )
 
     def _looks_like_answer_candidate(self, text: str) -> bool:
         """Heuristic check for whether a line resembles a final answer."""
@@ -245,7 +262,31 @@ class AccuracyScorer:
     
     def _exact_match(self, candidate: str, expected: str) -> bool:
         """Check if candidate exactly matches expected (case-insensitive)."""
-        return candidate.lower().strip() == expected.lower().strip()
+        candidate_norm = self._normalize_answer_text(candidate).lower()
+        expected_norm = self._normalize_answer_text(expected).lower()
+
+        if candidate_norm == expected_norm:
+            return True
+
+        # Also compare compact forms to ignore spacing differences.
+        candidate_compact = re.sub(r'\s+', '', candidate_norm)
+        expected_compact = re.sub(r'\s+', '', expected_norm)
+        return candidate_compact == expected_compact
+
+    def _normalize_answer_text(self, text: str) -> str:
+        """Normalize answer text for resilient exact matching."""
+        value = str(text or "").strip()
+        value = re.sub(
+            r'(?i)^\s*(?:final\s+answer|answer|result|solution)\s*[:\-=]\s*',
+            '',
+            value,
+        ).strip()
+
+        if '=' in value:
+            value = value.split('=')[-1].strip()
+
+        value = value.rstrip('.;,')
+        return value
     
     def _numeric_match(self, candidate: str, expected: str) -> bool:
         """Check if candidate numerically matches expected."""
@@ -279,6 +320,10 @@ class AccuracyScorer:
         # Prefer the right-hand side for assignments like "x = 5".
         if '=' in value:
             value = value.split('=')[-1].strip()
+
+        # Reject tokens like "15a" or "x15" that are not standalone numbers.
+        if re.search(r'\d[a-zA-Z]|[a-zA-Z]\d', value):
+            return None
 
         fraction_pattern = r'[-+]?\d+(?:\.\d+)?\s*/\s*[-+]?\d+(?:\.\d+)?'
         decimal_pattern = r'[-+]?\d+(?:\.\d+)?'
