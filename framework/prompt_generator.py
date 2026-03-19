@@ -222,7 +222,7 @@ class PromptGenerator:
         
         # Load examples from JSON file
         try:
-            with open(json_path, 'r', encoding='utf-8') as f:
+            with open(json_path, 'r', encoding='utf-8-sig') as f:
                 self.example_dataset = self._normalize_example_dataset(json.load(f))
             print(f"Loaded example dataset from {json_path}")
         except FileNotFoundError:

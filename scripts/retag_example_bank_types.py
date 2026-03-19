@@ -79,7 +79,7 @@ def main() -> None:
     parser.add_argument("--show", type=int, default=30, help="How many sample mismatches to print")
     args = parser.parse_args()
 
-    data = json.loads(TARGET_PATH.read_text(encoding="utf-8"))
+    data = json.loads(TARGET_PATH.read_text(encoding="utf-8-sig"))
     if not isinstance(data, dict):
         raise ValueError("Expected top-level object in example bank JSON")
 

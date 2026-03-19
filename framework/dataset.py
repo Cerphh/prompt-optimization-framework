@@ -110,7 +110,7 @@ class MathDataset:
     
     def load_from_file(self, filepath: str):
         """Load dataset from JSON file."""
-        with open(filepath, 'r', encoding='utf-8') as f:
+        with open(filepath, 'r', encoding='utf-8-sig') as f:
             data = json.load(f)
             self.load_from_dict(data)
     
