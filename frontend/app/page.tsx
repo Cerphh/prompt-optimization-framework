@@ -118,9 +118,63 @@ export default function Home() {
     return () => clearInterval(interval)
   }, [])
 
+  const normalizeDetectionText = (text: string): string => {
+    const replacements: Record<string, string> = {
+      '−': '-',
+      '–': '-',
+      '×': '*',
+      '÷': '/',
+      '⁰': '^0',
+      '¹': '^1',
+      '²': '^2',
+      '³': '^3',
+      '⁴': '^4',
+      '⁵': '^5',
+      '⁶': '^6',
+      '⁷': '^7',
+      '⁸': '^8',
+      '⁹': '^9',
+    }
+
+    let normalized = text
+    Object.entries(replacements).forEach(([source, target]) => {
+      normalized = normalized.replaceAll(source, target)
+    })
+
+    return normalized.toLowerCase().replace(/\s+/g, ' ').trim()
+  }
+
+  const looksLikeAlgebraEquationProblem = (text: string): boolean => {
+    const lowerText = normalizeDetectionText(text)
+
+    if (!lowerText.includes('=')) return false
+
+    const hasVariable = /\b[a-z]\b|\d+[a-z]|[a-z]\d/.test(lowerText)
+    if (!hasVariable) return false
+
+    const explicitPrecalculus = /\bd\/dx\b|\bdy\/dx\b|∫|\bderivative\b|\bdifferentiate\b|\bintegral\b|\bintegrate\b|\blimit\b|\blim\b|\bsin\b|\bcos\b|\btan\b|\bsec\b|\bcsc\b|\bcot\b|\barcsin\b|\barccos\b|\barctan\b/.test(lowerText)
+    if (explicitPrecalculus) return false
+
+    if (/\bsolve\b|\bsolution\b|\bsolutions\b|\broot\b|\broots\b|\bequation\b|\bpolynomial\b|\bfactor\b|\bfind x\b|\bsolve for\b/.test(lowerText)) {
+      return true
+    }
+
+    if (/\b[a-z]\^?\d/.test(lowerText)) return true
+    if (/[-+]?\d+[a-z]/.test(lowerText)) return true
+    if (/\b[a-z]\s*[+\-*/]\s*[a-z0-9]/.test(lowerText)) return true
+
+    return false
+  }
+
   // Auto-detect subject based on keywords in the problem
   const detectSubject = (text: string): string => {
-    const lowerText = text.toLowerCase()
+    const lowerText = normalizeDetectionText(text)
+
+    // Early guard to prevent equation-solving prompts from being mislabeled as pre-calculus.
+    if (looksLikeAlgebraEquationProblem(lowerText)) {
+      return 'algebra'
+    }
+
     let scores = { 'pre-calculus': 0, 'counting-probability': 0, algebra: 0 }
     
     // Comprehensive keyword lists for each subject
@@ -133,7 +187,7 @@ export default function Home() {
                  'graph', 'asymptote', 'domain', 'range', 'inverse function', 'composite function',
                  'trigonometric', 'sine', 'cosine', 'tangent function', 'periodic'],
       patterns: [/d\/dx/, /∫/, /lim|limit/, /derivative|derivatives/, /integral|integrate/i, 
-                 /exponential|logarithm|log\(/, /sin|cos|tan|graph|function/, /solve.*for|find.*value/],
+             /exponential|logarithm|log\(/, /sin|cos|tan|graph|function/, /find.*(derivative|integral|limit|domain|range|asymptote)/],
       problemGoals: ['solve', 'find', 'graph', 'calculate', 'determine'],  // What user wants to do
       symbols: ['dx', 'dy', 'dy/dx', '∫', 'e^', 'ln(', 'sin', 'cos', 'tan', '^'],
       operations: ['derivative', 'integral', 'limit', 'exponential growth'],
@@ -162,7 +216,7 @@ export default function Home() {
     const algebraPatterns = {
       keywords: ['solve', 'solve for', 'factor', 'factorize', 'simplify', 'expand', 'quadratic', 
                  'equation', 'polynomial', 'linear', 'matrix', 'system of equations', 'roots', 'zero', 'parabola',
-                 'binomial', 'trinomial', 'monomial', 'rational', 'radical', 'algebraic',
+                 'binomial', 'trinomial', 'monomial', 'rational', 'radical', 'algebraic', 'real solutions', 'real roots',
                  'expression', 'substitute', 'inequality', 'variable', 'coefficient'],
       patterns: [/solve (for|x|y|z)/, /factor|factorize/, /simplify/, /expand/, /quadratic/i,
                  /equation(s)?/, /polynomial/, /inequality/, /system.*equation/],
