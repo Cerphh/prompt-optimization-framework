@@ -125,13 +125,13 @@ class FirestoreStore:
                 source=source,
             )
 
-            doc_ref = (
+            problem_ref = (
                 self.db.collection(self.collection_name)
                 .document(domain)
                 .collection(difficulty)
                 .document(problem_id)
             )
-            doc_ref.set(
+            problem_ref.set(
                 {
                     "domain": domain,
                     "difficulty": difficulty,
@@ -140,10 +140,15 @@ class FirestoreStore:
                     "problem_id": problem_id,
                     "updated_at": firestore.SERVER_TIMESTAMP,
                     "result_count": firestore.Increment(1),
-                    "results": firestore.ArrayUnion([payload]),
                 },
                 merge=True,
             )
+
+            result_ref = problem_ref.collection("results").document(payload["result_id"])
+            result_ref.set({
+                **payload,
+                "created_at": firestore.SERVER_TIMESTAMP,
+            })
 
             return {
                 "success": True,
@@ -151,7 +156,7 @@ class FirestoreStore:
                 "domain": domain,
                 "difficulty": difficulty,
                 "problem_id": problem_id,
-                "document_id": doc_ref.id,
+                "document_id": problem_ref.id,
                 "result_id": payload.get("result_id"),
             }
         except Exception as exc:
@@ -210,9 +215,18 @@ class FirestoreStore:
 
         return document
 
-    def _extract_result_entries(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Return result entries for both new grouped schema and legacy flat schema."""
+    def _extract_result_entries(self, doc_ref: Any, data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Return result entries for subcollection schema and legacy document schemas."""
         entries: List[Dict[str, Any]] = []
+
+        try:
+            for result_doc in doc_ref.collection("results").stream():
+                result_data = result_doc.to_dict() or {}
+                if isinstance(result_data, dict):
+                    entries.append(result_data)
+        except Exception:
+            # If subcollection read fails for a document, continue with legacy fallbacks.
+            pass
 
         nested_results = data.get("results")
         if isinstance(nested_results, list):
@@ -382,7 +396,7 @@ class FirestoreStore:
             )
             for doc in query.stream():
                 data = doc.to_dict() or {}
-                for entry in self._extract_result_entries(data):
+                for entry in self._extract_result_entries(doc.reference, data):
                     comparisons = entry.get("technique_comparison", [])
                     if not isinstance(comparisons, list):
                         continue
@@ -493,7 +507,7 @@ class FirestoreStore:
 
             for doc in query.stream():
                 data = doc.to_dict() or {}
-                for entry in self._extract_result_entries(data):
+                for entry in self._extract_result_entries(doc.reference, data):
                     historical_profile = self._normalize_problem_profile(
                         entry.get("problem_profile") or data.get("problem_profile")
                     )
