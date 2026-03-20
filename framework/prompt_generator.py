@@ -462,7 +462,12 @@ class PromptGenerator:
         _ = subject
         normalized_problem = self._normalize_problem_text(problem)
         return (
-            "Solve the following math problem and end with a concise final answer.\n\n"
+            "Solve the following math problem correctly. "
+            "Focus on the requested quantity and work directly with the given information. "
+            "Use valid mathematical operations and combine quantities logically. "
+            "Show all necessary intermediate steps and label the final answer clearly. "
+            "Verify that your final result satisfies all given conditions. "
+            "Provide only the final answer after the intermediate steps.\n\n"
             f"Q: {normalized_problem}\n"
             "A:"
         )
@@ -2002,12 +2007,17 @@ class PromptGenerator:
         ])
 
         return (
-            "Solve the following math problems and give the final answer.\n\n"
-            f"{examples_text}\n\n"
-            f"Q: {normalized_problem}\n"
-            "A:"
-        )
-    
+        "Solve the following math problems correctly. "
+        "Use the solved examples as guidance for the type of answer and reasoning style expected. "
+        "Focus on the requested quantity and use valid mathematical operations and transformations. "
+        "Work directly with the given information and combine quantities logically. "
+        "Show all necessary intermediate steps and label the final answer clearly. "
+        "Verify that your final result satisfies all given conditions. "
+        "Provide only the final answer after the intermediate steps.\n\n"
+        f"{examples_text}\n\n"
+        f"Q: {normalized_problem}\n"
+        "A:"
+    )
     def generate_all_techniques(self, problem: str, subject: str = "general") -> Dict[str, str]:
         """
         Generate prompts using all techniques.

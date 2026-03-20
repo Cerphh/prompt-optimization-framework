@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react'
 
+type RunMode = 'normal' | 'benchmark'
+
 interface Technique {
   technique: string
   accuracy: number
@@ -13,9 +15,10 @@ interface Technique {
 interface TechniqueResult {
   technique: string
   success: boolean
-  prompt: string
-  response: string
-  metrics: {
+  prompt?: string
+  response?: string
+  error?: string
+  metrics?: {
     elapsed_time: number
     total_tokens: number
     prompt_tokens: number
@@ -40,15 +43,39 @@ interface BenchmarkResult {
   all_results: Record<string, TechniqueResult>
   comparison: Technique[]
   all_responses: Record<string, { response: string; score: number }>
-  selection_source?: 'db_history' | 'runtime_scores'
-  selection_details?: {
-    total_samples?: number
+  run_mode?: RunMode
+  ground_truth_used?: boolean
+  selection_source?:
+    | 'db_history'
+    | 'db_profile_rules'
+    | 'runtime_scores'
+  selection_details?: Record<string, unknown>
+  pre_execution_policy?: {
+    reason?: string
+    history_source?: 'db_history' | 'db_profile_rules' | null
+    selected_techniques?: string[]
+    best_technique?: string | null
+  }
+  execution_summary?: {
+    attempted_techniques?: string[]
+    attempted_count?: number
+    successful_count?: number
   }
   storage?: {
     success: boolean
     document_id?: string
     error?: string
   }
+}
+
+interface TechniqueRow {
+  technique: string
+  success: boolean
+  accuracy: number
+  completeness: number
+  efficiency: number
+  overall: number
+  error?: string
 }
 
 const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://127.0.0.1:8000').replace(/\/+$/, '')
@@ -63,12 +90,17 @@ const scoreColor = (v: number): string => {
   return 'var(--text)'
 }
 
+const toSafeNumber = (value: unknown): number => {
+  const parsed = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
 export default function Home() {
   const [problem, setProblem] = useState('')
   const [subject, setSubject] = useState('algebra')
   const [difficulty, setDifficulty] = useState('basic')
+  const [runMode, setRunMode] = useState<RunMode>('normal')
   const [difficultyManualOverride, setDifficultyManualOverride] = useState(false)
-  const [showBenchmarkOptions, setShowBenchmarkOptions] = useState(false)
   const [groundTruth, setGroundTruth] = useState('')
   const [lastRunUsedGroundTruth, setLastRunUsedGroundTruth] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -120,6 +152,12 @@ export default function Home() {
     const interval = setInterval(checkHealth, 10000) // Check every 10s
     return () => clearInterval(interval)
   }, [])
+
+  useEffect(() => {
+    if (runMode === 'normal' && validationError === 'Benchmark mode requires an expected answer') {
+      setValidationError('')
+    }
+  }, [runMode, validationError])
 
   const normalizeDetectionText = (text: string): string => {
     const replacements: Record<string, string> = {
@@ -439,6 +477,11 @@ export default function Home() {
       setValidationError('Problem must be at least 10 characters')
       return
     }
+
+    if (runMode === 'benchmark' && !groundTruth.trim()) {
+      setValidationError('Benchmark mode requires an expected answer')
+      return
+    }
     
     setLoading(true)
     setError('')
@@ -448,7 +491,7 @@ export default function Home() {
     setResult(null)
     setStreamingResponse('')
     setStreamingTechnique('')
-    setStreamingStatus('Initializing benchmark...')
+    setStreamingStatus(runMode === 'benchmark' ? 'Initializing benchmark mode...' : 'Initializing normal mode...')
 
     try {
       // Check connection first
@@ -456,7 +499,7 @@ export default function Home() {
         throw new Error('⚠️ System offline: Make sure Ollama is running (ollama serve) and the backend API is started')
       }
 
-      const groundTruthValue = groundTruth.trim()
+      const groundTruthValue = runMode === 'benchmark' ? groundTruth.trim() : ''
       setLastRunUsedGroundTruth(Boolean(groundTruthValue))
 
       const response = await fetch(apiUrl('/benchmark/stream'), {
@@ -468,7 +511,8 @@ export default function Home() {
           problem,
           subject,
           difficulty,
-          speed_profile: 'fast',
+          run_mode: runMode,
+          speed_profile: runMode === 'benchmark' ? 'balanced' : 'fast',
           ...(groundTruthValue ? { ground_truth: groundTruthValue } : {}),
         }),
       })
@@ -574,6 +618,8 @@ export default function Home() {
           metadata: {
             subject,
             difficulty,
+            run_mode: result.run_mode || runMode,
+            has_ground_truth: result.ground_truth_used ?? lastRunUsedGroundTruth,
           },
         }),
       })
@@ -621,7 +667,47 @@ export default function Home() {
   const expandedWasExtended = expandedContinuationRounds > 0
   const expandedStillTruncated = expandedMetrics?.truncated === true
 
-  const isDisabled = loading || !!validationError || problem.length < 10
+  const techniqueRows: TechniqueRow[] = result
+    ? Object.entries(result.all_results || {}).map(([techniqueName, techniqueResult]) => {
+        const scores = techniqueResult?.scores || ({} as Partial<TechniqueResult['scores']>)
+        return {
+          technique: techniqueName,
+          success: techniqueResult?.success ?? false,
+          accuracy: toSafeNumber(scores.accuracy),
+          completeness: toSafeNumber(scores.completeness),
+          efficiency: toSafeNumber(scores.efficiency),
+          overall: toSafeNumber(scores.overall),
+          error: techniqueResult?.error,
+        }
+      })
+    : []
+
+  techniqueRows.sort((a, b) => {
+    if (a.success !== b.success) {
+      return Number(b.success) - Number(a.success)
+    }
+    if (a.overall !== b.overall) {
+      return b.overall - a.overall
+    }
+    return a.technique.localeCompare(b.technique)
+  })
+
+  const activeMode: RunMode = result?.run_mode || runMode
+  const runUsedGroundTruth = result?.ground_truth_used ?? lastRunUsedGroundTruth
+  const modeLabel = activeMode === 'benchmark' ? 'Benchmark mode' : 'Normal mode'
+  const modeHint =
+    activeMode === 'benchmark'
+      ? 'Live comparison of all techniques with required expected answer.'
+      : 'Uses historical preselection after enough data; otherwise runs all techniques.'
+  const attemptedTechniqueCount = result?.execution_summary?.attempted_count ?? techniqueRows.length
+  const successfulTechniqueCount =
+    result?.execution_summary?.successful_count ?? techniqueRows.filter((row) => row.success).length
+
+  const isDisabled =
+    loading ||
+    !!validationError ||
+    problem.length < 10 ||
+    (runMode === 'benchmark' && !groundTruth.trim())
 
   /* Whether we're in "results" mode (sidebar + right panel) */
   const hasStarted = loading || !!result
@@ -694,8 +780,23 @@ export default function Home() {
             style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
           >
             <form onSubmit={handleSubmit}>
-              {/* Top row: Subject + Difficulty */}
-              <div className="grid grid-cols-2 gap-4 mb-4">
+              {/* Top row: Mode + Subject + Difficulty */}
+              <div className="grid grid-cols-3 gap-4 mb-4">
+                <div>
+                  <label htmlFor="mode-landing" className="block text-sm font-medium mb-1.5">
+                    Run Mode
+                  </label>
+                  <select
+                    id="mode-landing"
+                    value={runMode}
+                    onChange={(e) => setRunMode(e.target.value as RunMode)}
+                    className="w-full px-3 py-2 rounded-md text-sm outline-none"
+                    style={{ border: '1px solid var(--border)', color: 'var(--text)', background: 'var(--surface)' }}
+                  >
+                    <option value="normal">Normal mode</option>
+                    <option value="benchmark">Benchmark mode</option>
+                  </select>
+                </div>
                 <div>
                   <label htmlFor="subject-landing" className="flex items-center gap-2 text-sm font-medium mb-1.5">
                     Subject Category
@@ -742,43 +843,28 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Advanced benchmark options */}
-              <div className="mb-4">
-                <button
-                  type="button"
-                  onClick={() => setShowBenchmarkOptions((value) => !value)}
-                  className="text-xs font-mono font-medium hover:underline"
-                  style={{ color: 'var(--blue)' }}
-                >
-                  {showBenchmarkOptions ? 'Hide' : 'Show'} advanced benchmark options
-                </button>
-
-                {showBenchmarkOptions && (
-                  <div
-                    className="mt-2 p-3 rounded-md"
-                    style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}
-                  >
-                    <label htmlFor="ground-truth-landing" className="block text-sm font-medium mb-1.5">
-                      Expected Answer (optional)
-                    </label>
-                    <input
-                      id="ground-truth-landing"
-                      value={groundTruth}
-                      onChange={(e) => setGroundTruth(e.target.value)}
-                      placeholder="e.g., x = 4 or x = 5"
-                      className="w-full px-3 py-2 rounded-md text-sm font-mono outline-none"
-                      style={{
-                        border: '1px solid var(--border)',
-                        color: 'var(--text)',
-                        background: 'var(--surface)',
-                      }}
-                    />
-                    <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
-                      Leave blank for normal user solving. Fill this in for stronger benchmark accuracy scoring.
-                    </p>
-                  </div>
-                )}
-              </div>
+              {runMode === 'benchmark' && (
+                <div className="mb-4 p-3 rounded-md" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                  <label htmlFor="ground-truth-landing" className="block text-sm font-medium mb-1.5">
+                    Expected Answer (required)
+                  </label>
+                  <input
+                    id="ground-truth-landing"
+                    value={groundTruth}
+                    onChange={(e) => setGroundTruth(e.target.value)}
+                    placeholder="e.g., x = 4 or x = 5"
+                    className="w-full px-3 py-2 rounded-md text-sm font-mono outline-none"
+                    style={{
+                      border: `1px solid ${!groundTruth.trim() ? '#ef4444' : 'var(--border)'}`,
+                      color: 'var(--text)',
+                      background: 'var(--surface)',
+                    }}
+                  />
+                  <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                    Benchmark mode enforces ground-truth scoring for thesis-grade comparison.
+                  </p>
+                </div>
+              )}
 
               {/* Textarea */}
               <textarea
@@ -801,7 +887,7 @@ export default function Home() {
               {/* Footer: techniques hint + button */}
               <div className="flex items-center justify-between mt-4">
                 <span className="text-xs font-mono" style={{ color: 'var(--text-subtle)' }}>
-                  Techniques: FEW_SHOT &middot; ZERO_SHOT
+                  {modeLabel}: {modeHint}
                 </span>
                 <button
                   type="submit"
@@ -813,7 +899,7 @@ export default function Home() {
                     cursor: isDisabled ? 'not-allowed' : 'pointer',
                   }}
                 >
-                  Run Benchmark &rarr;
+                  {runMode === 'benchmark' ? 'Run Benchmark' : 'Run Normal Mode'} &rarr;
                 </button>
               </div>
             </form>
@@ -839,6 +925,28 @@ export default function Home() {
             style={{ borderRight: '1px solid var(--border)' }}
           >
             <form onSubmit={handleSubmit} className="space-y-5">
+              {/* Mode */}
+              <div>
+                <label htmlFor="run-mode" className="block text-sm font-medium mb-1.5">
+                  Run Mode
+                </label>
+                <select
+                  id="run-mode"
+                  value={runMode}
+                  onChange={(e) => setRunMode(e.target.value as RunMode)}
+                  disabled={loading}
+                  className="w-full px-3 py-2 rounded-md text-sm outline-none transition disabled:cursor-not-allowed"
+                  style={{
+                    border: '1px solid var(--border)',
+                    color: 'var(--text)',
+                    background: loading ? 'var(--bg)' : 'var(--surface)',
+                  }}
+                >
+                  <option value="normal">Normal mode (smart + fast)</option>
+                  <option value="benchmark">Benchmark mode (thesis)</option>
+                </select>
+              </div>
+
               {/* Subject */}
               <div>
                 <label htmlFor="subject" className="flex items-center gap-2 text-sm font-medium mb-1.5">
@@ -900,46 +1008,30 @@ export default function Home() {
                 </select>
               </div>
 
-              {/* Advanced benchmark options */}
-              <div>
-                <button
-                  type="button"
-                  onClick={() => setShowBenchmarkOptions((value) => !value)}
-                  className="text-xs font-mono font-medium hover:underline"
-                  style={{ color: 'var(--blue)' }}
-                >
-                  {showBenchmarkOptions ? 'Hide' : 'Show'} advanced benchmark options
-                </button>
+              {runMode === 'benchmark' && (
+                <div className="p-3 rounded-md" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                  <label htmlFor="ground-truth" className="block text-sm font-medium mb-1.5">
+                    Expected Answer (required)
+                  </label>
+                  <input
+                    id="ground-truth"
+                    value={groundTruth}
+                    onChange={(e) => setGroundTruth(e.target.value)}
+                    disabled={loading}
+                    placeholder="e.g., x = 4 or x = 5"
+                    className="w-full px-3 py-2 rounded-md text-sm font-mono outline-none transition"
+                    style={{
+                      border: `1px solid ${!groundTruth.trim() ? '#ef4444' : 'var(--border)'}`,
+                      color: 'var(--text)',
+                      background: loading ? 'var(--bg)' : 'var(--surface)',
+                    }}
+                  />
+                  <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                    Required for benchmark mode and thesis-grade scoring.
+                  </p>
+                </div>
+              )}
 
-                {showBenchmarkOptions && (
-                  <div
-                    className="mt-2 p-3 rounded-md"
-                    style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}
-                  >
-                    <label htmlFor="ground-truth" className="block text-sm font-medium mb-1.5">
-                      Expected Answer (optional)
-                    </label>
-                    <input
-                      id="ground-truth"
-                      value={groundTruth}
-                      onChange={(e) => setGroundTruth(e.target.value)}
-                      disabled={loading}
-                      placeholder="e.g., x = 4 or x = 5"
-                      className="w-full px-3 py-2 rounded-md text-sm font-mono outline-none transition"
-                      style={{
-                        border: '1px solid var(--border)',
-                        color: 'var(--text)',
-                        background: loading ? 'var(--bg)' : 'var(--surface)',
-                      }}
-                    />
-                    <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
-                      Leave blank for normal user solving. Fill this in for stronger benchmark accuracy scoring.
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* Problem */}
               <div>
                 <label htmlFor="problem" className="block text-sm font-medium mb-1.5">
                   Math Problem
@@ -977,7 +1069,7 @@ export default function Home() {
                   cursor: isDisabled ? 'not-allowed' : 'pointer',
                 }}
               >
-                {loading ? 'Running Benchmark\u2026' : 'Run Benchmark'}
+                {loading ? 'Running...' : runMode === 'benchmark' ? 'Run Benchmark' : 'Run Normal Mode'}
               </button>
             </form>
 
@@ -1052,11 +1144,25 @@ export default function Home() {
                   <div className="flex items-center gap-3">
                     <h2 className="text-lg font-semibold">Best Technique</h2>
                     <span
+                      className="font-mono text-xs px-2 py-1 rounded"
+                      style={{ color: 'var(--text)', border: '1px solid var(--border)' }}
+                    >
+                      {modeLabel}
+                    </span>
+                    <span
                       className="font-mono text-xs px-2.5 py-1 rounded"
                       style={{ background: 'var(--accent)', color: '#fff' }}
                     >
                       {result.best_technique?.toUpperCase()}
                     </span>
+                    {result.selection_source && (
+                      <span
+                        className="font-mono text-xs px-2 py-1 rounded"
+                        style={{ color: 'var(--text-muted)', border: '1px solid var(--border)' }}
+                      >
+                        source: {result.selection_source}
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <button
@@ -1180,7 +1286,7 @@ export default function Home() {
               >
                 <h2 className="text-lg font-semibold mb-4">Performance Scores</h2>
 
-                {!lastRunUsedGroundTruth && (
+                {!runUsedGroundTruth && (
                   <div
                     className="mb-4 px-3 py-2 rounded-md text-xs"
                     style={{ background: '#fffbeb', border: '1px solid #fde68a', color: 'var(--amber)' }}
@@ -1193,7 +1299,7 @@ export default function Home() {
                   {[
                     { label: 'OVERALL', value: result.best_result?.scores?.overall },
                     {
-                      label: !lastRunUsedGroundTruth ? 'ACCURACY*' : 'ACCURACY',
+                      label: !runUsedGroundTruth ? 'ACCURACY*' : 'ACCURACY',
                       value: result.best_result?.scores?.accuracy,
                     },
                     { label: 'COMPLETENESS', value: result.best_result?.scores?.completeness },
@@ -1220,7 +1326,7 @@ export default function Home() {
                   ))}
                 </div>
 
-                {!lastRunUsedGroundTruth && (
+                {!runUsedGroundTruth && (
                   <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
                     * Heuristic accuracy can be directionally useful, but is less reliable than ground-truth scoring.
                   </p>
@@ -1238,7 +1344,7 @@ export default function Home() {
                 >
                   <h2 className="text-lg font-semibold">Technique Comparison</h2>
                   <span className="font-mono text-xs" style={{ color: 'var(--text-subtle)' }}>
-                    {result.comparison?.length ?? 0} techniques
+                    {attemptedTechniqueCount} techniques - {successfulTechniqueCount} successful
                   </span>
                 </div>
                 <div className="overflow-x-auto">
@@ -1261,7 +1367,7 @@ export default function Home() {
                       </tr>
                     </thead>
                     <tbody>
-                      {result.comparison?.map((tech) => {
+                      {techniqueRows.map((tech) => {
                         const isBest = tech.technique === result.best_technique
                         return (
                           <tr
@@ -1271,21 +1377,29 @@ export default function Home() {
                           >
                             <td className="px-6 py-3 font-medium">
                               {tech.technique?.toUpperCase() ?? 'N/A'}
+                              {!tech.success && (
+                                <span
+                                  className="ml-2 text-[10px] font-mono px-1.5 py-0.5 rounded"
+                                  style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}
+                                >
+                                  failed
+                                </span>
+                              )}
                             </td>
                             <td className="text-center px-4 py-3 font-mono">
-                              {tech.accuracy?.toFixed(3) ?? '0.000'}
+                              {tech.accuracy.toFixed(3)}
                             </td>
                             <td className="text-center px-4 py-3 font-mono">
-                              {tech.completeness?.toFixed(3) ?? '0.000'}
+                              {tech.completeness.toFixed(3)}
                             </td>
                             <td className="text-center px-4 py-3 font-mono">
-                              {tech.efficiency?.toFixed(3) ?? '0.000'}
+                              {tech.efficiency.toFixed(3)}
                             </td>
                             <td
                               className="text-center px-4 py-3 font-mono font-semibold"
-                              style={{ color: scoreColor(tech.overall ?? 0) }}
+                              style={{ color: scoreColor(tech.overall) }}
                             >
-                              {tech.overall?.toFixed(3) ?? '0.000'}
+                              {tech.overall.toFixed(3)}
                             </td>
                             <td className="text-center px-4 py-3">
                               <button
@@ -1413,7 +1527,7 @@ export default function Home() {
                   style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}
                 >
                   <pre className="text-sm font-mono whitespace-pre-wrap leading-relaxed">
-                    {expandedResult.prompt}
+                    {expandedResult.prompt || 'No prompt captured for this technique run.'}
                   </pre>
                 </div>
               </div>
@@ -1431,7 +1545,8 @@ export default function Home() {
                   style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}
                 >
                   <pre className="text-sm font-mono whitespace-pre-wrap leading-relaxed">
-                    {expandedResult.response}
+                    {expandedResult.response || 'No response captured for this technique run.'}
+                    {expandedResult.error ? `\n\nError: ${expandedResult.error}` : ''}
                   </pre>
                 </div>
               </div>

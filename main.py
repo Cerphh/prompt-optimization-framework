@@ -30,6 +30,11 @@ app = FastAPI(
 )
 
 
+RUN_MODE_NORMAL = "normal"
+RUN_MODE_BENCHMARK = "benchmark"
+SUPPORTED_RUN_MODES = {RUN_MODE_NORMAL, RUN_MODE_BENCHMARK}
+
+
 def _get_cors_origins() -> List[str]:
     """Resolve allowed CORS origins from env or sensible local defaults."""
     configured = os.getenv("CORS_ALLOW_ORIGINS", "")
@@ -55,6 +60,20 @@ def _get_env_int(name: str, default: int, min_value: Optional[int] = None) -> in
     if min_value is not None and value < min_value:
         return min_value
     return value
+
+
+def _get_env_bool(name: str, default: bool) -> bool:
+    """Parse boolean environment variables with fallback."""
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+
+    normalized = raw_value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    return default
 
 
 def _get_env_float(
@@ -83,6 +102,22 @@ def _resolve_speed_profile(raw_value: Optional[str]) -> str:
     if normalized in {"balanced", "fast"}:
         return normalized
     return "balanced"
+
+
+def _resolve_run_mode(raw_value: Optional[str]) -> str:
+    """Normalize run mode to supported values."""
+    normalized = (raw_value or RUN_MODE_NORMAL).strip().lower()
+    if normalized in SUPPORTED_RUN_MODES:
+        return normalized
+    return RUN_MODE_NORMAL
+
+
+def _normalize_ground_truth(raw_value: Optional[str]) -> Optional[str]:
+    """Normalize ground truth string and return None when empty."""
+    if raw_value is None:
+        return None
+    normalized = str(raw_value).strip()
+    return normalized or None
 
 
 def _build_fast_pipeline_from_defaults() -> BenchmarkPipeline:
@@ -283,86 +318,140 @@ def _evaluate_selection_confidence(
 def _resolve_pre_execution_techniques(
     *,
     request_pipeline: BenchmarkPipeline,
+    run_mode: str,
     problem: str,
     domain: str,
     difficulty: str,
 ) -> Tuple[Optional[List[str]], Dict[str, Any]]:
-    """Optionally skip the historically weakest technique before execution."""
+    """Resolve whether to run all techniques or preselect from historical data."""
     technique_names = request_pipeline.prompt_generator.get_technique_names()
     details: Dict[str, Any] = {
+        "run_mode": run_mode,
         "enabled": False,
         "reason": "disabled",
         "selected_techniques": technique_names,
+        "best_technique": None,
         "skipped_technique": None,
-        "selection": None,
+        "history_source": None,
+        "profile_selection": None,
+        "domain_selection": None,
         "min_samples_per_technique": None,
         "min_average_gap": None,
+        "require_ground_truth_history": None,
+        "profile_min_similarity": None,
     }
+
+    if run_mode == RUN_MODE_BENCHMARK:
+        details["reason"] = "benchmark_forces_runtime_all_techniques"
+        return None, details
 
     if len(technique_names) < 2:
         details["reason"] = "single_technique"
         return None, details
 
-    enabled = os.getenv("DB_SKIP_LEAST_TECHNIQUE_ENABLED", "true").lower() == "true"
+    enabled = _get_env_bool("NORMAL_MODE_HISTORY_PRESELECTION_ENABLED", True)
     details["enabled"] = enabled
     if not enabled:
         return None, details
 
     min_samples = _get_env_int(
-        "DB_SKIP_LEAST_MIN_SAMPLES_PER_TECHNIQUE",
+        "NORMAL_MODE_MIN_SAMPLES_PER_TECHNIQUE",
         default=15,
         min_value=1,
     )
     min_gap = _get_env_float(
-        "DB_SKIP_LEAST_MIN_AVG_SCORE_GAP",
-        default=0.0,
+        "NORMAL_MODE_MIN_AVG_SCORE_GAP",
+        default=0.03,
         min_value=0.0,
     )
+    profile_min_similarity = _get_env_float(
+        "DB_PROFILE_MIN_SIMILARITY",
+        default=0.35,
+        min_value=0.0,
+        max_value=1.0,
+    )
+    require_ground_truth_history = _get_env_bool("DB_HISTORY_REQUIRE_GROUND_TRUTH", True)
+
     details["min_samples_per_technique"] = min_samples
     details["min_average_gap"] = min_gap
+    details["require_ground_truth_history"] = require_ground_truth_history
+    details["profile_min_similarity"] = profile_min_similarity
+
+    problem_profile = _build_problem_profile(problem=problem, domain=domain, difficulty=difficulty)
+
+    profile_selection = firestore_store.get_best_technique_by_profile(
+        domain=domain,
+        difficulty=difficulty,
+        problem_profile=problem_profile,
+        available_techniques=technique_names,
+        min_similarity=profile_min_similarity,
+        require_ground_truth=require_ground_truth_history,
+    )
+    details["profile_selection"] = profile_selection
+
+    profile_ok, profile_reason = _evaluate_selection_confidence(
+        profile_selection,
+        min_samples=min_samples,
+        min_gap=min_gap,
+    )
+    if profile_ok:
+        best_technique = str(profile_selection.get("best_technique") or "")
+        if best_technique in technique_names:
+            selected_techniques = [best_technique]
+            skipped_candidates = [name for name in technique_names if name != best_technique]
+            details["selected_techniques"] = selected_techniques
+            details["best_technique"] = best_technique
+            details["history_source"] = "db_profile_rules"
+            details["skipped_technique"] = skipped_candidates[0] if len(skipped_candidates) == 1 else None
+            details["reason"] = "preselected_by_profile_history"
+            return selected_techniques, details
 
     selection = firestore_store.get_best_technique_by_domain(
         domain=domain,
         difficulty=difficulty,
         available_techniques=technique_names,
+        require_ground_truth=require_ground_truth_history,
     )
-    details["selection"] = selection
+    details["domain_selection"] = selection
 
     if not isinstance(selection, dict):
         details["reason"] = "invalid_selection_payload"
         return None, details
 
-    can_skip, reason = _evaluate_selection_confidence(
+    can_preselect, reason = _evaluate_selection_confidence(
         selection,
         min_samples=min_samples,
         min_gap=min_gap,
     )
     details["reason"] = reason
-    if not can_skip:
+    if not can_preselect:
         return None, details
 
-    ranking = selection.get("ranking", [])
-    if not isinstance(ranking, list) or len(ranking) < 2:
-        details["reason"] = "insufficient_ranking"
+    best_technique = str(selection.get("best_technique") or "")
+    if not best_technique or best_technique not in technique_names:
+        details["reason"] = "invalid_best_technique"
         return None, details
 
-    weakest = ranking[-1].get("technique") if isinstance(ranking[-1], dict) else None
-    if not weakest or weakest not in technique_names:
-        details["reason"] = "invalid_weakest_technique"
-        return None, details
-
-    selected_techniques = [technique for technique in technique_names if technique != weakest]
-    if not selected_techniques:
-        details["reason"] = "no_techniques_remaining"
-        return None, details
-
+    selected_techniques = [best_technique]
+    skipped_candidates = [name for name in technique_names if name != best_technique]
     details["selected_techniques"] = selected_techniques
-    details["skipped_technique"] = weakest
-    details["reason"] = "skip_weakest_technique"
+    details["best_technique"] = best_technique
+    details["history_source"] = "db_history"
+    details["skipped_technique"] = skipped_candidates[0] if len(skipped_candidates) == 1 else None
+    details["reason"] = "preselected_by_domain_history"
     return selected_techniques, details
 
 
-def _apply_db_based_selection(result: Dict[str, Any], domain: str, difficulty: str) -> Dict[str, Any]:
+def _apply_db_based_selection(
+    result: Dict[str, Any],
+    domain: str,
+    difficulty: str,
+    *,
+    min_samples_override: Optional[int] = None,
+    min_gap_override: Optional[float] = None,
+    profile_min_samples_override: Optional[int] = None,
+    profile_min_gap_override: Optional[float] = None,
+) -> Dict[str, Any]:
     """Apply profile-rule selection first, then domain-average fallback, else runtime greedy."""
     result = _attach_problem_profile(result=result, domain=domain, difficulty=difficulty)
 
@@ -372,17 +461,33 @@ def _apply_db_based_selection(result: Dict[str, Any], domain: str, difficulty: s
         if technique_result.get("success", False)
     ]
 
-    min_samples = _get_env_int("DB_MIN_SAMPLES_PER_TECHNIQUE", default=5, min_value=1)
-    min_gap = _get_env_float("DB_MIN_AVG_SCORE_GAP", default=0.03, min_value=0.0)
-    profile_min_samples = _get_env_int(
-        "DB_PROFILE_MIN_SAMPLES_PER_TECHNIQUE",
-        default=max(2, min_samples),
-        min_value=1,
+    min_samples = (
+        _get_env_int("DB_MIN_SAMPLES_PER_TECHNIQUE", default=5, min_value=1)
+        if min_samples_override is None
+        else max(1, int(min_samples_override))
     )
-    profile_min_gap = _get_env_float(
-        "DB_PROFILE_MIN_AVG_SCORE_GAP",
-        default=max(0.01, min_gap / 2),
-        min_value=0.0,
+    min_gap = (
+        _get_env_float("DB_MIN_AVG_SCORE_GAP", default=0.03, min_value=0.0)
+        if min_gap_override is None
+        else max(0.0, float(min_gap_override))
+    )
+    profile_min_samples = (
+        _get_env_int(
+            "DB_PROFILE_MIN_SAMPLES_PER_TECHNIQUE",
+            default=max(2, min_samples),
+            min_value=1,
+        )
+        if profile_min_samples_override is None
+        else max(1, int(profile_min_samples_override))
+    )
+    profile_min_gap = (
+        _get_env_float(
+            "DB_PROFILE_MIN_AVG_SCORE_GAP",
+            default=max(0.01, min_gap / 2),
+            min_value=0.0,
+        )
+        if profile_min_gap_override is None
+        else max(0.0, float(profile_min_gap_override))
     )
     profile_min_similarity = _get_env_float(
         "DB_PROFILE_MIN_SIMILARITY",
@@ -390,9 +495,10 @@ def _apply_db_based_selection(result: Dict[str, Any], domain: str, difficulty: s
         min_value=0.0,
         max_value=1.0,
     )
+    require_ground_truth_history = _get_env_bool("DB_HISTORY_REQUIRE_GROUND_TRUTH", True)
     exploration_rate = _get_env_float(
         "DB_EXPLORATION_RATE",
-        default=0.15,
+        default=0.0,
         min_value=0.0,
         max_value=1.0,
     )
@@ -405,6 +511,7 @@ def _apply_db_based_selection(result: Dict[str, Any], domain: str, difficulty: s
         problem_profile=problem_profile,
         available_techniques=successful_techniques,
         min_similarity=profile_min_similarity,
+        require_ground_truth=require_ground_truth_history,
     )
 
     if not isinstance(profile_selection, dict):
@@ -459,6 +566,7 @@ def _apply_db_based_selection(result: Dict[str, Any], domain: str, difficulty: s
         domain=domain,
         difficulty=difficulty,
         available_techniques=successful_techniques,
+        require_ground_truth=require_ground_truth_history,
     )
 
     if not isinstance(selection, dict):
@@ -499,6 +607,7 @@ def _apply_db_based_selection(result: Dict[str, Any], domain: str, difficulty: s
                     "profile_min_similarity": profile_min_similarity,
                     "min_samples_per_technique": min_samples,
                     "min_average_gap": min_gap,
+                    "require_ground_truth_history": require_ground_truth_history,
                     "exploration_rate": exploration_rate,
                 },
             }
@@ -516,6 +625,7 @@ def _apply_db_based_selection(result: Dict[str, Any], domain: str, difficulty: s
             "profile_min_similarity": profile_min_similarity,
             "min_samples_per_technique": min_samples,
             "min_average_gap": min_gap,
+            "require_ground_truth_history": require_ground_truth_history,
             "exploration_rate": exploration_rate,
         },
     }
@@ -527,13 +637,73 @@ def _finalize_benchmark_result(
     *,
     domain: str,
     difficulty: str,
+    run_mode: str,
 ) -> Dict[str, Any]:
     """Apply selection strategy and validate winner without persisting."""
-    result = _apply_db_based_selection(
-        result=result,
-        domain=domain,
-        difficulty=difficulty,
-    )
+    result = _attach_problem_profile(result=result, domain=domain, difficulty=difficulty)
+
+    if run_mode == RUN_MODE_BENCHMARK:
+        all_results = result.get("all_results", {}) if isinstance(result, dict) else {}
+        attempted_count = len(all_results) if isinstance(all_results, dict) else 0
+        if attempted_count < 2:
+            raise HTTPException(
+                status_code=500,
+                detail="Benchmark mode requires runtime execution of at least two techniques.",
+            )
+
+        result["selection_source"] = "runtime_scores"
+        result["selection_details"] = {
+            "reason": "benchmark_forces_runtime_all_techniques",
+            "profile_selection": None,
+            "domain_selection": None,
+        }
+    else:
+        normal_min_samples = _get_env_int(
+            "NORMAL_MODE_MIN_SAMPLES_PER_TECHNIQUE",
+            default=15,
+            min_value=1,
+        )
+        normal_min_gap = _get_env_float(
+            "NORMAL_MODE_MIN_AVG_SCORE_GAP",
+            default=0.03,
+            min_value=0.0,
+        )
+        normal_profile_min_samples = _get_env_int(
+            "NORMAL_MODE_PROFILE_MIN_SAMPLES_PER_TECHNIQUE",
+            default=max(2, normal_min_samples),
+            min_value=1,
+        )
+        normal_profile_min_gap = _get_env_float(
+            "NORMAL_MODE_PROFILE_MIN_AVG_SCORE_GAP",
+            default=max(0.01, normal_min_gap / 2),
+            min_value=0.0,
+        )
+
+        result = _apply_db_based_selection(
+            result=result,
+            domain=domain,
+            difficulty=difficulty,
+            min_samples_override=normal_min_samples,
+            min_gap_override=normal_min_gap,
+            profile_min_samples_override=normal_profile_min_samples,
+            profile_min_gap_override=normal_profile_min_gap,
+        )
+
+    all_results = result.get("all_results", {}) if isinstance(result, dict) else {}
+    attempted_techniques = sorted(all_results.keys()) if isinstance(all_results, dict) else []
+    successful_count = 0
+    if isinstance(all_results, dict):
+        successful_count = sum(
+            1 for payload in all_results.values()
+            if isinstance(payload, dict) and payload.get("success", False)
+        )
+
+    result["run_mode"] = run_mode
+    result["execution_summary"] = {
+        "attempted_techniques": attempted_techniques,
+        "attempted_count": len(attempted_techniques),
+        "successful_count": successful_count,
+    }
 
     best_result = result.get("best_result", {})
     if not best_result.get("success", False):
@@ -551,6 +721,7 @@ class BenchmarkRequest(BaseModel):
     ground_truth: Optional[str] = None
     subject: Optional[str] = "algebra"  # algebra, counting-probability, or pre-calculus
     difficulty: Optional[str] = "basic"  # basic, intermediate, advanced
+    run_mode: Optional[str] = RUN_MODE_NORMAL  # normal or benchmark
     speed_profile: Optional[str] = "balanced"  # balanced, fast
 
 
@@ -618,11 +789,25 @@ async def run_benchmark(request: BenchmarkRequest):
     Returns comparative results and optimal technique selection.
     """
     try:
+        run_mode = _resolve_run_mode(request.run_mode)
+        ground_truth = _normalize_ground_truth(request.ground_truth)
+        if run_mode == RUN_MODE_BENCHMARK and not ground_truth:
+            raise HTTPException(
+                status_code=400,
+                detail="Benchmark mode requires a non-empty ground_truth value.",
+            )
+        if run_mode == RUN_MODE_NORMAL:
+            ground_truth = None
+
         speed_profile = _resolve_speed_profile(request.speed_profile)
+        if run_mode == RUN_MODE_BENCHMARK:
+            # Benchmark mode prioritizes reproducibility over speed shortcuts.
+            speed_profile = "balanced"
         request_pipeline = pipeline if speed_profile == "balanced" else _build_fast_pipeline_from_defaults()
 
         techniques_to_run, pre_execution_policy = _resolve_pre_execution_techniques(
             request_pipeline=request_pipeline,
+            run_mode=run_mode,
             problem=request.problem,
             domain=request.subject or "general",
             difficulty=request.difficulty or "basic",
@@ -630,7 +815,7 @@ async def run_benchmark(request: BenchmarkRequest):
 
         benchmark_kwargs: Dict[str, Any] = {
             "problem": request.problem,
-            "ground_truth": request.ground_truth,
+            "ground_truth": ground_truth,
             "subject": request.subject,
         }
         if techniques_to_run:
@@ -642,7 +827,9 @@ async def run_benchmark(request: BenchmarkRequest):
             result=result,
             domain=request.subject or "general",
             difficulty=request.difficulty or "basic",
+            run_mode=run_mode,
         )
+        result["ground_truth_used"] = bool(ground_truth)
         result["pre_execution_policy"] = pre_execution_policy
         
         return result
@@ -663,10 +850,23 @@ async def run_benchmark_stream(request: BenchmarkRequest):
     - complete
     - error
     """
+    run_mode = _resolve_run_mode(request.run_mode)
+    ground_truth = _normalize_ground_truth(request.ground_truth)
+    if run_mode == RUN_MODE_BENCHMARK and not ground_truth:
+        raise HTTPException(
+            status_code=400,
+            detail="Benchmark mode requires a non-empty ground_truth value.",
+        )
+    if run_mode == RUN_MODE_NORMAL:
+        ground_truth = None
+
     speed_profile = _resolve_speed_profile(request.speed_profile)
+    if run_mode == RUN_MODE_BENCHMARK:
+        speed_profile = "balanced"
     request_pipeline = pipeline if speed_profile == "balanced" else _build_fast_pipeline_from_defaults()
     techniques_to_run, pre_execution_policy = _resolve_pre_execution_techniques(
         request_pipeline=request_pipeline,
+        run_mode=run_mode,
         problem=request.problem,
         domain=request.subject or "general",
         difficulty=request.difficulty or "basic",
@@ -676,7 +876,7 @@ async def run_benchmark_stream(request: BenchmarkRequest):
         try:
             stream_kwargs: Dict[str, Any] = {
                 "problem": request.problem,
-                "ground_truth": request.ground_truth,
+                "ground_truth": ground_truth,
                 "subject": request.subject,
             }
             if techniques_to_run:
@@ -689,7 +889,9 @@ async def run_benchmark_stream(request: BenchmarkRequest):
                         result=result,
                         domain=request.subject or "general",
                         difficulty=request.difficulty or "basic",
+                        run_mode=run_mode,
                     )
+                    result["ground_truth_used"] = bool(ground_truth)
                     result["pre_execution_policy"] = pre_execution_policy
                     event["result"] = result
                 elif event.get("type") == "error":
@@ -811,6 +1013,7 @@ async def benchmark_dataset_problem(problem_id: int):
     try:
         techniques_to_run, pre_execution_policy = _resolve_pre_execution_techniques(
             request_pipeline=pipeline,
+            run_mode=RUN_MODE_BENCHMARK,
             problem=problem_data["problem"],
             domain=problem_data.get("category", "general"),
             difficulty="basic",
@@ -829,7 +1032,9 @@ async def benchmark_dataset_problem(problem_id: int):
             result=result,
             domain=problem_data.get("category", "general"),
             difficulty="basic",
+            run_mode=RUN_MODE_BENCHMARK,
         )
+        result["ground_truth_used"] = True
         result["pre_execution_policy"] = pre_execution_policy
         
         return result
@@ -852,6 +1057,12 @@ async def save_result(request: SaveResultRequest):
             domain=str(domain),
             difficulty=str(difficulty),
         )
+
+        run_mode = _resolve_run_mode(metadata.get("run_mode") or benchmark_result.get("run_mode"))
+        has_ground_truth = bool(_normalize_ground_truth(benchmark_result.get("ground_truth")))
+
+        metadata["run_mode"] = run_mode
+        metadata["has_ground_truth"] = has_ground_truth
         metadata["problem_profile"] = benchmark_result.get("problem_profile")
 
         storage = firestore_store.save_benchmark_result(

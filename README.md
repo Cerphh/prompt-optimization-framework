@@ -178,6 +178,34 @@ Notes:
 - `MODEL_VERIFIER_RETRY_ENABLED` runs a lightweight verification pass and retries once when the answer is weak.
 - Keep `MODEL_TEMPERATURE=0` for deterministic math outputs.
 
+### 3.3 Dual Run Modes (Thesis + Production)
+
+The API supports two execution modes through `run_mode`:
+
+- `benchmark`: thesis/validation mode
+   - Requires `ground_truth`
+   - Runs all techniques live for direct comparison
+   - Uses balanced settings for reproducibility
+- `normal`: user/production mode
+   - Ignores `ground_truth`
+   - Uses historical preselection when confidence gates are met
+   - Falls back to live runtime comparison when history is insufficient
+
+Normal mode history gates (defaults):
+
+```bash
+export NORMAL_MODE_HISTORY_PRESELECTION_ENABLED=true
+export NORMAL_MODE_MIN_SAMPLES_PER_TECHNIQUE=15
+export NORMAL_MODE_MIN_AVG_SCORE_GAP=0.03
+export NORMAL_MODE_PROFILE_MIN_SAMPLES_PER_TECHNIQUE=15
+export NORMAL_MODE_PROFILE_MIN_AVG_SCORE_GAP=0.015
+export DB_HISTORY_REQUIRE_GROUND_TRUTH=true
+```
+
+Notes:
+- `DB_HISTORY_REQUIRE_GROUND_TRUTH=true` keeps normal-mode routing tied to benchmark-grade history.
+- Set `DB_HISTORY_ALLOW_UNKNOWN_QUALITY=true` only when migrating legacy records that do not have quality metadata.
+
 ### 4. Install Ollama & Model
 
 ```bash
@@ -213,7 +241,7 @@ uvicorn main:app --reload
 
 Visit: http://127.0.0.1:8000/docs
 
-Benchmark responses from `/benchmark`, `/benchmark/dataset/{problem_id}`, and the final `complete` event from `/benchmark/stream` include a `storage` object with Firestore write status and document ID (when available). If Firestore is disabled or unavailable, the same object includes failure details.
+Benchmark responses do not include `storage` automatically. Persist results explicitly through `POST /results/save` (or frontend `Save to DB`) to keep evaluation and persistence decoupled.
 
 ### Programmatic Usage
 
@@ -248,8 +276,10 @@ for comp in result['comparison']:
 
 ### Benchmarking
 
-- `POST /benchmark` - Run comprehensive benchmark on a problem
+- `POST /benchmark` - Run benchmark/normal execution on a problem (`run_mode=benchmark|normal`)
 - `POST /benchmark/dataset/{problem_id}` - Benchmark a dataset problem
+- `POST /benchmark/stream` - Stream benchmark/normal execution events
+- `POST /results/save` - Persist a result to Firestore
 
 ### Dataset Management
 

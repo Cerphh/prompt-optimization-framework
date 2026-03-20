@@ -198,11 +198,36 @@ class FirestoreStore:
             raw_profile = benchmark_result.get("problem_profile")
         normalized_profile = self._normalize_problem_profile(raw_profile)
 
+        run_mode_raw = metadata.get("run_mode") or benchmark_result.get("run_mode") or "normal"
+        run_mode = self._normalize_key(run_mode_raw, default="normal")
+
+        has_ground_truth: Optional[bool] = None
+        raw_ground_truth_flag = metadata.get("has_ground_truth")
+        if isinstance(raw_ground_truth_flag, bool):
+            has_ground_truth = raw_ground_truth_flag
+        elif isinstance(raw_ground_truth_flag, (int, float)):
+            has_ground_truth = bool(raw_ground_truth_flag)
+        elif isinstance(raw_ground_truth_flag, str):
+            normalized_flag = raw_ground_truth_flag.strip().lower()
+            if normalized_flag in {"1", "true", "yes", "on"}:
+                has_ground_truth = True
+            elif normalized_flag in {"0", "false", "no", "off"}:
+                has_ground_truth = False
+
+        if has_ground_truth is None:
+            ground_truth_value = metadata.get("ground_truth", benchmark_result.get("ground_truth"))
+            has_ground_truth = bool(str(ground_truth_value).strip()) if ground_truth_value is not None else False
+
+        evaluation_quality = "ground_truth" if has_ground_truth else "no_ground_truth"
+
         document = {
             "result_id": datetime.now(timezone.utc).isoformat(),
             "source": source,
             "domain": domain,
             "difficulty": difficulty,
+            "run_mode": run_mode,
+            "has_ground_truth": has_ground_truth,
+            "evaluation_quality": evaluation_quality,
             "problem": problem_text,
             "prompt_used": best_result.get("prompt"),
             "model_response": best_result.get("response"),
@@ -238,6 +263,35 @@ class FirestoreStore:
             entries.append(data)
 
         return entries
+
+    @staticmethod
+    def _bool_from_value(value: Any) -> Optional[bool]:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return bool(value)
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"1", "true", "yes", "on"}:
+                return True
+            if normalized in {"0", "false", "no", "off"}:
+                return False
+        return None
+
+    def _entry_has_ground_truth(self, entry: Dict[str, Any], data: Dict[str, Any]) -> Optional[bool]:
+        for payload in (entry, data):
+            parsed = self._bool_from_value((payload or {}).get("has_ground_truth"))
+            if parsed is not None:
+                return parsed
+
+        for payload in (entry, data):
+            quality = str((payload or {}).get("evaluation_quality", "") or "").strip().lower()
+            if quality == "ground_truth":
+                return True
+            if quality in {"no_ground_truth", "heuristic"}:
+                return False
+
+        return None
 
     def _normalize_profile_labels(self, value: Any) -> List[str]:
         if value is None:
@@ -366,6 +420,7 @@ class FirestoreStore:
         domain: str,
         difficulty: str = "basic",
         available_techniques: Optional[List[str]] = None,
+        require_ground_truth: bool = False,
     ) -> Dict[str, Any]:
         """Get best technique for a domain based on historical Firestore results."""
         if not self.enabled:
@@ -386,6 +441,7 @@ class FirestoreStore:
             totals: Dict[str, float] = {}
             counts: Dict[str, int] = {}
             allowed = set(available_techniques or [])
+            allow_unknown_quality = os.getenv("DB_HISTORY_ALLOW_UNKNOWN_QUALITY", "false").strip().lower() == "true"
             normalized_domain = self._normalize_key(domain, default="general")
             normalized_difficulty = self._normalize_key(difficulty, default="basic")
 
@@ -397,6 +453,13 @@ class FirestoreStore:
             for doc in query.stream():
                 data = doc.to_dict() or {}
                 for entry in self._extract_result_entries(doc.reference, data):
+                    if require_ground_truth:
+                        has_ground_truth = self._entry_has_ground_truth(entry, data)
+                        if has_ground_truth is False:
+                            continue
+                        if has_ground_truth is None and not allow_unknown_quality:
+                            continue
+
                     comparisons = entry.get("technique_comparison", [])
                     if not isinstance(comparisons, list):
                         continue
@@ -443,6 +506,7 @@ class FirestoreStore:
                 "success": True,
                 "domain": normalized_domain,
                 "difficulty": normalized_difficulty,
+                "require_ground_truth": require_ground_truth,
                 "best_technique": best["technique"],
                 "ranking": ranking,
             }
@@ -460,6 +524,7 @@ class FirestoreStore:
         problem_profile: Optional[Dict[str, Any]],
         available_techniques: Optional[List[str]] = None,
         min_similarity: float = 0.35,
+        require_ground_truth: bool = False,
     ) -> Dict[str, Any]:
         """Get best technique using profile-level IF-THEN matching over historical results."""
         if not self.enabled:
@@ -493,6 +558,7 @@ class FirestoreStore:
             totals: Dict[str, float] = {}
             counts: Dict[str, int] = {}
             allowed = set(available_techniques or [])
+            allow_unknown_quality = os.getenv("DB_HISTORY_ALLOW_UNKNOWN_QUALITY", "false").strip().lower() == "true"
             normalized_domain = self._normalize_key(domain, default="general")
             normalized_difficulty = self._normalize_key(difficulty, default="basic")
 
@@ -508,6 +574,13 @@ class FirestoreStore:
             for doc in query.stream():
                 data = doc.to_dict() or {}
                 for entry in self._extract_result_entries(doc.reference, data):
+                    if require_ground_truth:
+                        has_ground_truth = self._entry_has_ground_truth(entry, data)
+                        if has_ground_truth is False:
+                            continue
+                        if has_ground_truth is None and not allow_unknown_quality:
+                            continue
+
                     historical_profile = self._normalize_problem_profile(
                         entry.get("problem_profile") or data.get("problem_profile")
                     )
@@ -572,6 +645,7 @@ class FirestoreStore:
                 "success": True,
                 "domain": normalized_domain,
                 "difficulty": normalized_difficulty,
+                "require_ground_truth": require_ground_truth,
                 "best_technique": best["technique"],
                 "ranking": ranking,
                 "problem_profile": normalized_profile,
