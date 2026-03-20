@@ -109,7 +109,14 @@ class AccuracyScorer:
         # Explicit answer lines have highest confidence.
         answer_pattern = r'(?im)^\s*(?:final\s+answer|answer|result|solution)\s*[:\-=]\s*([^\n]+)'
         matches = re.findall(answer_pattern, response, re.IGNORECASE)
-        candidates.extend(match.strip() for match in matches if str(match).strip())
+        for match in matches:
+            value = str(match).strip()
+            if not value:
+                continue
+            candidates.append(value)
+            inline_expression = self._extract_inline_math_candidate(value)
+            if inline_expression:
+                candidates.append(inline_expression)
 
         lines = [line.strip() for line in response.split('\n') if line.strip()]
         if lines:
@@ -119,26 +126,74 @@ class AccuracyScorer:
                 for previous_line in reversed(lines[:-1]):
                     if self._looks_like_answer_candidate(previous_line):
                         candidates.append(previous_line)
+                        inline_expression = self._extract_inline_math_candidate(previous_line)
+                        if inline_expression:
+                            candidates.append(inline_expression)
                         break
 
             candidates.append(lines[-1])
+            inline_expression = self._extract_inline_math_candidate(lines[-1])
+            if inline_expression:
+                candidates.append(inline_expression)
 
             # Include a penultimate line if it looks like a concluding statement.
             if len(lines) >= 2 and re.search(r'(?i)\b(therefore|thus|hence|so|final)\b', lines[-2]):
                 candidates.append(lines[-2])
+                inline_expression = self._extract_inline_math_candidate(lines[-2])
+                if inline_expression:
+                    candidates.append(inline_expression)
 
         return self._unique_preserve_order(candidates)
 
     def _has_explicit_answer_signal(self, response: str) -> bool:
         """Determine whether response provides an explicit final-answer target."""
-        if re.search(r'(?im)^\s*(?:final\s+answer|answer|result|solution)\s*[:\-=]', response):
-            return True
+        return bool(
+            re.search(
+                r'(?i)\b(?:final\s+answer|answer|result|solution)\s*[:\-=]',
+                response,
+            )
+        )
 
-        lines = [line.strip() for line in response.split('\n') if line.strip()]
-        if not lines:
+    def _extract_inline_math_candidate(self, text: str) -> Optional[str]:
+        """Extract a likely math expression from narrative text."""
+        value = str(text or "").strip()
+        if not value:
+            return None
+
+        value = value.rstrip('.;,')
+
+        if ':' in value:
+            right = value.rsplit(':', 1)[-1].strip().rstrip('.;,')
+            if self._looks_math_like(right):
+                return right
+
+        lead_in_match = re.search(
+            r'(?i)\b(?:is|equals|becomes|gives)\s*[:=]\s*([^\n]+)$',
+            value,
+        )
+        if lead_in_match:
+            tail = lead_in_match.group(1).strip().rstrip('.;,')
+            if self._looks_math_like(tail):
+                return tail
+
+        return None
+
+    def _looks_math_like(self, text: str) -> bool:
+        """Heuristic check for whether text resembles math content."""
+        value = str(text or "").strip()
+        if not value:
             return False
 
-        return self._looks_like_answer_candidate(lines[-1])
+        has_digit = bool(re.search(r'\d', value))
+        has_variable = bool(re.search(r'[A-Za-z]', value))
+        has_operator = bool(re.search(r'[+\-*/^=()]', value))
+
+        if has_digit and (has_operator or has_variable):
+            return True
+        if has_variable and has_operator:
+            return True
+
+        return bool(re.fullmatch(r'[-+]?\d+(?:\.\d+)?(?:\s*/\s*[-+]?\d+(?:\.\d+)?)?', value))
 
     def _is_blank_explicit_answer_line(self, line: str) -> bool:
         """Check whether a line is an explicit answer label with empty payload."""
@@ -282,6 +337,10 @@ class AccuracyScorer:
             value,
         ).strip()
 
+        inline_expression = self._extract_inline_math_candidate(value)
+        if inline_expression:
+            value = inline_expression
+
         if '=' in value:
             value = value.split('=')[-1].strip()
 
@@ -380,16 +439,28 @@ class AccuracyScorer:
     
     def _clean_for_sympy(self, text: str) -> str:
         """Clean text for SymPy parsing."""
-        # Remove common words
-        text = re.sub(r'\b(is|equals|the|answer)\b', '', text, flags=re.IGNORECASE)
-        # Remove extra whitespace
-        text = ' '.join(text.split())
-        # Extract mathematical expression
-        # Look for numbers, operators, and parentheses
-        match = re.search(r'[-+*/().\d\s^x]+', text)
-        if match:
-            return match.group(0).strip()
-        return text.strip()
+        cleaned = self._normalize_answer_text(text)
+
+        inline_expression = self._extract_inline_math_candidate(cleaned)
+        if inline_expression:
+            cleaned = inline_expression
+
+        cleaned = self._normalize_math_text(cleaned)
+        cleaned = cleaned.replace('^', '**')
+
+        # Normalize implicit multiplication: 2x, x(, )x, and mn -> 2*x, x*(, )*x, m*n
+        cleaned = re.sub(r'(?<=\d)\s*(?=[A-Za-z(])', '*', cleaned)
+        cleaned = re.sub(r'(?<=[A-Za-z)])\s*(?=\d|\()', '*', cleaned)
+        cleaned = re.sub(r'(?<=[A-Za-z])\s*(?=[A-Za-z])', '*', cleaned)
+
+        # Keep only chars relevant to symbolic parsing.
+        cleaned = re.sub(r'[^A-Za-z0-9+\-*/()._=\s*]', ' ', cleaned)
+
+        if '=' in cleaned:
+            cleaned = cleaned.split('=')[-1]
+
+        cleaned = ' '.join(cleaned.split())
+        return cleaned.strip()
     
     def _partial_match(self, candidate: str, expected: str) -> bool:
         """Check for partial matches (substring containment)."""

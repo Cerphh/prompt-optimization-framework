@@ -7,9 +7,11 @@ type RunMode = 'normal' | 'benchmark'
 interface Technique {
   technique: string
   accuracy: number
-  completeness: number
+  consistency: number | null
   efficiency: number
   overall: number
+  consistency_is_provisional?: boolean
+  consistency_runs_used?: number
 }
 
 interface TechniqueResult {
@@ -30,14 +32,20 @@ interface TechniqueResult {
   }
   scores: {
     accuracy: number
-    completeness: number
+    consistency: number | null
     efficiency: number
     overall: number
+    consistency_is_provisional?: boolean
+    consistency_runs_used?: number
+    consistency_matching_runs?: number | null
+    overall_is_provisional?: boolean
+    overall_note?: string
   }
 }
 
 interface BenchmarkResult {
   problem: string
+  runs_per_technique?: number
   best_technique: string
   best_result: TechniqueResult
   all_results: Record<string, TechniqueResult>
@@ -72,13 +80,19 @@ interface TechniqueRow {
   technique: string
   success: boolean
   accuracy: number
-  completeness: number
+  consistency: number
+  consistencyAvailable: boolean
+  consistencyRunsUsed: number
+  consistencyIsProvisional: boolean
   efficiency: number
   overall: number
+  overallIsProvisional: boolean
   error?: string
 }
 
 const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://127.0.0.1:8000').replace(/\/+$/, '')
+const INITIAL_RUNS_PER_TECHNIQUE = 1
+const CONSISTENCY_TEST_RUNS_PER_TECHNIQUE = 3
 
 const apiUrl = (path: string): string => `${API_BASE_URL}${path}`
 
@@ -469,9 +483,10 @@ export default function Home() {
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
+  const runBenchmarkFlow = async (
+    runsPerTechnique: number,
+    mode: 'initial' | 'consistency'
+  ) => {
     // Validate before submitting
     if (problem.length < 10) {
       setValidationError('Problem must be at least 10 characters')
@@ -482,16 +497,23 @@ export default function Home() {
       setValidationError('Benchmark mode requires an expected answer')
       return
     }
-    
+
     setLoading(true)
     setError('')
     setSaveStatus('')
     setDidSaveToDb(false)
     setDidExportJson(false)
     setResult(null)
+    setExpandedTechnique(null)
     setStreamingResponse('')
     setStreamingTechnique('')
-    setStreamingStatus(runMode === 'benchmark' ? 'Initializing benchmark mode...' : 'Initializing normal mode...')
+    setStreamingStatus(
+      mode === 'consistency'
+        ? `Running consistency test (${runsPerTechnique} runs per technique)...`
+        : runMode === 'benchmark'
+        ? 'Initializing benchmark mode (single-run scoring)...'
+        : 'Initializing normal mode (single-run scoring)...'
+    )
 
     try {
       // Check connection first
@@ -513,6 +535,7 @@ export default function Home() {
           difficulty,
           run_mode: runMode,
           speed_profile: runMode === 'benchmark' ? 'balanced' : 'fast',
+          runs_per_technique: runsPerTechnique,
           ...(groundTruthValue ? { ground_truth: groundTruthValue } : {}),
         }),
       })
@@ -520,7 +543,7 @@ export default function Home() {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
         const detail = errorData.detail || 'Unknown error'
-        
+
         if (response.status === 500) {
           throw new Error(`🔴 Server Error: ${detail}`)
         } else if (response.status === 404) {
@@ -588,7 +611,11 @@ export default function Home() {
       }
 
       setResult(finalResult)
-      setSaveStatus('Not saved yet. Click Save to DB to save this result.')
+      if (mode === 'consistency') {
+        setSaveStatus('Consistency test complete. Overall score now includes consistency.')
+      } else {
+        setSaveStatus('Not saved yet. Click Save to DB to save this result.')
+      }
     } catch (err) {
       if (err instanceof TypeError && err.message.includes('fetch')) {
         setError('🔴 Cannot connect to API. Make sure backend is running on port 8000')
@@ -598,6 +625,15 @@ export default function Home() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    await runBenchmarkFlow(INITIAL_RUNS_PER_TECHNIQUE, 'initial')
+  }
+
+  const handleRunConsistencyTest = async () => {
+    await runBenchmarkFlow(CONSISTENCY_TEST_RUNS_PER_TECHNIQUE, 'consistency')
   }
 
   const handleSaveToDb = async () => {
@@ -674,9 +710,13 @@ export default function Home() {
           technique: techniqueName,
           success: techniqueResult?.success ?? false,
           accuracy: toSafeNumber(scores.accuracy),
-          completeness: toSafeNumber(scores.completeness),
+          consistency: toSafeNumber(scores.consistency),
+          consistencyAvailable: scores.consistency !== null && scores.consistency !== undefined,
+          consistencyRunsUsed: toSafeNumber(scores.consistency_runs_used),
+          consistencyIsProvisional: Boolean(scores.consistency_is_provisional),
           efficiency: toSafeNumber(scores.efficiency),
           overall: toSafeNumber(scores.overall),
+          overallIsProvisional: Boolean(scores.overall_is_provisional),
           error: techniqueResult?.error,
         }
       })
@@ -708,6 +748,15 @@ export default function Home() {
     !!validationError ||
     problem.length < 10 ||
     (runMode === 'benchmark' && !groundTruth.trim())
+
+  const canRunConsistencyTest =
+    !loading &&
+    !validationError &&
+    problem.length >= 10 &&
+    (runMode !== 'benchmark' || !!groundTruth.trim())
+
+  const bestConsistencyIsProvisional =
+    result?.best_result?.scores?.consistency_is_provisional === true
 
   /* Whether we're in "results" mode (sidebar + right panel) */
   const hasStarted = loading || !!result
@@ -1069,8 +1118,33 @@ export default function Home() {
                   cursor: isDisabled ? 'not-allowed' : 'pointer',
                 }}
               >
-                {loading ? 'Running...' : runMode === 'benchmark' ? 'Run Benchmark' : 'Run Normal Mode'}
+                {loading ? 'Running...' : runMode === 'benchmark' ? 'Run Benchmark (1 Run)' : 'Run Normal Mode (1 Run)'}
               </button>
+
+              {result && (
+                <button
+                  type="button"
+                  onClick={handleRunConsistencyTest}
+                  disabled={!canRunConsistencyTest}
+                  className="w-full py-2.5 rounded-md text-sm font-medium transition-colors"
+                  style={{
+                    border: `1px solid ${canRunConsistencyTest ? 'var(--blue)' : 'var(--border-strong)'}`,
+                    color: canRunConsistencyTest ? 'var(--blue)' : 'var(--text-muted)',
+                    background: canRunConsistencyTest ? 'var(--surface)' : 'var(--bg)',
+                    cursor: canRunConsistencyTest ? 'pointer' : 'not-allowed',
+                  }}
+                >
+                  {bestConsistencyIsProvisional
+                    ? `Run Consistency Test (${CONSISTENCY_TEST_RUNS_PER_TECHNIQUE} Runs)`
+                    : `Re-run Consistency Test (${CONSISTENCY_TEST_RUNS_PER_TECHNIQUE} Runs)`}
+                </button>
+              )}
+
+              {result && bestConsistencyIsProvisional && (
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  First pass uses single-run scoring (accuracy + efficiency). Run the consistency test to compute the full overall score.
+                </p>
+              )}
             </form>
 
             {error && (
@@ -1302,7 +1376,12 @@ export default function Home() {
                       label: !runUsedGroundTruth ? 'ACCURACY*' : 'ACCURACY',
                       value: result.best_result?.scores?.accuracy,
                     },
-                    { label: 'COMPLETENESS', value: result.best_result?.scores?.completeness },
+                    {
+                      label: result.best_result?.scores?.consistency_is_provisional
+                        ? 'CONSISTENCY*'
+                        : 'CONSISTENCY',
+                      value: result.best_result?.scores?.consistency,
+                    },
                     { label: 'EFFICIENCY', value: result.best_result?.scores?.efficiency },
                   ].map((s) => (
                     <div
@@ -1320,7 +1399,7 @@ export default function Home() {
                         className="text-3xl font-mono font-light"
                         style={{ color: scoreColor(s.value ?? 0) }}
                       >
-                        {s.value?.toFixed(3) ?? '0.000'}
+                        {s.value === null || s.value === undefined ? 'PROV' : s.value.toFixed(3)}
                       </p>
                     </div>
                   ))}
@@ -1351,7 +1430,7 @@ export default function Home() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                        {['Technique', 'Accuracy', 'Completeness', 'Efficiency', 'Overall', 'Details'].map(
+                        {['Technique', 'Accuracy', 'Consistency', 'Efficiency', 'Overall', 'Details'].map(
                           (col, i) => (
                             <th
                               key={col}
@@ -1390,7 +1469,7 @@ export default function Home() {
                               {tech.accuracy.toFixed(3)}
                             </td>
                             <td className="text-center px-4 py-3 font-mono">
-                              {tech.completeness.toFixed(3)}
+                              {tech.consistencyAvailable ? tech.consistency.toFixed(3) : 'PROV'}
                             </td>
                             <td className="text-center px-4 py-3 font-mono">
                               {tech.efficiency.toFixed(3)}
@@ -1400,6 +1479,7 @@ export default function Home() {
                               style={{ color: scoreColor(tech.overall) }}
                             >
                               {tech.overall.toFixed(3)}
+                              {tech.overallIsProvisional ? '*' : ''}
                             </td>
                             <td className="text-center px-4 py-3">
                               <button
@@ -1489,7 +1569,12 @@ export default function Home() {
                   {[
                     { label: 'OVERALL', value: expandedResult.scores?.overall },
                     { label: 'ACCURACY', value: expandedResult.scores?.accuracy },
-                    { label: 'COMPLETENESS', value: expandedResult.scores?.completeness },
+                    {
+                      label: expandedResult.scores?.consistency_is_provisional
+                        ? 'CONSISTENCY*'
+                        : 'CONSISTENCY',
+                      value: expandedResult.scores?.consistency,
+                    },
                     { label: 'EFFICIENCY', value: expandedResult.scores?.efficiency },
                   ].map((s) => (
                     <div
@@ -1507,7 +1592,7 @@ export default function Home() {
                         className="text-2xl font-mono font-light"
                         style={{ color: scoreColor(s.value ?? 0) }}
                       >
-                        {s.value?.toFixed(3) ?? '0.000'}
+                        {s.value === null || s.value === undefined ? 'PROV' : s.value.toFixed(3)}
                       </p>
                     </div>
                   ))}

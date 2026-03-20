@@ -16,9 +16,10 @@ print()
 # Initialize
 pipeline = BenchmarkPipeline(
     model_name=os.getenv("MODEL_NAME", "llama3"),
-    accuracy_weight=0.5,
-    completeness_weight=0.3,
-    efficiency_weight=0.2
+    accuracy_weight=1.0,
+    consistency_weight=1.0,
+    efficiency_weight=1.0,
+    runs_per_technique=3,
 )
 
 # Check connection
@@ -30,7 +31,7 @@ if not model_ready:
 
 print("✓ Pipeline ready")
 print(f"  Metric weights: Accuracy={pipeline.weights['accuracy']:.2f}, "
-      f"Completeness={pipeline.weights['completeness']:.2f}, "
+    f"Consistency={pipeline.weights['consistency']:.2f}, "
       f"Efficiency={pipeline.weights['efficiency']:.2f}")
 print()
 
@@ -140,15 +141,16 @@ print("-" * 80)
 
 # Aggregate metrics for each technique
 technique_metrics = {
-    "zero_shot": {"accuracy": [], "completeness": [], "efficiency": [], "overall": []},
-    "few_shot": {"accuracy": [], "completeness": [], "efficiency": [], "overall": []}
+    "zero_shot": {"accuracy": [], "consistency": [], "efficiency": [], "overall": []},
+    "few_shot": {"accuracy": [], "consistency": [], "efficiency": [], "overall": []}
 }
 
 for result in all_results:
     for comp in result["comparison"]:
         tech = comp["technique"]
         technique_metrics[tech]["accuracy"].append(comp["accuracy"])
-        technique_metrics[tech]["completeness"].append(comp["completeness"])
+        if comp["consistency"] is not None:
+            technique_metrics[tech]["consistency"].append(comp["consistency"])
         technique_metrics[tech]["efficiency"].append(comp["efficiency"])
         technique_metrics[tech]["overall"].append(comp["overall"])
 
@@ -156,7 +158,7 @@ print(f"{'Technique':<15} {'Metric':<15} {'Mean':<8} {'Std':<8} {'Min':<8} {'Max
 print("-" * 80)
 
 for technique in ["zero_shot", "few_shot"]:
-    for metric in ["accuracy", "completeness", "efficiency", "overall"]:
+    for metric in ["accuracy", "consistency", "efficiency", "overall"]:
         values = technique_metrics[technique][metric]
         if values:
             mean = sum(values) / len(values)

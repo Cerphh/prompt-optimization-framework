@@ -462,15 +462,12 @@ class PromptGenerator:
         _ = subject
         normalized_problem = self._normalize_problem_text(problem)
         return (
-            "Solve the following math problem correctly. "
-            "Focus on the requested quantity and work directly with the given information. "
-            "Use valid mathematical operations and combine quantities logically. "
-            "Show all necessary intermediate steps and label the final answer clearly. "
-            "Verify that your final result satisfies all given conditions. "
-            "Provide only the final answer after the intermediate steps.\n\n"
-            f"Q: {normalized_problem}\n"
-            "A:"
-        )
+        "Carefully solve the following math problem in your mind, ensuring the answer is correct. "
+        "Do NOT show any steps, explanations, or reasoning. "
+        "Provide ONLY the final answer.\n\n"
+        f"Q: {normalized_problem}\n"
+        "A:"
+    )
 
     def _normalize_problem_text(self, problem: str) -> str:
         """Normalize user input to avoid duplicated Q:/A: wrappers in prompts."""
@@ -2005,19 +2002,14 @@ class PromptGenerator:
             )
             for ex in selected_examples
         ])
-
         return (
-        "Solve the following math problems correctly. "
-        "Use the solved examples as guidance for the type of answer and reasoning style expected. "
-        "Focus on the requested quantity and use valid mathematical operations and transformations. "
-        "Work directly with the given information and combine quantities logically. "
-        "Show all necessary intermediate steps and label the final answer clearly. "
-        "Verify that your final result satisfies all given conditions. "
-        "Provide only the final answer after the intermediate steps.\n\n"
-        f"{examples_text}\n\n"
-        f"Q: {normalized_problem}\n"
-        "A:"
-    )
+            "Use the following examples to understand how to solve these problems, but DO NOT output any of the steps or explanations shown in the examples. "
+            "Think carefully and use the examples only for internal reasoning. "
+            "Output ONLY the final answer for the following question. Do NOT include any steps, explanations, or extra text.\n\n"
+            f"{examples_text}\n\n"
+            f"Q: {normalized_problem}\n"
+            "A:"
+        )
     def generate_all_techniques(self, problem: str, subject: str = "general") -> Dict[str, str]:
         """
         Generate prompts using all techniques.

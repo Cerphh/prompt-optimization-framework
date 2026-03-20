@@ -32,7 +32,7 @@ The API should be accessible at `http://localhost:8000`.
 - Run benchmarks comparing different prompting techniques
 - View detailed results including:
   - Best performing technique
-  - Accuracy, completeness, and efficiency scores
+  - Accuracy, consistency, and efficiency scores
   - Response comparison across all techniques
   - Performance metrics (latency, tokens)
 

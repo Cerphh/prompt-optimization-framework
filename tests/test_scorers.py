@@ -37,6 +37,19 @@ def test_accuracy_uses_previous_math_line_when_final_answer_payload_is_blank():
     assert score == 1.0
 
 
+def test_accuracy_extracts_expression_from_narrative_final_line():
+    scorer = AccuracyScorer()
+    response = (
+        "To expand the expression (m - 4)(2n + 7), I will use distribution:\n"
+        "(m - 4)(2n + 7) = m(2n + 7) - 4(2n + 7)\n"
+        "= 2mn + 7m - 8n - 28\n"
+        "So, the expanded expression is: 2mn + 7m - 8n - 28."
+    )
+
+    score = scorer.score(response=response, expected="2mn + 7m - 8n - 28")
+    assert score == 1.0
+
+
 def test_efficiency_score_is_bounded():
     scorer = EfficiencyScorer()
     score = scorer.score(

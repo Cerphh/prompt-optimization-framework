@@ -15,19 +15,19 @@ This framework implements a **comparative experimental design** to evaluate mult
 
 ### 📊 Three Evaluation Metrics
 
-1. **Accuracy** (default weight: 0.5)
+1. **Accuracy** (default weight: 1/3)
    - Exact string matching
    - Numeric comparison
    - Symbolic math evaluation using SymPy
    - Supports fractions and algebraic expressions
 
-2. **Completeness** (default weight: 0.3)
-   - Step-by-step reasoning detection
-   - Explanation quality
-   - Structure and organization
-   - Detail sufficiency
+2. **Consistency** (default weight: 1/3)
+   - Measured per technique across repeated runs
+   - Robust normalization before comparison
+   - Numeric/symbolic equivalence support
+   - Incremental tracking with run-count transparency
 
-3. **Efficiency** (default weight: 0.2)
+3. **Efficiency** (default weight: 1/3)
    - Response latency
    - Token usage (prompt + completion)
    - Response conciseness
@@ -36,7 +36,7 @@ This framework implements a **comparative experimental design** to evaluate mult
 
 Automatically selects the best-performing prompting technique based on:
 - Highest overall weighted score
-- Tie-breaking: accuracy → completeness → efficiency
+- Tie-breaking: accuracy → consistency → efficiency
 
 ## Project Structure
 
@@ -49,7 +49,7 @@ prompt-optimization-framework/
 │   ├── prompt_generator.py     # Two prompting strategies
 │   ├── model_runner.py         # Ollama LLM interface
 │   ├── accuracy_scorer.py      # Accuracy evaluation
-│   ├── completeness_scorer.py  # Completeness evaluation
+│   ├── consistency_scorer.py   # Consistency evaluation
 │   ├── efficiency_scorer.py    # Efficiency evaluation
 │   └── pipeline.py             # Main benchmark pipeline
 │
@@ -252,9 +252,10 @@ from framework.dataset import get_sample_dataset
 # Initialize pipeline
 pipeline = BenchmarkPipeline(
    model_name="llama3",
-   accuracy_weight=0.5,
-   completeness_weight=0.3,
-   efficiency_weight=0.2,
+   accuracy_weight=1.0,
+   consistency_weight=1.0,
+   efficiency_weight=1.0,
+   runs_per_technique=3,
 )
 
 # Run benchmark on a problem
@@ -303,10 +304,10 @@ for comp in result['comparison']:
 ======================================================================
 RESULTS COMPARISON
 ======================================================================
-Technique            Accuracy   Complete   Efficiency Overall
+Technique            Accuracy   Consistency Efficiency Overall
 ----------------------------------------------------------------------
-few_shot             1.000      0.850      0.810      0.892
-zero_shot            1.000      0.150      0.670      0.679
+few_shot             1.000      0.850      0.810      0.887
+zero_shot            1.000      0.150      0.670      0.607
 
 ======================================================================
 OPTIMAL TECHNIQUE SELECTED (GREEDY ALGORITHM)
@@ -331,12 +332,16 @@ Overall Score: 0.892
 
 3. **Evaluation Pipeline**
    ```
-   Input Problem → Generate 2 Prompts → Execute Each → Score → Greedy Select → Return Best
+   Input Problem → Generate 2 Prompts → Run Each Technique N Times → Score → Greedy Select → Return Best
    ```
 
 4. **Scoring Formula**
    ```
-   Overall = (Accuracy × 0.5) + (Completeness × 0.3) + (Efficiency × 0.2)
+   Full overall (consistency available):
+   Overall = (Accuracy + Consistency + Efficiency) / 3
+
+   Provisional overall (run 1 only):
+   Overall = (Accuracy + Efficiency) / 2
    ```
 
 ### Key Design Decisions

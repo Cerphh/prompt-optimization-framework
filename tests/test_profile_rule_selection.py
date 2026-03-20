@@ -17,7 +17,7 @@ def _mock_result(best_technique: str = "few_shot"):
         },
         "scores": {
             "accuracy": 0.9,
-            "completeness": 0.7,
+            "consistency": 0.7,
             "efficiency": 0.8,
             "overall": 0.83,
         },
@@ -36,7 +36,7 @@ def _mock_result(best_technique: str = "few_shot"):
         },
         "scores": {
             "accuracy": 0.92,
-            "completeness": 0.78,
+            "consistency": 0.78,
             "efficiency": 0.74,
             "overall": 0.85,
         },
@@ -56,14 +56,14 @@ def _mock_result(best_technique: str = "few_shot"):
             {
                 "technique": "few_shot",
                 "accuracy": 0.92,
-                "completeness": 0.78,
+                "consistency": 0.78,
                 "efficiency": 0.74,
                 "overall": 0.85,
             },
             {
                 "technique": "zero_shot",
                 "accuracy": 0.9,
-                "completeness": 0.7,
+                "consistency": 0.7,
                 "efficiency": 0.8,
                 "overall": 0.83,
             },

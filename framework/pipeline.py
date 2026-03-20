@@ -4,20 +4,20 @@ Research benchmarking pipeline for comparative prompt evaluation.
 
 Implements:
 1. Generate multiple prompts using different techniques
-2. Execute each prompt independently through the model
+2. Execute each prompt independently through the model (optionally repeated runs)
 3. Evaluate responses using multiple metrics
 4. Use greedy algorithm to select optimal prompt
 5. Return comprehensive results and recommendations
 """
 
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Tuple
 import hashlib
 import math
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from .prompt_generator import PromptGenerator
 from .model_runner import ModelRunner
 from .accuracy_scorer import AccuracyScorer
-from .completeness_scorer import CompletenessScorer
+from .consistency_scorer import ConsistencyScorer
 from .efficiency_scorer import EfficiencyScorer
 
 class BenchmarkPipeline:
@@ -30,9 +30,10 @@ class BenchmarkPipeline:
     
     def __init__(self, model_name: str = "llama3",
                  base_url: str = "http://127.0.0.1:11434",
-                 accuracy_weight: float = 0.5,
-                 completeness_weight: float = 0.3,
-                 efficiency_weight: float = 0.2):
+                 accuracy_weight: float = 1.0,
+                 consistency_weight: float = 1.0,
+                 efficiency_weight: float = 1.0,
+                 runs_per_technique: int = 3):
         """
         Initialize the benchmarking pipeline.
         
@@ -40,22 +41,36 @@ class BenchmarkPipeline:
             model_name: Name of the LLM to use
             base_url: Base URL for Ollama API
             accuracy_weight: Weight for accuracy score (0-1)
-            completeness_weight: Weight for completeness score (0-1)
+            consistency_weight: Weight for consistency score (0-1)
             efficiency_weight: Weight for efficiency score (0-1)
+            runs_per_technique: Number of repeated runs per technique for consistency
         """
         self.prompt_generator = PromptGenerator()
         self.model_runner = ModelRunner(model_name=model_name, base_url=base_url)
         self.accuracy_scorer = AccuracyScorer()
-        self.completeness_scorer = CompletenessScorer()
+        self.consistency_scorer = ConsistencyScorer()
         self.efficiency_scorer = EfficiencyScorer()
+        self.default_runs_per_technique = self._sanitize_runs_per_technique(runs_per_technique)
         
         # Metric weights for scoring
         self.weights = {
             'accuracy': accuracy_weight,
-            'completeness': completeness_weight,
+            'consistency': consistency_weight,
             'efficiency': efficiency_weight
         }
         self.weights = self._normalize_weights(self.weights)
+
+    def _sanitize_runs_per_technique(self, runs_per_technique: Any) -> int:
+        """Validate and coerce run count to a positive integer."""
+        try:
+            value = int(runs_per_technique)
+        except (TypeError, ValueError):
+            raise ValueError("runs_per_technique must be an integer")
+
+        if value < 1:
+            raise ValueError("runs_per_technique must be >= 1")
+
+        return value
 
     def _normalize_weights(self, weights: Dict[str, float]) -> Dict[str, float]:
         """Validate and normalize metric weights to sum to 1.0."""
@@ -78,18 +93,47 @@ class BenchmarkPipeline:
 
         return {name: value / total for name, value in sanitized.items()}
 
-    def _build_failed_result(self, technique_name: str, prompt: str, error: str) -> Dict[str, Any]:
+    def _build_failed_result(
+        self,
+        technique_name: str,
+        prompt: str,
+        error: str,
+        runs_configured: int = 0,
+    ) -> Dict[str, Any]:
         """Build a uniform failed technique payload."""
         return {
             "technique": technique_name,
             "success": False,
             "error": error,
             "prompt": prompt,
+            "response": "",
+            "metrics": {
+                "elapsed_time": 0,
+                "total_tokens": 0,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "runs_recorded": 0,
+                "runs_succeeded": 0,
+                "runs_failed": runs_configured,
+            },
             "scores": {
                 "accuracy": 0.0,
-                "completeness": 0.0,
+                "consistency": None,
                 "efficiency": 0.0,
                 "overall": 0.0,
+                "consistency_is_provisional": True,
+                "consistency_runs_used": 0,
+                "consistency_matching_runs": None,
+                "overall_is_provisional": True,
+                "overall_note": "No successful runs available.",
+            },
+            "run_history": [],
+            "audit": {
+                "runs_configured": runs_configured,
+                "runs_recorded": 0,
+                "normalized_outputs": [],
+                "output_counts": {},
+                "canonical_output": None,
             },
         }
     
@@ -99,6 +143,7 @@ class BenchmarkPipeline:
         ground_truth: str = None,
         subject: str = "general",
         techniques_to_run: Optional[List[str]] = None,
+        runs_per_technique: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Run comprehensive benchmark on a single problem.
@@ -113,6 +158,10 @@ class BenchmarkPipeline:
         Returns:
             Dictionary with results for all techniques and best selection
         """
+        resolved_runs = self.default_runs_per_technique
+        if runs_per_technique is not None:
+            resolved_runs = self._sanitize_runs_per_technique(runs_per_technique)
+
         # Step 1: Generate prompts using all techniques
         prompts = self.prompt_generator.generate_all_techniques(problem, subject=subject)
         if techniques_to_run:
@@ -131,11 +180,12 @@ class BenchmarkPipeline:
             # Submit all tasks
             future_to_technique = {
                 executor.submit(
-                    self._evaluate_single_prompt,
+                    self._evaluate_technique_runs,
                     technique_name=technique_name,
                     prompt=prompt,
                     problem=problem,
-                    ground_truth=ground_truth
+                    ground_truth=ground_truth,
+                    runs_per_technique=resolved_runs,
                 ): technique_name
                 for technique_name, prompt in prompts.items()
             }
@@ -152,6 +202,7 @@ class BenchmarkPipeline:
                         technique_name=technique_name,
                         prompt=prompts[technique_name],
                         error=str(e),
+                        runs_configured=resolved_runs,
                     )
         
         # Step 3: Greedy selection - pick best performing technique
@@ -161,6 +212,7 @@ class BenchmarkPipeline:
         return {
             "problem": problem,
             "ground_truth": ground_truth,
+            "runs_per_technique": resolved_runs,
             "all_results": results,
             "best_technique": best_technique,
             "best_result": results[best_technique],
@@ -174,6 +226,7 @@ class BenchmarkPipeline:
         ground_truth: str = None,
         subject: str = "general",
         techniques_to_run: Optional[List[str]] = None,
+        runs_per_technique: Optional[int] = None,
     ):
         """
         Stream benchmark progress and partial output events.
@@ -184,6 +237,10 @@ class BenchmarkPipeline:
         - complete: final benchmark payload
         - error: terminal error event
         """
+        resolved_runs = self.default_runs_per_technique
+        if runs_per_technique is not None:
+            resolved_runs = self._sanitize_runs_per_technique(runs_per_technique)
+
         prompts = self.prompt_generator.generate_all_techniques(problem, subject=subject)
         if techniques_to_run:
             allowed = set(techniques_to_run)
@@ -202,7 +259,10 @@ class BenchmarkPipeline:
 
         yield {
             "type": "status",
-            "message": f"Streaming response for {preview_technique}...",
+            "message": (
+                f"Streaming run 1/{resolved_runs} for {preview_technique}; "
+                "remaining runs and techniques will finalize in background."
+            ),
             "technique": preview_technique,
         }
 
@@ -211,11 +271,12 @@ class BenchmarkPipeline:
         with ThreadPoolExecutor(max_workers=max(1, len(remaining_techniques))) as executor:
             future_to_technique = {
                 executor.submit(
-                    self._evaluate_single_prompt,
+                    self._evaluate_technique_runs,
                     technique_name=technique_name,
                     prompt=prompts[technique_name],
                     problem=problem,
                     ground_truth=ground_truth,
+                    runs_per_technique=resolved_runs,
                 ): technique_name
                 for technique_name in remaining_techniques
             }
@@ -248,23 +309,33 @@ class BenchmarkPipeline:
                     }
 
             if not model_result or not model_result.get("success", False):
-                results[preview_technique] = self._build_failed_result(
-                    technique_name=preview_technique,
-                    prompt=prompts[preview_technique],
-                    error=(model_result or {}).get("error", "Streaming finished without a final model result."),
-                )
-            else:
-                results[preview_technique] = self._build_scored_result(
-                    technique_name=preview_technique,
-                    prompt=prompts[preview_technique],
-                    model_result=model_result,
-                    problem=problem,
-                    ground_truth=ground_truth,
-                )
+                model_result = {
+                    "response": "",
+                    "success": False,
+                    "error": (model_result or {}).get(
+                        "error",
+                        "Streaming finished without a final model result.",
+                    ),
+                    "metrics": {
+                        "elapsed_time": 0,
+                        "prompt_tokens": 0,
+                        "completion_tokens": 0,
+                        "total_tokens": 0,
+                    },
+                }
+
+            results[preview_technique] = self._evaluate_technique_runs(
+                technique_name=preview_technique,
+                prompt=prompts[preview_technique],
+                problem=problem,
+                ground_truth=ground_truth,
+                runs_per_technique=resolved_runs,
+                first_run_model_result=model_result,
+            )
 
             yield {
                 "type": "status",
-                "message": "Finalizing remaining techniques...",
+                "message": "Finalizing remaining runs and techniques...",
             }
 
             for future in as_completed(future_to_technique):
@@ -276,12 +347,14 @@ class BenchmarkPipeline:
                         technique_name=technique_name,
                         prompt=prompts[technique_name],
                         error=str(e),
+                        runs_configured=resolved_runs,
                     )
 
         best_technique = self._greedy_select(results, problem)
         final_result = {
             "problem": problem,
             "ground_truth": ground_truth,
+            "runs_per_technique": resolved_runs,
             "all_results": results,
             "best_technique": best_technique,
             "best_result": results[best_technique],
@@ -293,7 +366,10 @@ class BenchmarkPipeline:
     def _evaluate_single_prompt(self, technique_name: str, prompt: str,
                                 problem: str, ground_truth: str = None) -> Dict[str, Any]:
         """
-        Evaluate a single prompt through the complete pipeline.
+        Evaluate one run for a technique through the complete pipeline.
+        
+        This wrapper is kept for backward compatibility. Internally, it uses the
+        multi-run evaluator with one configured run.
         
         Args:
             technique_name: Name of the prompting technique
@@ -304,58 +380,261 @@ class BenchmarkPipeline:
         Returns:
             Evaluation results with scores and metadata
         """
-        # Run prompt through model
-        model_result = self.model_runner.run(prompt)
-        
-        if not model_result["success"]:
-            return self._build_failed_result(
-                technique_name=technique_name,
-                prompt=prompt,
-                error=model_result.get("error", "Unknown error"),
-            )
-        
-        return self._build_scored_result(
+        return self._evaluate_technique_runs(
             technique_name=technique_name,
             prompt=prompt,
-            model_result=model_result,
             problem=problem,
             ground_truth=ground_truth,
+            runs_per_technique=1,
         )
 
-    def _build_scored_result(
+    def _evaluate_technique_runs(
+        self,
+        technique_name: str,
+        prompt: str,
+        problem: str,
+        ground_truth: str = None,
+        runs_per_technique: Optional[int] = None,
+        first_run_model_result: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Evaluate repeated runs for one technique and compute consistency."""
+        resolved_runs = self.default_runs_per_technique
+        if runs_per_technique is not None:
+            resolved_runs = self._sanitize_runs_per_technique(runs_per_technique)
+
+        run_history: List[Dict[str, Any]] = []
+        normalized_outputs: List[str] = []
+
+        for run_index in range(1, resolved_runs + 1):
+            if run_index == 1 and first_run_model_result is not None:
+                model_result = first_run_model_result
+            else:
+                model_result = self.model_runner.run(prompt)
+
+            run_payload = self._build_single_run_payload(
+                technique_name=technique_name,
+                prompt=prompt,
+                model_result=model_result,
+                problem=problem,
+                ground_truth=ground_truth,
+                run_index=run_index,
+                runs_per_technique=resolved_runs,
+            )
+
+            normalized_outputs.append(run_payload["normalized_output"])
+            consistency_state = self.consistency_scorer.compute_consistency(normalized_outputs)
+            consistency_value = consistency_state["value"]
+
+            overall_score, overall_is_provisional = self._compute_overall_score(
+                accuracy=run_payload["scores"]["accuracy"],
+                efficiency=run_payload["scores"]["efficiency"],
+                consistency=consistency_value,
+            )
+
+            run_payload["scores"].update(
+                {
+                    "consistency": round(consistency_value, 3) if consistency_value is not None else None,
+                    "consistency_is_provisional": bool(consistency_state["is_provisional"]),
+                    "consistency_runs_used": int(consistency_state["runs_used"]),
+                    "consistency_matching_runs": consistency_state["matching_runs"],
+                    "overall": round(overall_score, 3),
+                    "overall_is_provisional": overall_is_provisional,
+                    "overall_note": (
+                        "Provisional overall score: consistency is not available until run 2."
+                        if overall_is_provisional
+                        else "Overall score includes accuracy, efficiency, and consistency."
+                    ),
+                }
+            )
+
+            run_history.append(run_payload)
+
+        final_consistency_state = self.consistency_scorer.compute_consistency(normalized_outputs)
+        successful_runs = [run for run in run_history if run.get("success", False)]
+        last_successful_run = successful_runs[-1] if successful_runs else None
+
+        accuracy = 0.0
+        efficiency = 0.0
+        if successful_runs:
+            accuracy = sum(run["scores"]["accuracy"] for run in successful_runs) / len(successful_runs)
+            efficiency = sum(run["scores"]["efficiency"] for run in successful_runs) / len(successful_runs)
+
+        consistency = final_consistency_state["value"]
+        overall, overall_is_provisional = self._compute_overall_score(
+            accuracy=accuracy,
+            efficiency=efficiency,
+            consistency=consistency,
+        )
+
+        aggregated_metrics = self._aggregate_metrics(run_history)
+
+        if successful_runs:
+            success = True
+            response = str(last_successful_run.get("response", ""))
+            error = None
+        else:
+            success = False
+            response = ""
+            error = str(run_history[-1].get("error", "All runs failed")) if run_history else "All runs failed"
+
+        result = {
+            "technique": technique_name,
+            "success": success,
+            "prompt": prompt,
+            "response": response,
+            "metrics": aggregated_metrics,
+            "scores": {
+                "accuracy": round(accuracy, 3),
+                "consistency": round(consistency, 3) if consistency is not None else None,
+                "efficiency": round(efficiency, 3),
+                "overall": round(overall, 3),
+                "consistency_is_provisional": bool(final_consistency_state["is_provisional"]),
+                "consistency_runs_used": int(final_consistency_state["runs_used"]),
+                "consistency_matching_runs": final_consistency_state["matching_runs"],
+                "overall_is_provisional": overall_is_provisional,
+                "overall_note": (
+                    "Provisional overall score: consistency is not available until run 2."
+                    if overall_is_provisional
+                    else "Overall score includes accuracy, efficiency, and consistency."
+                ),
+            },
+            "run_history": run_history,
+            "audit": {
+                "runs_configured": resolved_runs,
+                "runs_recorded": len(run_history),
+                "normalized_outputs": normalized_outputs,
+                "output_counts": final_consistency_state["output_counts"],
+                "canonical_output": final_consistency_state["canonical_output"],
+            },
+        }
+
+        if error:
+            result["error"] = error
+
+        return result
+
+    def _build_single_run_payload(
         self,
         technique_name: str,
         prompt: str,
         model_result: Dict[str, Any],
         problem: str,
-        ground_truth: str = None,
+        ground_truth: str,
+        run_index: int,
+        runs_per_technique: int,
     ) -> Dict[str, Any]:
-        response = model_result["response"]
-        metrics = model_result["metrics"]
+        """Build one run payload while preserving accuracy and efficiency formulas."""
+        metrics = model_result.get("metrics") or {}
+        metrics = {
+            "elapsed_time": metrics.get("elapsed_time", 0),
+            "total_tokens": metrics.get("total_tokens", 0),
+            "prompt_tokens": metrics.get("prompt_tokens", 0),
+            "completion_tokens": metrics.get("completion_tokens", 0),
+            "done_reason": metrics.get("done_reason"),
+            "truncated": metrics.get("truncated", False),
+            "continuation_rounds": metrics.get("continuation_rounds", 0),
+            "continuation_error": metrics.get("continuation_error"),
+            "verifier_retry_applied": metrics.get("verifier_retry_applied", False),
+            "verifier_verdict": metrics.get("verifier_verdict"),
+        }
 
-        accuracy = self.accuracy_scorer.score(response, ground_truth, problem)
-        completeness = self.completeness_scorer.score(response, problem)
-        efficiency = self.efficiency_scorer.score(response, metrics)
+        success = bool(model_result.get("success", False))
+        response = str(model_result.get("response", "") or "")
 
-        overall = (
-            accuracy * self.weights['accuracy'] +
-            completeness * self.weights['completeness'] +
-            efficiency * self.weights['efficiency']
-        )
+        if success:
+            accuracy = self.accuracy_scorer.score(response, ground_truth, problem)
+            efficiency = self.efficiency_scorer.score(response, metrics)
+            normalized_output = self.consistency_scorer.normalize_output(response)
+            error = None
+        else:
+            accuracy = 0.0
+            efficiency = 0.0
+            normalized_output = f"error:run_{run_index}"
+            error = str(model_result.get("error", "Unknown error"))
 
-        return {
+        payload = {
             "technique": technique_name,
-            "success": True,
+            "run_index": run_index,
+            "runs_configured": runs_per_technique,
+            "success": success,
             "prompt": prompt,
             "response": response,
             "metrics": metrics,
+            "normalized_output": normalized_output,
             "scores": {
                 "accuracy": round(accuracy, 3),
-                "completeness": round(completeness, 3),
                 "efficiency": round(efficiency, 3),
-                "overall": round(overall, 3)
-            }
+            },
         }
+
+        if error:
+            payload["error"] = error
+
+        return payload
+
+    def _aggregate_metrics(self, run_history: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Aggregate metrics across successful runs for summary reporting."""
+        successful_runs = [run for run in run_history if run.get("success", False)]
+        runs_recorded = len(run_history)
+        runs_succeeded = len(successful_runs)
+        runs_failed = runs_recorded - runs_succeeded
+
+        if not successful_runs:
+            return {
+                "elapsed_time": 0,
+                "total_tokens": 0,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "runs_recorded": runs_recorded,
+                "runs_succeeded": runs_succeeded,
+                "runs_failed": runs_failed,
+            }
+
+        def _mean_metric(key: str) -> float:
+            total = 0.0
+            for run in successful_runs:
+                value = run.get("metrics", {}).get(key, 0)
+                try:
+                    total += float(value)
+                except (TypeError, ValueError):
+                    continue
+            return total / max(len(successful_runs), 1)
+
+        return {
+            "elapsed_time": round(_mean_metric("elapsed_time"), 4),
+            "total_tokens": int(round(_mean_metric("total_tokens"))),
+            "prompt_tokens": int(round(_mean_metric("prompt_tokens"))),
+            "completion_tokens": int(round(_mean_metric("completion_tokens"))),
+            "runs_recorded": runs_recorded,
+            "runs_succeeded": runs_succeeded,
+            "runs_failed": runs_failed,
+        }
+
+    def _compute_overall_score(
+        self,
+        *,
+        accuracy: float,
+        efficiency: float,
+        consistency: Optional[float],
+    ) -> Tuple[float, bool]:
+        """Compute weighted overall score with provisional fallback when consistency is unavailable."""
+        available_scores: Dict[str, float] = {
+            "accuracy": float(accuracy),
+            "efficiency": float(efficiency),
+        }
+        if consistency is not None:
+            available_scores["consistency"] = float(consistency)
+
+        weight_sum = sum(self.weights.get(name, 0.0) for name in available_scores)
+        if weight_sum > 0:
+            overall = sum(
+                score * self.weights.get(name, 0.0)
+                for name, score in available_scores.items()
+            ) / weight_sum
+        else:
+            overall = sum(available_scores.values()) / max(len(available_scores), 1)
+
+        return overall, consistency is None
     
     def _greedy_select(self, results: Dict[str, Dict], problem: str) -> str:
         """
@@ -385,7 +664,7 @@ class BenchmarkPipeline:
                 continue
             
             scores = result["scores"]
-            overall = scores["overall"]
+            overall = float(scores.get("overall", 0.0) or 0.0)
             
             # Pick the technique with highest score
             if overall > best_score:
@@ -418,9 +697,13 @@ class BenchmarkPipeline:
                 comparison.append({
                     "technique": technique_name,
                     "accuracy": scores["accuracy"],
-                    "completeness": scores["completeness"],
+                    "consistency": scores.get("consistency"),
                     "efficiency": scores["efficiency"],
                     "overall": scores["overall"],
+                    "consistency_is_provisional": scores.get("consistency_is_provisional", False),
+                    "consistency_runs_used": scores.get("consistency_runs_used", 0),
+                    "consistency_matching_runs": scores.get("consistency_matching_runs"),
+                    "overall_is_provisional": scores.get("overall_is_provisional", False),
                     "latency": result["metrics"].get("elapsed_time", 0),
                     "tokens": result["metrics"].get("total_tokens", 0)
                 })
@@ -435,26 +718,30 @@ class BenchmarkPipeline:
         return self.model_runner.test_connection()
     
     def set_weights(self, accuracy: float = None, 
-                   completeness: float = None, 
+                   consistency: float = None, 
                    efficiency: float = None):
         """
         Update metric weights.
         
         Args:
             accuracy: New accuracy weight
-            completeness: New completeness weight
+            consistency: New consistency weight
             efficiency: New efficiency weight
         """
         new_weights = dict(self.weights)
 
         if accuracy is not None:
             new_weights['accuracy'] = accuracy
-        if completeness is not None:
-            new_weights['completeness'] = completeness
+        if consistency is not None:
+            new_weights['consistency'] = consistency
         if efficiency is not None:
             new_weights['efficiency'] = efficiency
 
         self.weights = self._normalize_weights(new_weights)
+
+    def set_runs_per_technique(self, runs_per_technique: int):
+        """Update the default run count used for consistency estimation."""
+        self.default_runs_per_technique = self._sanitize_runs_per_technique(runs_per_technique)
 
 
 # Legacy compatibility wrapper

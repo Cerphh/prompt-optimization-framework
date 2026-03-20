@@ -23,13 +23,14 @@ except Exception as e:
 try:
     pipeline = BenchmarkPipeline(
         model_name=os.getenv("MODEL_NAME", "llama3"),
-        accuracy_weight=0.5,
-        completeness_weight=0.3,
-        efficiency_weight=0.2
+        accuracy_weight=1.0,
+        consistency_weight=1.0,
+        efficiency_weight=1.0,
+        runs_per_technique=3,
     )
     print("✓ Benchmark pipeline initialized")
     print(f"  Weights: Accuracy={pipeline.weights['accuracy']:.1f}, "
-          f"Completeness={pipeline.weights['completeness']:.1f}, "
+          f"Consistency={pipeline.weights['consistency']:.1f}, "
           f"Efficiency={pipeline.weights['efficiency']:.1f}")
 except Exception as e:
     print(f"✗ Pipeline initialization failed: {e}")
@@ -85,13 +86,13 @@ try:
         print("=" * 70)
         print("RESULTS COMPARISON")
         print("=" * 70)
-        print(f"{'Technique':<20} {'Accuracy':<10} {'Complete':<10} {'Efficiency':<10} {'Overall':<10}")
+        print(f"{'Technique':<20} {'Accuracy':<10} {'Consistency':<12} {'Efficiency':<10} {'Overall':<10}")
         print("-" * 70)
         
         for comp in result["comparison"]:
             print(f"{comp['technique']:<20} "
                   f"{comp['accuracy']:<10.3f} "
-                  f"{comp['completeness']:<10.3f} "
+                  f"{(comp['consistency'] if comp['consistency'] is not None else 0.0):<12.3f} "
                   f"{comp['efficiency']:<10.3f} "
                   f"{comp['overall']:<10.3f}")
         
@@ -105,7 +106,8 @@ try:
         print()
         print("Scores:")
         print(f"  Accuracy:     {result['best_result']['scores']['accuracy']:.3f}")
-        print(f"  Completeness: {result['best_result']['scores']['completeness']:.3f}")
+        consistency_value = result['best_result']['scores'].get('consistency')
+        print(f"  Consistency:  {consistency_value:.3f}" if consistency_value is not None else "  Consistency:  provisional")
         print(f"  Efficiency:   {result['best_result']['scores']['efficiency']:.3f}")
         print()
         print("Metrics:")

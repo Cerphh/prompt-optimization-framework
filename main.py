@@ -11,7 +11,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List, Any, Dict, Tuple
 from framework.pipeline import BenchmarkPipeline
 from framework.dataset import get_sample_dataset
@@ -125,9 +125,10 @@ def _build_fast_pipeline_from_defaults() -> BenchmarkPipeline:
     request_pipeline = BenchmarkPipeline(
         model_name=pipeline.model_runner.model_name,
         base_url=pipeline.model_runner.base_url,
-        accuracy_weight=pipeline.weights.get("accuracy", 0.5),
-        completeness_weight=pipeline.weights.get("completeness", 0.3),
-        efficiency_weight=pipeline.weights.get("efficiency", 0.2),
+        accuracy_weight=pipeline.weights.get("accuracy", 1.0),
+        consistency_weight=pipeline.weights.get("consistency", 1.0),
+        efficiency_weight=pipeline.weights.get("efficiency", 1.0),
+        runs_per_technique=pipeline.default_runs_per_technique,
     )
 
     runner = request_pipeline.model_runner
@@ -162,9 +163,10 @@ app.add_middleware(
 pipeline = BenchmarkPipeline(
     model_name=os.getenv("MODEL_NAME", "llama3"),
     base_url=os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434"),
-    accuracy_weight=0.5,
-    completeness_weight=0.3,
-    efficiency_weight=0.2
+    accuracy_weight=1.0,
+    consistency_weight=1.0,
+    efficiency_weight=1.0,
+    runs_per_technique=3,
 )
 
 # Initialize dataset
@@ -725,12 +727,13 @@ class BenchmarkRequest(BaseModel):
     difficulty: Optional[str] = "basic"  # basic, intermediate, advanced
     run_mode: Optional[str] = RUN_MODE_NORMAL  # normal or benchmark
     speed_profile: Optional[str] = "balanced"  # balanced, fast
+    runs_per_technique: Optional[int] = Field(default=None, ge=1)
 
 
 class WeightsUpdate(BaseModel):
     """Model for updating metric weights."""
     accuracy: Optional[float] = None
-    completeness: Optional[float] = None
+    consistency: Optional[float] = None
     efficiency: Optional[float] = None
 
 
@@ -822,6 +825,8 @@ async def run_benchmark(request: BenchmarkRequest):
         }
         if techniques_to_run:
             benchmark_kwargs["techniques_to_run"] = techniques_to_run
+        if request.runs_per_technique is not None:
+            benchmark_kwargs["runs_per_technique"] = request.runs_per_technique
 
         result = request_pipeline.benchmark(**benchmark_kwargs)
 
@@ -883,6 +888,8 @@ async def run_benchmark_stream(request: BenchmarkRequest):
             }
             if techniques_to_run:
                 stream_kwargs["techniques_to_run"] = techniques_to_run
+            if request.runs_per_technique is not None:
+                stream_kwargs["runs_per_technique"] = request.runs_per_technique
 
             for event in request_pipeline.benchmark_stream_events(**stream_kwargs):
                 if event.get("type") == "complete":
@@ -955,7 +962,7 @@ async def update_weights(weights: WeightsUpdate):
     try:
         pipeline.set_weights(
             accuracy=weights.accuracy,
-            completeness=weights.completeness,
+            consistency=weights.consistency,
             efficiency=weights.efficiency
         )
         return {

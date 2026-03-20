@@ -19,7 +19,7 @@ def _mock_benchmark_result(problem: str, ground_truth: str | None = None):
         },
         "scores": {
             "accuracy": 1.0,
-            "completeness": 0.7,
+            "consistency": 0.7,
             "efficiency": 0.9,
             "overall": 0.89,
         },
@@ -38,7 +38,7 @@ def _mock_benchmark_result(problem: str, ground_truth: str | None = None):
         },
         "scores": {
             "accuracy": 1.0,
-            "completeness": 0.8,
+            "consistency": 0.8,
             "efficiency": 0.8,
             "overall": 0.9,
         },
@@ -57,21 +57,21 @@ def _mock_benchmark_result(problem: str, ground_truth: str | None = None):
             {
                 "technique": "few_shot",
                 "accuracy": 1.0,
-                "completeness": 0.8,
+                "consistency": 0.8,
                 "efficiency": 0.8,
                 "overall": 0.9,
             },
             {
                 "technique": "zero_shot",
                 "accuracy": 1.0,
-                "completeness": 0.7,
+                "consistency": 0.7,
                 "efficiency": 0.9,
                 "overall": 0.89,
             },
         ],
         "weights": {
             "accuracy": 0.5,
-            "completeness": 0.3,
+            "consistency": 0.3,
             "efficiency": 0.2,
         },
     }
@@ -347,7 +347,7 @@ def test_benchmark_mode_rejects_single_technique_result(monkeypatch):
             {
                 "technique": "zero_shot",
                 "accuracy": 1.0,
-                "completeness": 0.7,
+                "consistency": 0.7,
                 "efficiency": 0.9,
                 "overall": 0.89,
             }
