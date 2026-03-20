@@ -117,6 +117,7 @@ def test_profile_rules_override_domain_average_when_confident(monkeypatch):
 
 def test_profile_rules_fallback_to_domain_average_when_profile_low_confidence(monkeypatch):
     monkeypatch.setenv("DB_EXPLORATION_RATE", "0")
+    monkeypatch.setenv("DB_MIN_SAMPLES_PER_TECHNIQUE", "10")
     monkeypatch.setenv("DB_PROFILE_MIN_SAMPLES_PER_TECHNIQUE", "3")
     monkeypatch.setenv("DB_PROFILE_MIN_AVG_SCORE_GAP", "0.03")
 
