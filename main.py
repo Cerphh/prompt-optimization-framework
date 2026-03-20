@@ -461,19 +461,12 @@ def _apply_db_based_selection(
         if technique_result.get("success", False)
     ]
 
-<<<<<<< HEAD
-    min_samples = (
-        _get_env_int("DB_MIN_SAMPLES_PER_TECHNIQUE", default=5, min_value=1)
-        if min_samples_override is None
-        else max(1, int(min_samples_override))
-=======
     min_samples = _get_env_int("DB_MIN_SAMPLES_PER_TECHNIQUE", default=15, min_value=1)
     min_gap = _get_env_float("DB_MIN_AVG_SCORE_GAP", default=0.03, min_value=0.0)
     profile_min_samples = _get_env_int(
         "DB_PROFILE_MIN_SAMPLES_PER_TECHNIQUE",
         default=max(15, min_samples),
         min_value=1,
->>>>>>> b4adbbddd810aed32147ba27d07793a34fef2ee1
     )
     min_gap = (
         _get_env_float("DB_MIN_AVG_SCORE_GAP", default=0.03, min_value=0.0)
