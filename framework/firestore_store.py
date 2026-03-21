@@ -99,9 +99,9 @@ class FirestoreStore:
     ) -> Dict[str, Any]:
         """Persist a benchmark result to a domain/difficulty document in Firestore.
         
-        Schema: benchmark_results/{domain}/{difficulty}
-        - result_per_run: array of individual result objects
-        - 3_run_ave: aggregated metrics from the last 3 runs
+        Schema: benchmark_results/{domain}/{difficulty}/{problem_id}
+        - result_per_run: stores run1/run2/run3 payloads
+        - 3_run_ave: stores aggregated metrics from those runs
         """
         if not self.enabled:
             return {
@@ -127,32 +127,30 @@ class FirestoreStore:
                 metadata=metadata,
                 source=source,
             )
+            problem_text = self._resolve_problem_text(benchmark_result=benchmark_result, metadata=metadata)
+            problem_id = self._build_problem_document_id(problem_text)
 
             domain_doc_ref = self.db.collection(self.collection_name).document(domain)
-            difficulty_doc_ref = domain_doc_ref.collection(difficulty).document("aggregated")
+            difficulty_collection_ref = domain_doc_ref.collection(difficulty)
+            problem_doc_ref = difficulty_collection_ref.document(problem_id)
 
-            # Get existing data to preserve result_per_run array
-            existing_doc = difficulty_doc_ref.get()
-            existing_data = existing_doc.to_dict() if existing_doc.exists else {}
-            result_per_run = existing_data.get("result_per_run", [])
-            
-            # Append new result
-            result_per_run.append(payload)
-            
-            # Keep only last 100 results to avoid excessive document size
-            if len(result_per_run) > 100:
-                result_per_run = result_per_run[-100:]
+            # Build run1/run2/run3 directly from the current benchmark run history.
+            result_per_run = self._build_run_entries_from_benchmark_result(
+                benchmark_result=benchmark_result,
+                fallback_payload=payload,
+            )
             
             # Compute 3_run_ave from last 3 results
             three_run_ave = self._compute_3_run_average(result_per_run)
-            
-            # Keep only the two requested schema fields.
-            difficulty_doc_ref.set(
+
+            problem_doc_ref.set(
                 {
-                    "result_per_run": result_per_run,
+                    "problem_id": problem_id,
+                    "problem": problem_text,
+                    "result_per_run": self._encode_runs_as_named_map(result_per_run),
                     "3_run_ave": three_run_ave,
                 },
-                merge=False,
+                merge=True,
             )
 
             return {
@@ -160,6 +158,7 @@ class FirestoreStore:
                 "collection": self.collection_name,
                 "domain": domain,
                 "difficulty": difficulty,
+                "problem_id": problem_id,
                 "result_id": payload.get("result_id"),
                 "result_per_run_count": len(result_per_run),
             }
@@ -170,6 +169,112 @@ class FirestoreStore:
                 "error": str(exc),
             }
 
+    def _build_run_entries_from_benchmark_result(
+        self,
+        benchmark_result: Dict[str, Any],
+        fallback_payload: Dict[str, Any],
+    ) -> List[Dict[str, Any]]:
+        """Build up to 3 run entries from best_result.run_history with metric-level fields."""
+        best_result = benchmark_result.get("best_result", {}) if isinstance(benchmark_result, dict) else {}
+        run_history = best_result.get("run_history", []) if isinstance(best_result, dict) else []
+
+        entries: List[Dict[str, Any]] = []
+        if isinstance(run_history, list):
+            for run in run_history:
+                if not isinstance(run, dict):
+                    continue
+                run_scores = run.get("scores", {}) if isinstance(run.get("scores"), dict) else {}
+                overall_value = self._to_float(run_scores.get("overall"))
+
+                entries.append(
+                    {
+                        "result_id": fallback_payload.get("result_id"),
+                        "source": fallback_payload.get("source"),
+                        "domain": fallback_payload.get("domain"),
+                        "difficulty": fallback_payload.get("difficulty"),
+                        "run_mode": fallback_payload.get("run_mode"),
+                        "has_ground_truth": fallback_payload.get("has_ground_truth"),
+                        "evaluation_quality": fallback_payload.get("evaluation_quality"),
+                        "problem": fallback_payload.get("problem"),
+                        "run_index": run.get("run_index"),
+                        "prompt_used": run.get("prompt") or fallback_payload.get("prompt_used"),
+                        "model_response": run.get("response") or fallback_payload.get("model_response"),
+                        "performance_score": overall_value,
+                        "overall": overall_value,
+                        "metric_result": {
+                            "accuracy": self._to_float(run_scores.get("accuracy")),
+                            "consistency": self._to_float(run_scores.get("consistency")),
+                            "efficiency": self._to_float(run_scores.get("efficiency")),
+                            "overall": overall_value,
+                        },
+                        "technique_comparison": fallback_payload.get("technique_comparison", []),
+                    }
+                )
+
+        # Fallback when run_history is missing.
+        if not entries:
+            scores = (
+                best_result.get("scores", {})
+                if isinstance(best_result, dict) and isinstance(best_result.get("scores"), dict)
+                else {}
+            )
+            fallback_entry = dict(fallback_payload)
+            fallback_entry["run_index"] = 1
+            fallback_entry["overall"] = self._to_float(scores.get("overall")) or self._to_float(
+                fallback_payload.get("performance_score")
+            )
+            fallback_entry["metric_result"] = {
+                "accuracy": self._to_float(scores.get("accuracy")),
+                "consistency": self._to_float(scores.get("consistency")),
+                "efficiency": self._to_float(scores.get("efficiency")),
+                "overall": fallback_entry["overall"],
+            }
+            entries = [fallback_entry]
+
+        return entries[-3:]
+
+    def _encode_runs_as_named_map(self, runs: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+        """Encode latest runs as explicit run1/run2/run3 slots."""
+        named_runs: Dict[str, Dict[str, Any]] = {}
+        latest_runs = runs[-3:]
+        for index in range(1, 4):
+            if index <= len(latest_runs):
+                named_runs[f"run{index}"] = latest_runs[index - 1]
+            else:
+                named_runs[f"run{index}"] = {
+                    "run_index": index,
+                    "overall": None,
+                    "metric_result": {
+                        "accuracy": None,
+                        "consistency": None,
+                        "efficiency": None,
+                        "overall": None,
+                    },
+                }
+        return named_runs
+
+    def _decode_runs_from_result_per_run_doc(self, doc_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Decode run payloads from either named slots or legacy list shape."""
+        raw = (doc_data or {}).get("result_per_run")
+        if isinstance(raw, list):
+            return [item for item in raw if isinstance(item, dict)][-3:]
+
+        if isinstance(raw, dict):
+            runs: List[Dict[str, Any]] = []
+            for key in ("run1", "run2", "run3"):
+                value = raw.get(key)
+                if isinstance(value, dict):
+                    runs.append(value)
+            return runs[-3:]
+
+        return []
+
+    @staticmethod
+    def _to_float(value: Any) -> Optional[float]:
+        if isinstance(value, (int, float)):
+            return float(value)
+        return None
+
     def _compute_3_run_average(self, result_per_run: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Compute aggregated metrics from the last 3 results in result_per_run."""
         if not result_per_run:
@@ -178,13 +283,28 @@ class FirestoreStore:
         # Get last 3 results
         last_3 = result_per_run[-3:] if len(result_per_run) >= 3 else result_per_run
         
-        # Aggregate performance scores
+        # Aggregate top-level performance scores.
         performance_scores = [r.get("performance_score") for r in last_3 if r.get("performance_score") is not None]
         avg_performance = sum(performance_scores) / len(performance_scores) if performance_scores else None
+
+        metric_totals = {"accuracy": 0.0, "consistency": 0.0, "efficiency": 0.0, "overall": 0.0}
+        metric_counts = {"accuracy": 0, "consistency": 0, "efficiency": 0, "overall": 0}
+
+        # Aggregate run-level metric_result values (run1/run2/run3).
+        for result in last_3:
+            metric_result = result.get("metric_result", {})
+            if not isinstance(metric_result, dict):
+                continue
+            for metric_key in ("accuracy", "consistency", "efficiency", "overall"):
+                metric_value = self._to_float(metric_result.get(metric_key))
+                if metric_value is None:
+                    continue
+                metric_totals[metric_key] += metric_value
+                metric_counts[metric_key] += 1
         
-        # Aggregate technique comparisons
-        technique_totals: Dict[str, float] = {}
-        technique_counts: Dict[str, int] = {}
+        # Aggregate per-technique metrics across runs.
+        technique_totals: Dict[str, Dict[str, float]] = {}
+        technique_counts: Dict[str, Dict[str, int]] = {}
         
         for result in last_3:
             comparisons = result.get("technique_comparison", [])
@@ -192,17 +312,47 @@ class FirestoreStore:
                 for comparison in comparisons:
                     if isinstance(comparison, dict):
                         technique = comparison.get("technique")
-                        overall = comparison.get("overall")
-                        if technique and isinstance(overall, (int, float)):
-                            technique_totals[technique] = technique_totals.get(technique, 0.0) + float(overall)
-                            technique_counts[technique] = technique_counts.get(technique, 0) + 1
+                        if not technique:
+                            continue
+
+                        if technique not in technique_totals:
+                            technique_totals[technique] = {
+                                "accuracy": 0.0,
+                                "consistency": 0.0,
+                                "efficiency": 0.0,
+                                "overall": 0.0,
+                            }
+                            technique_counts[technique] = {
+                                "accuracy": 0,
+                                "consistency": 0,
+                                "efficiency": 0,
+                                "overall": 0,
+                            }
+
+                        for metric_key in ("accuracy", "consistency", "efficiency", "overall"):
+                            metric_value = self._to_float(comparison.get(metric_key))
+                            if metric_value is None:
+                                continue
+                            technique_totals[technique][metric_key] += metric_value
+                            technique_counts[technique][metric_key] += 1
         
-        technique_averages = {}
-        for technique, count in technique_counts.items():
-            technique_averages[technique] = round(technique_totals[technique] / count, 4)
+        technique_averages: Dict[str, Dict[str, Optional[float]]] = {}
+        for technique, totals in technique_totals.items():
+            counts = technique_counts[technique]
+            technique_averages[technique] = {}
+            for metric_key in ("accuracy", "consistency", "efficiency", "overall"):
+                count = counts[metric_key]
+                technique_averages[technique][metric_key] = round(totals[metric_key] / count, 4) if count else None
+
+        metric_averages: Dict[str, Optional[float]] = {}
+        for metric_key in ("accuracy", "consistency", "efficiency", "overall"):
+            count = metric_counts[metric_key]
+            metric_averages[metric_key] = round(metric_totals[metric_key] / count, 4) if count else None
         
         return {
             "avg_performance_score": round(avg_performance, 4) if avg_performance is not None else None,
+            "metric_result": metric_averages,
+            "metric_averages": metric_averages,
             "technique_averages": technique_averages,
             "sample_count": len(last_3),
         }
@@ -282,18 +432,8 @@ class FirestoreStore:
         return document
 
     def _extract_result_entries(self, doc_ref: Any, data: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Extract result entries from the new Option A schema.
-        
-        Results are stored in the result_per_run array at domain/difficulty level.
-        """
-        entries: List[Dict[str, Any]] = []
-
-        # New schema (Option A): result_per_run is an array
-        result_per_run = data.get("result_per_run", [])
-        if isinstance(result_per_run, list):
-            entries.extend(item for item in result_per_run if isinstance(item, dict))
-
-        return entries
+        """Extract result entries from result_per_run document schema."""
+        return self._decode_runs_from_result_per_run_doc(data)
 
     @staticmethod
     def _bool_from_value(value: Any) -> Optional[bool]:
@@ -442,20 +582,17 @@ class FirestoreStore:
         )
 
     def _stream_problem_docs(self, domain: str, difficulty: str):
-        """Stream doc from the aggregated results at domain/difficulty level.
-        
-        Returns the aggregated document at benchmark_results/{domain}/{difficulty}/aggregated
-        """
+        """Stream all problem documents under domain/difficulty."""
         try:
-            aggregated_doc = (
+            docs = list(
                 self.db.collection(self.collection_name)
                 .document(domain)
                 .collection(difficulty)
-                .document("aggregated")
-                .get()
+                .stream()
             )
-            if aggregated_doc.exists:
-                yield aggregated_doc
+            for doc in docs:
+                yield doc
+            return
         except Exception:
             # If query fails, no data available
             pass
