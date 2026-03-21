@@ -1,7 +1,7 @@
 from framework.prompt_generator import PromptGenerator
 
 
-def test_few_shot_falls_back_to_zero_shot_when_subject_examples_missing():
+def test_few_shot_uses_global_examples_when_subject_examples_missing():
     generator = PromptGenerator()
     generator.example_dataset = {
         "algebra": [],
@@ -14,7 +14,9 @@ def test_few_shot_falls_back_to_zero_shot_when_subject_examples_missing():
         num_examples=2,
     )
 
-    assert prompt.startswith("Solve the following math problem and end with a concise final answer.")
+    assert prompt.startswith("Solve the following math problems and give the final answer.")
+    assert "Use the following examples only as style references." in prompt
+    assert "Q: What is 1 + 1?" in prompt
     assert "Q: Solve for x: 2x + 6 = 10" in prompt
     assert "A:" in prompt
 

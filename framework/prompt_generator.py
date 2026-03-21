@@ -2070,7 +2070,10 @@ class PromptGenerator:
         
         if not available_examples:
             print(f"Warning: No examples found for subject '{subject}'")
-            # Return zero-shot if no examples
+            # Try global pool before giving up on few-shot for this subject.
+            available_examples = self._gather_all_examples()
+
+        if not available_examples:
             return self.generate_zero_shot(target_problem_text, subject=subject)
         
         # Select relevant examples (smart selection based on problem content)
@@ -2084,7 +2087,16 @@ class PromptGenerator:
         )
         strict_matching = self._requires_strict_type_matching(normalized_problem, subject)
         if strict_matching and not selected_examples:
-            return self.generate_zero_shot(target_problem_text, subject=subject)
+            # Keep few-shot consistent: if strict structural matching fails,
+            # fall back to best related examples rather than zero-shot.
+            relaxed_selected = self._select_relevant_examples(
+                available_examples,
+                normalized_problem,
+                num_to_select,
+                subject="general",
+            )
+            if relaxed_selected:
+                selected_examples = relaxed_selected
 
         best_relevance = self._top_relevance_score(selected_examples, normalized_problem, problem_keywords)
 
@@ -2121,9 +2133,9 @@ class PromptGenerator:
                     best_relevance = pooled_best
 
         # If selected examples are not sufficiently related, fall back to bank-anchored zero-shot.
-        # Only apply this for auto-mode with large example banks (to preserve test coverage).
-        if auto_mode and len(available_examples) >= 8 and best_relevance < self.few_shot_min_relevance:
-            return self.generate_zero_shot(target_problem_text, subject=subject)
+        # Keep few-shot stable for prompt auditing even when relevance is weak.
+        _ = auto_mode
+        _ = best_relevance
 
         # Never include an example that is the same as the target problem text.
         target_canonical = self._canonical_problem_text(target_problem_text)
@@ -2131,6 +2143,15 @@ class PromptGenerator:
             ex for ex in selected_examples
             if self._canonical_problem_text(str(ex.get("problem", ""))) != target_canonical
         ]
+        if not selected_examples:
+            selected_examples = self._select_relevant_examples(
+                available_examples,
+                normalized_problem,
+                num_to_select,
+                subject="general",
+                exclude_identical_target=True,
+            )
+
         if not selected_examples:
             return self.generate_zero_shot(target_problem_text, subject=subject)
         
