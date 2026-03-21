@@ -59,6 +59,8 @@ interface TechniqueResult {
     total_tokens: number
     prompt_tokens: number
     completion_tokens: number
+    truncated?: boolean
+    continuation_rounds?: number
     runs_recorded?: number
     runs_succeeded?: number
     runs_failed?: number
