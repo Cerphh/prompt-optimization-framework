@@ -146,17 +146,13 @@ class FirestoreStore:
             # Compute 3_run_ave from last 3 results
             three_run_ave = self._compute_3_run_average(result_per_run)
             
-            # Set the document with both result_per_run and 3_run_ave
+            # Keep only the two requested schema fields.
             difficulty_doc_ref.set(
                 {
-                    "domain": domain,
-                    "difficulty": difficulty,
                     "result_per_run": result_per_run,
                     "3_run_ave": three_run_ave,
-                    "result_count": firestore.Increment(1),
-                    "updated_at": firestore.SERVER_TIMESTAMP,
                 },
-                merge=True,
+                merge=False,
             )
 
             return {
