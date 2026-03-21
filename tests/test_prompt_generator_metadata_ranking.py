@@ -273,7 +273,7 @@ def test_select_relevant_examples_enforces_linear_equation_family_match():
 
     selected = generator._select_relevant_examples(
         available_examples,
-        "Solve for x: 3x - 12 = 0.",
+        "Solve for x: 3x + 12 = 0.",
         num_examples=1,
         subject="algebra",
     )

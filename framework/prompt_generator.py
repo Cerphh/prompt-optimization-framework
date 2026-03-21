@@ -1287,9 +1287,21 @@ class PromptGenerator:
         """Build a canonical signature so structurally identical problems align."""
         value = self._normalize_detection_text(text)
         # Normalize numbers and symbolic variable names while keeping operators/keywords.
+        value = re.sub(r"(?<![a-z])(\d+(?:\.\d+)?)([a-z])(?![a-z])", r"<num><var>", value)
         value = re.sub(r"\b\d+(?:\.\d+)?(?:/\d+(?:\.\d+)?)?\b", "<num>", value)
-        value = re.sub(r"\b[a-z]\b", "<var>", value)
-        value = re.sub(r"\s+", " ", value).strip()
+        value = re.sub(r"(?<![a-z])[a-z](?![a-z])", "<var>", value)
+        value = re.sub(r"\s+", "", value)
+        value = re.sub(r"[.,;:!?]+$", "", value)
+        return value
+
+    def _canonical_problem_text(self, text: str) -> str:
+        """Canonicalize problem text for duplicate detection."""
+        value = self._normalize_detection_text(text)
+        value = value.replace("q:", " ")
+        value = value.replace("a:", " ")
+        value = re.sub(r"\s+", "", value)
+        value = re.sub(r"[^a-z0-9^=+\-*/()\[\]{}|<>.,]", "", value)
+        value = re.sub(r"[.,;:!?]+$", "", value)
         return value
 
     def _requires_strict_type_matching(self, problem: str, subject: str = "general") -> bool:
@@ -1431,14 +1443,21 @@ class PromptGenerator:
 
         if strict_intent_matching and filtered_examples:
             target_signature = self._problem_pattern_signature(problem)
+            target_canonical = self._canonical_problem_text(problem)
             signature_matches = [
                 example for example in filtered_examples
                 if isinstance(example, dict)
                 and self._problem_pattern_signature(str(example.get("problem", ""))) == target_signature
             ]
-            # Enforce identical structure (allowing variable/value changes) when present.
+            # In strict mode, require same structure from the example bank.
             if signature_matches:
-                filtered_examples = signature_matches
+                non_identical_signature_matches = [
+                    example for example in signature_matches
+                    if self._canonical_problem_text(str(example.get("problem", ""))) != target_canonical
+                ]
+                filtered_examples = non_identical_signature_matches
+            else:
+                filtered_examples = []
 
         problem_constraints = self._extract_constraints_from_text(problem)
         effective_constraints = set(problem_constraints)
@@ -2104,6 +2123,15 @@ class PromptGenerator:
         # If selected examples are not sufficiently related, fall back to bank-anchored zero-shot.
         # Only apply this for auto-mode with large example banks (to preserve test coverage).
         if auto_mode and len(available_examples) >= 8 and best_relevance < self.few_shot_min_relevance:
+            return self.generate_zero_shot(target_problem_text, subject=subject)
+
+        # Never include an example that is the same as the target problem text.
+        target_canonical = self._canonical_problem_text(target_problem_text)
+        selected_examples = [
+            ex for ex in selected_examples
+            if self._canonical_problem_text(str(ex.get("problem", ""))) != target_canonical
+        ]
+        if not selected_examples:
             return self.generate_zero_shot(target_problem_text, subject=subject)
         
         # Format examples (concise format for speed)

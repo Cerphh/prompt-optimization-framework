@@ -21,7 +21,9 @@ def test_generate_few_shot_auto_detects_subject_from_question():
         num_examples=1,
     )
 
-    assert "Q: Find the derivative of f(x) = x^3." in prompt
+    assert "Use the following examples only as style references." not in prompt
+    assert "Q: Find the derivative of f(x) = x^3." not in prompt
+    assert "Q: Find the derivative of x^4 + 2x." in prompt
 
 
 def test_select_relevant_examples_ranks_conditional_probability_examples():
@@ -90,8 +92,8 @@ def test_few_shot_prefers_multi_assignment_substitution_examples():
                 "solution": "x^3 = 5^3 = 125",
             },
             {
-                "problem": "If x = 3 and y = 2, then what is the value of 2x^3 - 3y^2?",
-                "solution": "2(3^3) - 3(2^2) = 54 - 12 = 42",
+                "problem": "What is the value of a^3 - 2b when a = 3 and b = 2?",
+                "solution": "a^3 - 2b = 3^3 - 2(2) = 27 - 4 = 23",
             },
             {
                 "problem": "Solve x^3 - 2x = 0.",
@@ -107,7 +109,9 @@ def test_few_shot_prefers_multi_assignment_substitution_examples():
         num_examples=1,
     )
 
-    assert "Q: If x = 3 and y = 2, then what is the value of 2x^3 - 3y^2?" in prompt
+    assert "Use the following examples only as style references." not in prompt
+    assert "Q: What is the value of a^3 - 2b when a = 3 and b = 2?" not in prompt
+    assert "Q: What is the positive value of the expression x^3 - 2y when x = 5 and y = 2?" in prompt
 
 
 def test_few_shot_strict_match_in_counting_probability_domain():
@@ -115,7 +119,7 @@ def test_few_shot_strict_match_in_counting_probability_domain():
     generator.example_dataset = {
         "counting-probability": [
             {
-                "problem": "A coin is flipped 4 times. What is the probability of exactly 2 heads?",
+                "problem": "A die is rolled 5 times. What is the probability of getting exactly two 6s?",
                 "solution": "Use binomial counting.",
                 "type": "probability",
             },
@@ -134,7 +138,9 @@ def test_few_shot_strict_match_in_counting_probability_domain():
         num_examples=1,
     )
 
-    assert "probability of exactly 2 heads" in prompt.lower()
+    assert "use the following examples only as style references." not in prompt.lower()
+    assert "probability of getting exactly two 6s" not in prompt.lower()
+    assert "probability of getting exactly one 6" in prompt.lower()
     assert "arranged in a row" not in prompt.lower()
 
 
@@ -143,8 +149,8 @@ def test_few_shot_strict_match_in_precalculus_domain():
     generator.example_dataset = {
         "pre-calculus": [
             {
-                "problem": "Find the derivative of f(x) = x^3.",
-                "solution": "f'(x) = 3x^2",
+                "problem": "Find the derivative of f(t) = t^4 + t.",
+                "solution": "f'(t) = 4t^3 + 1",
                 "type": "derivative",
             },
             {
@@ -162,7 +168,9 @@ def test_few_shot_strict_match_in_precalculus_domain():
         num_examples=1,
     )
 
-    assert "find the derivative of f(x) = x^3" in prompt.lower()
+    assert "use the following examples only as style references." not in prompt.lower()
+    assert "find the derivative of f(t) = t^4 + t" not in prompt.lower()
+    assert "q: find the derivative of x^4 + x." in prompt.lower()
     assert "evaluate the integral" not in prompt.lower()
 
 
@@ -171,8 +179,8 @@ def test_few_shot_prompt_explicitly_targets_input_problem_answer():
     generator.example_dataset = {
         "algebra": [
             {
-                "problem": "Solve for x: 2x + 9 = 21.",
-                "solution": "x = 6",
+                "problem": "Solve for y: 3y - 12 = 0.",
+                "solution": "y = 4",
                 "type": "solve_equation",
             }
         ],
@@ -210,7 +218,7 @@ def test_few_shot_target_problem_text_is_identical_to_input():
     assert "Q: Solve for x: x² + 4x + 4 = 0" not in prompt
 
 
-def test_few_shot_can_select_identical_problem_from_example_bank():
+def test_few_shot_does_not_select_identical_problem_from_example_bank():
     generator = PromptGenerator()
     generator.example_dataset = {
         "algebra": [
@@ -220,7 +228,7 @@ def test_few_shot_can_select_identical_problem_from_example_bank():
                 "type": "solve_equation",
             },
             {
-                "problem": "Solve for x: 2x + 10 = 18.",
+                "problem": "Solve for y: 3y - 12 = 0.",
                 "solution": "x = 4",
                 "type": "solve_equation",
             },
@@ -234,9 +242,9 @@ def test_few_shot_can_select_identical_problem_from_example_bank():
         num_examples=1,
     )
 
-    # Identical example from the bank is allowed, so it appears in the
-    # example section and again in the target block.
-    assert prompt.count("Q: Solve for x: 3x - 12 = 0.") >= 2
+    # Strict mode should reject identical problem text and use a related structure match.
+    assert "Q: Solve for y: 3y - 12 = 0." in prompt
+    assert prompt.count("Q: Solve for x: 3x - 12 = 0.") == 1
 
 
 def test_few_shot_prefers_same_structure_algebra_with_variable_change():
@@ -321,3 +329,57 @@ def test_few_shot_prefers_same_structure_precalculus_with_variable_change():
 
     assert "Q: Find the derivative of f(t) = t^3 + t." in prompt
     assert "Q: Find the derivative of f(t) = sin(t)." not in prompt
+
+
+def test_few_shot_falls_back_when_no_same_structure_in_bank():
+    generator = PromptGenerator()
+    generator.example_dataset = {
+        "algebra": [
+            {
+                "problem": "Solve for y: 5^y + 4 = 125^y.",
+                "solution": "Rewrite the base and solve for y.",
+                "type": "solve_equation",
+            }
+        ],
+        "general": [],
+    }
+
+    prompt = generator.generate_few_shot(
+        "Solve for x: x + 7 = 18",
+        subject="algebra",
+        num_examples=1,
+    )
+
+    # No same-structure example exists, so strict mode should avoid unrelated few-shot examples.
+    assert "Use the following examples only as style references." not in prompt
+    assert "Q: Solve for y: 5^y + 4 = 125^y." not in prompt
+    assert "Q: Solve for x: x + 7 = 18" in prompt
+
+
+def test_few_shot_excludes_spacing_variant_identical_example():
+    generator = PromptGenerator()
+    generator.example_dataset = {
+        "algebra": [
+            {
+                "problem": "Solve for x: x + 7 = 18.",
+                "solution": "x = 11",
+                "type": "solve_equation",
+            },
+            {
+                "problem": "Solve for y: y + 7 = 18.",
+                "solution": "y = 11",
+                "type": "solve_equation",
+            },
+        ],
+        "general": [],
+    }
+
+    prompt = generator.generate_few_shot(
+        "Solve for x: x+7=18",
+        subject="algebra",
+        num_examples=1,
+    )
+
+    assert "Q: Solve for y: y + 7 = 18." in prompt
+    assert "Q: Solve for x: x + 7 = 18." not in prompt
+    assert "Q: Solve for x: x+7=18" in prompt
