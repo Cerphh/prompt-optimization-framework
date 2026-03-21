@@ -1267,11 +1267,13 @@ class PromptGenerator:
         signature = self._extract_equation_signature(value)
         if signature["has_system"]:
             return "system"
-        if signature["has_x4"]:
+
+        # Detect polynomial degree by any variable symbol, not just x.
+        if re.search(r"\b[a-z]\s*\^\s*4\b", value):
             return "quartic"
-        if signature["has_x3"]:
+        if re.search(r"\b[a-z]\s*\^\s*3\b", value):
             return "cubic"
-        if signature["has_x2"]:
+        if re.search(r"\b[a-z]\s*\^\s*2\b", value):
             return "quadratic"
         if signature["has_abs"]:
             return "absolute"
@@ -1280,6 +1282,15 @@ class PromptGenerator:
         if has_variable:
             return "linear"
         return None
+
+    def _problem_pattern_signature(self, text: str) -> str:
+        """Build a canonical signature so structurally identical problems align."""
+        value = self._normalize_detection_text(text)
+        # Normalize numbers and symbolic variable names while keeping operators/keywords.
+        value = re.sub(r"\b\d+(?:\.\d+)?(?:/\d+(?:\.\d+)?)?\b", "<num>", value)
+        value = re.sub(r"\b[a-z]\b", "<var>", value)
+        value = re.sub(r"\s+", " ", value).strip()
+        return value
 
     def _requires_strict_type_matching(self, problem: str, subject: str = "general") -> bool:
         """Enable strict few-shot type matching for the three core math domains."""
@@ -1404,7 +1415,8 @@ class PromptGenerator:
                 # Enforce strict intent matching even when type metadata is absent.
                 filtered_examples = []
 
-        if strict_intent_matching and filtered_examples:
+        equation_family_intents = {"solve_equation", "real_solutions", "system"}
+        if strict_intent_matching and problem_intent in equation_family_intents and filtered_examples:
             problem_family = self._detect_equation_family(problem)
             if problem_family is not None:
                 family_matches = [
@@ -1416,6 +1428,17 @@ class PromptGenerator:
                     filtered_examples = family_matches
                 else:
                     filtered_examples = []
+
+        if strict_intent_matching and filtered_examples:
+            target_signature = self._problem_pattern_signature(problem)
+            signature_matches = [
+                example for example in filtered_examples
+                if isinstance(example, dict)
+                and self._problem_pattern_signature(str(example.get("problem", ""))) == target_signature
+            ]
+            # Enforce identical structure (allowing variable/value changes) when present.
+            if signature_matches:
+                filtered_examples = signature_matches
 
         problem_constraints = self._extract_constraints_from_text(problem)
         effective_constraints = set(problem_constraints)

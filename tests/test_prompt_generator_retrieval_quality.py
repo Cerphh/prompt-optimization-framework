@@ -237,3 +237,87 @@ def test_few_shot_can_select_identical_problem_from_example_bank():
     # Identical example from the bank is allowed, so it appears in the
     # example section and again in the target block.
     assert prompt.count("Q: Solve for x: 3x - 12 = 0.") >= 2
+
+
+def test_few_shot_prefers_same_structure_algebra_with_variable_change():
+    generator = PromptGenerator()
+    generator.example_dataset = {
+        "algebra": [
+            {
+                "problem": "Solve for y: 4y + 8 = 20.",
+                "solution": "y = 3",
+                "type": "solve_equation",
+            },
+            {
+                "problem": "Solve for y: y^2 - 9 = 0.",
+                "solution": "y = 3 or y = -3",
+                "type": "solve_equation",
+            },
+        ],
+        "general": [],
+    }
+
+    prompt = generator.generate_few_shot(
+        "Solve for x: 4x + 8 = 20.",
+        subject="algebra",
+        num_examples=1,
+    )
+
+    assert "Q: Solve for y: 4y + 8 = 20." in prompt
+    assert "Q: Solve for y: y^2 - 9 = 0." not in prompt
+
+
+def test_few_shot_prefers_same_structure_probability_with_value_change():
+    generator = PromptGenerator()
+    generator.example_dataset = {
+        "counting-probability": [
+            {
+                "problem": "A coin is flipped 5 times. What is the probability of exactly 2 heads?",
+                "solution": "Use binomial distribution.",
+                "type": "probability",
+            },
+            {
+                "problem": "A coin is flipped 5 times. What is the probability of at least 2 heads?",
+                "solution": "Use complement and binomial.",
+                "type": "probability",
+            },
+        ],
+        "general": [],
+    }
+
+    prompt = generator.generate_few_shot(
+        "A coin is flipped 7 times. What is the probability of exactly 3 heads?",
+        subject="counting-probability",
+        num_examples=1,
+    )
+
+    assert "probability of exactly 2 heads" in prompt.lower()
+    assert "probability of at least 2 heads" not in prompt.lower()
+
+
+def test_few_shot_prefers_same_structure_precalculus_with_variable_change():
+    generator = PromptGenerator()
+    generator.example_dataset = {
+        "pre-calculus": [
+            {
+                "problem": "Find the derivative of f(t) = t^3 + t.",
+                "solution": "f'(t) = 3t^2 + 1",
+                "type": "derivative",
+            },
+            {
+                "problem": "Find the derivative of f(t) = sin(t).",
+                "solution": "f'(t) = cos(t)",
+                "type": "derivative",
+            },
+        ],
+        "general": [],
+    }
+
+    prompt = generator.generate_few_shot(
+        "Find the derivative of f(x) = x^3 + x.",
+        subject="pre-calculus",
+        num_examples=1,
+    )
+
+    assert "Q: Find the derivative of f(t) = t^3 + t." in prompt
+    assert "Q: Find the derivative of f(t) = sin(t)." not in prompt
