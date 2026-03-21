@@ -164,3 +164,76 @@ def test_few_shot_strict_match_in_precalculus_domain():
 
     assert "find the derivative of f(x) = x^3" in prompt.lower()
     assert "evaluate the integral" not in prompt.lower()
+
+
+def test_few_shot_prompt_explicitly_targets_input_problem_answer():
+    generator = PromptGenerator()
+    generator.example_dataset = {
+        "algebra": [
+            {
+                "problem": "Solve for x: 2x + 9 = 21.",
+                "solution": "x = 6",
+                "type": "solve_equation",
+            }
+        ],
+        "general": [],
+    }
+
+    prompt = generator.generate_few_shot(
+        "Solve for x: 3x - 12 = 0.",
+        subject="algebra",
+        num_examples=1,
+    )
+
+    assert "do not repeat or copy any example answer" in prompt.lower()
+    assert "target problem" in prompt.lower()
+    assert "Q: Solve for x: 3x - 12 = 0." in prompt
+
+
+def test_few_shot_target_problem_text_is_identical_to_input():
+    generator = PromptGenerator()
+    generator.example_dataset = {
+        "algebra": [
+            {
+                "problem": "Solve for x: 2x + 9 = 21.",
+                "solution": "x = 6",
+                "type": "solve_equation",
+            }
+        ],
+        "general": [],
+    }
+
+    raw_problem = "Solve for x: x^2 + 4x + 4 = 0"
+    prompt = generator.generate_few_shot(raw_problem, subject="algebra", num_examples=1)
+
+    assert f"Q: {raw_problem}" in prompt
+    assert "Q: Solve for x: x² + 4x + 4 = 0" not in prompt
+
+
+def test_few_shot_can_select_identical_problem_from_example_bank():
+    generator = PromptGenerator()
+    generator.example_dataset = {
+        "algebra": [
+            {
+                "problem": "Solve for x: 3x - 12 = 0.",
+                "solution": "x = 4",
+                "type": "solve_equation",
+            },
+            {
+                "problem": "Solve for x: 2x + 10 = 18.",
+                "solution": "x = 4",
+                "type": "solve_equation",
+            },
+        ],
+        "general": [],
+    }
+
+    prompt = generator.generate_few_shot(
+        "Solve for x: 3x - 12 = 0.",
+        subject="algebra",
+        num_examples=1,
+    )
+
+    # Identical example from the bank is allowed, so it appears in the
+    # example section and again in the target block.
+    assert prompt.count("Q: Solve for x: 3x - 12 = 0.") >= 2

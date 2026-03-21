@@ -460,12 +460,11 @@ class PromptGenerator:
             Zero-shot prompt
         """
         _ = subject
-        normalized_problem = self._normalize_problem_text(problem)
+        target_problem_text = str(problem)
         return (
-        "Carefully solve the following math problem in your mind, ensuring the answer is correct. "
-        "Do NOT show any steps, explanations, or reasoning. "
-        "Provide ONLY the final answer.\n\n"
-        f"Q: {normalized_problem}\n"
+        "Solve the following math problem and end with a concise final answer. "
+        "Do NOT show steps or explanations.\n\n"
+        f"Q: {target_problem_text}\n"
         "A:"
     )
 
@@ -1284,7 +1283,7 @@ class PromptGenerator:
 
     def _requires_strict_type_matching(self, problem: str, subject: str = "general") -> bool:
         """Enable strict few-shot type matching for the three core math domains."""
-        normalized_subject = self._normalize_subject(subject)
+        normalized_subject = (subject or "").strip().lower()
         if normalized_subject not in {"algebra", "counting-probability", "pre-calculus"}:
             return False
 
@@ -1711,6 +1710,7 @@ class PromptGenerator:
         problem: str,
         num_examples: int,
         subject: str = "general",
+        exclude_identical_target: bool = False,
     ) -> list:
         """
         Select the most relevant examples for the given problem.
@@ -1725,6 +1725,19 @@ class PromptGenerator:
         """
         if num_examples <= 0:
             return []
+
+        if exclude_identical_target:
+            normalized_problem = self._normalize_problem_text(problem)
+            # Avoid direct answer leakage: never use an example whose problem
+            # text is identical to the current target problem.
+            available_examples = [
+                ex for ex in available_examples
+                if isinstance(ex, dict)
+                and self._normalize_problem_text(str(ex.get("problem", ""))) != normalized_problem
+            ]
+
+            if not available_examples:
+                return []
 
         problem_keywords = self._detect_problem_keywords(problem)
         available_examples = self._filter_examples_by_metadata(available_examples, problem, subject=subject)
@@ -1985,6 +1998,8 @@ class PromptGenerator:
             Few-shot prompt with subject-specific, relevant examples
         """
         normalized_problem = self._normalize_problem_text(problem)
+        # Keep target prompt text identical to user input; use normalized text only for retrieval.
+        target_problem_text = str(problem)
         
         # Track if num_examples determination is automatic (used for smart relevance fallback)
         auto_mode = num_examples is None
@@ -2014,7 +2029,7 @@ class PromptGenerator:
         if not available_examples:
             print(f"Warning: No examples found for subject '{subject}'")
             # Return zero-shot if no examples
-            return self.generate_zero_shot(normalized_problem, subject=subject)
+            return self.generate_zero_shot(target_problem_text, subject=subject)
         
         # Select relevant examples (smart selection based on problem content)
         num_to_select = min(num_examples, len(available_examples))
@@ -2027,7 +2042,7 @@ class PromptGenerator:
         )
         strict_matching = self._requires_strict_type_matching(normalized_problem, subject)
         if strict_matching and not selected_examples:
-            return self.generate_zero_shot(normalized_problem, subject=subject)
+            return self.generate_zero_shot(target_problem_text, subject=subject)
 
         best_relevance = self._top_relevance_score(selected_examples, normalized_problem, problem_keywords)
 
@@ -2066,7 +2081,7 @@ class PromptGenerator:
         # If selected examples are not sufficiently related, fall back to bank-anchored zero-shot.
         # Only apply this for auto-mode with large example banks (to preserve test coverage).
         if auto_mode and len(available_examples) >= 8 and best_relevance < self.few_shot_min_relevance:
-            return self.generate_zero_shot(normalized_problem, subject=subject)
+            return self.generate_zero_shot(target_problem_text, subject=subject)
         
         # Format examples (concise format for speed)
         examples_text = "\n\n".join([
@@ -2077,11 +2092,15 @@ class PromptGenerator:
             for ex in selected_examples
         ])
         return (
-            "Use the following examples to understand how to solve these problems, but DO NOT output any of the steps or explanations shown in the examples. "
+            "Solve the following math problems and give the final answer. "
+            "Use the following examples only as style references. "
+            "Do NOT repeat or copy any example answer. "
+            "You must solve ONLY the target problem shown after 'TARGET PROBLEM'. "
             "Think carefully and use the examples only for internal reasoning. "
-            "Output ONLY the final answer for the following question. Do NOT include any steps, explanations, or extra text.\n\n"
+            "Output ONLY the final answer for the TARGET PROBLEM. Do NOT include steps, explanations, or extra text.\n\n"
             f"{examples_text}\n\n"
-            f"Q: {normalized_problem}\n"
+            "TARGET PROBLEM\n"
+            f"Q: {target_problem_text}\n"
             "A:"
         )
     def generate_all_techniques(self, problem: str, subject: str = "general") -> Dict[str, str]:
