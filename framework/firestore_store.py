@@ -18,6 +18,9 @@ from firebase_admin import credentials, firestore
 class FirestoreStore:
     """Handles benchmark result persistence to Firestore."""
 
+    RUN_BUCKET_DOCUMENT_ID = "3_runs"
+    RUN_BUCKET_PROBLEMS_COLLECTION = "problems"
+
     def __init__(
         self,
         collection_name: str = "benchmark_results",
@@ -125,16 +128,12 @@ class FirestoreStore:
                 source=source,
             )
 
-            problem_ref = (
-                self.db.collection(self.collection_name)
-                .document(domain)
-                .collection(difficulty)
-                .document(problem_id)
-            )
+            problem_ref = self._problem_collection_ref(domain=domain, difficulty=difficulty).document(problem_id)
             problem_ref.set(
                 {
                     "domain": domain,
                     "difficulty": difficulty,
+                    "run_bucket": self.RUN_BUCKET_DOCUMENT_ID,
                     "problem": problem_text,
                     "problem_normalized": self._normalize_problem_text(problem_text),
                     "problem_id": problem_id,
@@ -397,6 +396,39 @@ class FirestoreStore:
         normalized = str(value).strip().lower().replace(" ", "_")
         return normalized or default
 
+    def _problem_collection_ref(self, domain: str, difficulty: str) -> Any:
+        """Return collection ref for benchmark_results/{domain}/{difficulty}/3_runs/*."""
+        return (
+            self.db.collection(self.collection_name)
+            .document(domain)
+            .collection(difficulty)
+            .document(self.RUN_BUCKET_DOCUMENT_ID)
+            .collection(self.RUN_BUCKET_PROBLEMS_COLLECTION)
+        )
+
+    def _legacy_problem_collection_ref(self, domain: str, difficulty: str) -> Any:
+        """Legacy schema fallback: benchmark_results/{domain}/{difficulty}/*."""
+        return (
+            self.db.collection(self.collection_name)
+            .document(domain)
+            .collection(difficulty)
+        )
+
+    def _stream_problem_docs(self, domain: str, difficulty: str):
+        """Stream docs from new schema first, fallback to legacy when empty/unavailable."""
+        try:
+            docs = list(self._problem_collection_ref(domain=domain, difficulty=difficulty).stream())
+            if docs:
+                for doc in docs:
+                    yield doc
+                return
+        except Exception:
+            # Fallback to legacy hierarchy when the new bucket does not exist yet.
+            pass
+
+        for doc in self._legacy_problem_collection_ref(domain=domain, difficulty=difficulty).stream():
+            yield doc
+
     def _resolve_domain(self, benchmark_result: Dict[str, Any], metadata: Dict[str, Any]) -> str:
         domain = (
             metadata.get("domain")
@@ -446,11 +478,12 @@ class FirestoreStore:
             normalized_difficulty = self._normalize_key(difficulty, default="basic")
 
             query = (
-                self.db.collection(self.collection_name)
-                .document(normalized_domain)
-                .collection(normalized_difficulty)
+                self._stream_problem_docs(
+                    domain=normalized_domain,
+                    difficulty=normalized_difficulty,
+                )
             )
-            for doc in query.stream():
+            for doc in query:
                 data = doc.to_dict() or {}
                 for entry in self._extract_result_entries(doc.reference, data):
                     if require_ground_truth:
@@ -563,15 +596,16 @@ class FirestoreStore:
             normalized_difficulty = self._normalize_key(difficulty, default="basic")
 
             query = (
-                self.db.collection(self.collection_name)
-                .document(normalized_domain)
-                .collection(normalized_difficulty)
+                self._stream_problem_docs(
+                    domain=normalized_domain,
+                    difficulty=normalized_difficulty,
+                )
             )
 
             matched_documents = 0
             similarities: List[float] = []
 
-            for doc in query.stream():
+            for doc in query:
                 data = doc.to_dict() or {}
                 for entry in self._extract_result_entries(doc.reference, data):
                     if require_ground_truth:
