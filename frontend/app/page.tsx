@@ -1315,7 +1315,10 @@ export default function Home() {
 
                 {/* Save / Export status */}
                 {saveStatus && (() => {
-                  const isSuccess = saveStatus.startsWith('Saved') || saveStatus.startsWith('Exported as JSON and saved')
+                  const isSuccess =
+                    saveStatus.startsWith('Saved') ||
+                    saveStatus.startsWith('Exported as JSON and saved') ||
+                    saveStatus.startsWith('Consistency test complete')
                   const isExportOnly = saveStatus.startsWith('Exported as JSON. Don')
                   const isNotSaved = saveStatus.startsWith('Not saved')
                   const isFail = !isSuccess && !isExportOnly && !isNotSaved
