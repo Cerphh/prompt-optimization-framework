@@ -109,6 +109,23 @@ const toSafeNumber = (value: unknown): number => {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
+const HIDDEN_PROMPT_PREAMBLES = [
+  "Solve the following math problems and give the final answer. Use the following examples only as style references. Do NOT repeat or copy any example answer. You must solve ONLY the target problem shown after 'TARGET PROBLEM'. Think carefully and use the examples only for internal reasoning. Output ONLY the final answer for the TARGET PROBLEM. Do NOT include steps, explanations, or extra text.",
+]
+
+const getDisplayPrompt = (prompt?: string): string => {
+  if (!prompt) return 'No prompt available'
+
+  let display = prompt
+  for (const preamble of HIDDEN_PROMPT_PREAMBLES) {
+    if (display.startsWith(preamble)) {
+      display = display.slice(preamble.length).trimStart()
+    }
+  }
+
+  return display.trim() || 'No prompt available'
+}
+
 export default function Home() {
   const [problem, setProblem] = useState('')
   const [subject, setSubject] = useState('algebra')
@@ -1328,7 +1345,7 @@ export default function Home() {
                       style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}
                     >
                       <pre className="text-sm font-mono whitespace-pre-wrap leading-relaxed">
-                        {result.best_result?.prompt || 'No prompt available'}
+                        {getDisplayPrompt(result.best_result?.prompt)}
                       </pre>
                     </div>
                   </div>
@@ -1612,7 +1629,7 @@ export default function Home() {
                   style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}
                 >
                   <pre className="text-sm font-mono whitespace-pre-wrap leading-relaxed">
-                    {expandedResult.prompt || 'No prompt captured for this technique run.'}
+                    {getDisplayPrompt(expandedResult.prompt)}
                   </pre>
                 </div>
               </div>
