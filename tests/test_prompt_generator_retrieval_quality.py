@@ -108,3 +108,59 @@ def test_few_shot_prefers_multi_assignment_substitution_examples():
     )
 
     assert "Q: If x = 3 and y = 2, then what is the value of 2x^3 - 3y^2?" in prompt
+
+
+def test_few_shot_strict_match_in_counting_probability_domain():
+    generator = PromptGenerator()
+    generator.example_dataset = {
+        "counting-probability": [
+            {
+                "problem": "A coin is flipped 4 times. What is the probability of exactly 2 heads?",
+                "solution": "Use binomial counting.",
+                "type": "probability",
+            },
+            {
+                "problem": "In how many ways can 5 students be arranged in a row?",
+                "solution": "Use 5!.",
+                "type": "counting_arrangements",
+            },
+        ],
+        "general": [],
+    }
+
+    prompt = generator.generate_few_shot(
+        "A die is rolled 3 times. What is the probability of getting exactly one 6?",
+        subject="counting-probability",
+        num_examples=1,
+    )
+
+    assert "probability of exactly 2 heads" in prompt.lower()
+    assert "arranged in a row" not in prompt.lower()
+
+
+def test_few_shot_strict_match_in_precalculus_domain():
+    generator = PromptGenerator()
+    generator.example_dataset = {
+        "pre-calculus": [
+            {
+                "problem": "Find the derivative of f(x) = x^3.",
+                "solution": "f'(x) = 3x^2",
+                "type": "derivative",
+            },
+            {
+                "problem": "Evaluate the integral of 2x dx.",
+                "solution": "x^2 + C",
+                "type": "integral",
+            },
+        ],
+        "general": [],
+    }
+
+    prompt = generator.generate_few_shot(
+        "Find the derivative of x^4 + x.",
+        subject="pre-calculus",
+        num_examples=1,
+    )
+
+    assert "find the derivative of f(x) = x^3" in prompt.lower()
+    assert "evaluate the integral" not in prompt.lower()

@@ -248,3 +248,34 @@ def test_select_relevant_examples_compare_values_uses_template_fallback_when_spa
     )
 
     assert selected[0]["type"] == "compare_values"
+
+
+def test_select_relevant_examples_enforces_linear_equation_family_match():
+    generator = PromptGenerator()
+
+    available_examples = [
+        {
+            "problem": "Solve for x: 2x + 9 = 21.",
+            "solution": "x = 6",
+            "type": "solve_equation",
+        },
+        {
+            "problem": "Solve for x: x^2 - 5x + 6 = 0.",
+            "solution": "(x-2)(x-3)=0, so x=2 or x=3",
+            "type": "solve_equation",
+        },
+        {
+            "problem": "Solve the system: x + y = 8 and x - y = 2.",
+            "solution": "x = 5, y = 3",
+            "type": "solve_equation",
+        },
+    ]
+
+    selected = generator._select_relevant_examples(
+        available_examples,
+        "Solve for x: 3x - 12 = 0.",
+        num_examples=1,
+        subject="algebra",
+    )
+
+    assert selected[0]["problem"] == "Solve for x: 2x + 9 = 21."

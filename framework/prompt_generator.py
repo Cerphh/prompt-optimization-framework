@@ -1246,7 +1246,8 @@ class PromptGenerator:
         type_values = self._normalize_label_list(example.get("type"))
         if type_values:
             example_type = self._normalize_type_label(type_values[0])
-            if example_type == problem_type or self._intent_similarity(problem_type, example_type) > 0:
+            # Keep type matching strict so few-shot examples mirror target intent.
+            if example_type == problem_type:
                 return True
 
         # The migrated bank has many speed/rate algebra word problems typed as
@@ -1257,6 +1258,38 @@ class PromptGenerator:
                 return True
 
         return False
+
+    def _detect_equation_family(self, text: str) -> Optional[str]:
+        """Detect coarse equation family for strict few-shot alignment."""
+        value = self._normalize_detection_text(text)
+        if "=" not in value:
+            return None
+
+        signature = self._extract_equation_signature(value)
+        if signature["has_system"]:
+            return "system"
+        if signature["has_x4"]:
+            return "quartic"
+        if signature["has_x3"]:
+            return "cubic"
+        if signature["has_x2"]:
+            return "quadratic"
+        if signature["has_abs"]:
+            return "absolute"
+
+        has_variable = bool(re.search(r"\b[a-z]\b|\d+[a-z]|[a-z]\d+", value))
+        if has_variable:
+            return "linear"
+        return None
+
+    def _requires_strict_type_matching(self, problem: str, subject: str = "general") -> bool:
+        """Enable strict few-shot type matching for the three core math domains."""
+        normalized_subject = self._normalize_subject(subject)
+        if normalized_subject not in {"algebra", "counting-probability", "pre-calculus"}:
+            return False
+
+        problem_type = self._normalize_type_label(self._detect_primary_intent(problem))
+        return problem_type != "general"
 
     def _score_metadata_alignment(
         self,
@@ -1333,13 +1366,15 @@ class PromptGenerator:
 
         return metadata_score
 
-    def _filter_examples_by_metadata(self, available_examples: List[dict], problem: str) -> List[dict]:
+    def _filter_examples_by_metadata(self, available_examples: List[dict], problem: str, subject: str = "general") -> List[dict]:
         """Apply optional type/constraint filtering when metadata is available."""
         if not available_examples:
             return []
 
         filtered_examples = available_examples
-        problem_type = self._normalize_type_label(self._detect_primary_intent(problem))
+        problem_intent = self._detect_primary_intent(problem)
+        problem_type = self._normalize_type_label(problem_intent)
+        strict_intent_matching = self._requires_strict_type_matching(problem, subject)
 
         typed_examples = [
             example for example in filtered_examples
@@ -1354,6 +1389,34 @@ class PromptGenerator:
 
             if type_matches:
                 filtered_examples = type_matches
+            elif strict_intent_matching:
+                # If typed metadata exists but none match, enforce strictness.
+                filtered_examples = []
+
+        if strict_intent_matching and problem_type != "general":
+            intent_matches = [
+                example for example in filtered_examples
+                if isinstance(example, dict)
+                and self._detect_primary_intent(str(example.get("problem", ""))) == problem_intent
+            ]
+            if intent_matches:
+                filtered_examples = intent_matches
+            elif filtered_examples:
+                # Enforce strict intent matching even when type metadata is absent.
+                filtered_examples = []
+
+        if strict_intent_matching and filtered_examples:
+            problem_family = self._detect_equation_family(problem)
+            if problem_family is not None:
+                family_matches = [
+                    example for example in filtered_examples
+                    if isinstance(example, dict)
+                    and self._detect_equation_family(str(example.get("problem", ""))) == problem_family
+                ]
+                if family_matches:
+                    filtered_examples = family_matches
+                else:
+                    filtered_examples = []
 
         problem_constraints = self._extract_constraints_from_text(problem)
         effective_constraints = set(problem_constraints)
@@ -1617,7 +1680,11 @@ class PromptGenerator:
     def _resolve_subject_for_problem(self, problem: str, requested_subject: str) -> str:
         """Resolve the most appropriate subject with fallback to automatic classification."""
         explicit_subject = (requested_subject or "").strip().lower()
-        if explicit_subject in self.example_dataset and self.example_dataset.get(explicit_subject):
+        if (
+            explicit_subject in self.example_dataset
+            and self.example_dataset.get(explicit_subject)
+            and explicit_subject != "general"
+        ):
             return explicit_subject
 
         requested = self._normalize_subject(requested_subject)
@@ -1643,6 +1710,7 @@ class PromptGenerator:
         available_examples: list,
         problem: str,
         num_examples: int,
+        subject: str = "general",
     ) -> list:
         """
         Select the most relevant examples for the given problem.
@@ -1659,7 +1727,7 @@ class PromptGenerator:
             return []
 
         problem_keywords = self._detect_problem_keywords(problem)
-        available_examples = self._filter_examples_by_metadata(available_examples, problem)
+        available_examples = self._filter_examples_by_metadata(available_examples, problem, subject=subject)
         problem_intent = self._detect_primary_intent(problem)
 
         if problem_intent == "compare_values":
@@ -1955,12 +2023,16 @@ class PromptGenerator:
             available_examples,
             normalized_problem,
             num_to_select,
+            subject=subject,
         )
+        strict_matching = self._requires_strict_type_matching(normalized_problem, subject)
+        if strict_matching and not selected_examples:
+            return self.generate_zero_shot(normalized_problem, subject=subject)
 
         best_relevance = self._top_relevance_score(selected_examples, normalized_problem, problem_keywords)
 
         # If relevance is weak, try a detected-subject rerank and then a global rerank.
-        if best_relevance < self.few_shot_min_relevance:
+        if not strict_matching and best_relevance < self.few_shot_min_relevance:
             detected_subject = self._normalize_subject(self.classify_subject(normalized_problem))
             if detected_subject != subject and detected_subject in self.example_dataset:
                 detected_examples = self.example_dataset.get(detected_subject, [])
@@ -1969,6 +2041,7 @@ class PromptGenerator:
                         detected_examples,
                         normalized_problem,
                         min(num_examples, len(detected_examples)),
+                        subject=detected_subject,
                     )
                     detected_best = self._top_relevance_score(detected_selected, normalized_problem, problem_keywords)
                     if detected_best > best_relevance + 0.05:
@@ -1976,13 +2049,14 @@ class PromptGenerator:
                         selected_examples = detected_selected
                         best_relevance = detected_best
 
-        if best_relevance < self.few_shot_min_relevance:
+        if not strict_matching and best_relevance < self.few_shot_min_relevance:
             pooled_examples = self._gather_all_examples()
             if pooled_examples:
                 pooled_selected = self._select_relevant_examples(
                     pooled_examples,
                     normalized_problem,
                     min(num_examples, len(pooled_examples)),
+                    subject=subject,
                 )
                 pooled_best = self._top_relevance_score(pooled_selected, normalized_problem, problem_keywords)
                 if pooled_best > best_relevance + 0.05:
