@@ -18,9 +18,6 @@ from firebase_admin import credentials, firestore
 class FirestoreStore:
     """Handles benchmark result persistence to Firestore."""
 
-    RUN_BUCKET_DOCUMENT_ID = "3_runs"
-    RUN_BUCKET_PROBLEMS_COLLECTION = "problems"
-
     def __init__(
         self,
         collection_name: str = "benchmark_results",
@@ -100,7 +97,12 @@ class FirestoreStore:
         source: str,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """Persist a benchmark result document to Firestore."""
+        """Persist a benchmark result to a domain/difficulty document in Firestore.
+        
+        Schema: benchmark_results/{domain}/{difficulty}
+        - result_per_run: array of individual result objects
+        - 3_run_ave: aggregated metrics from the last 3 runs
+        """
         if not self.enabled:
             return {
                 "success": False,
@@ -119,8 +121,6 @@ class FirestoreStore:
             metadata = metadata or {}
             domain = self._resolve_domain(benchmark_result=benchmark_result, metadata=metadata)
             difficulty = self._resolve_difficulty(benchmark_result=benchmark_result, metadata=metadata)
-            problem_text = self._resolve_problem_text(benchmark_result=benchmark_result, metadata=metadata)
-            problem_id = self._build_problem_document_id(problem_text)
 
             payload = self._build_storage_document(
                 benchmark_result=benchmark_result,
@@ -128,35 +128,44 @@ class FirestoreStore:
                 source=source,
             )
 
-            problem_ref = self._problem_collection_ref(domain=domain, difficulty=difficulty).document(problem_id)
-            problem_ref.set(
+            domain_doc_ref = self.db.collection(self.collection_name).document(domain)
+            difficulty_doc_ref = domain_doc_ref.collection(difficulty).document("aggregated")
+
+            # Get existing data to preserve result_per_run array
+            existing_doc = difficulty_doc_ref.get()
+            existing_data = existing_doc.to_dict() if existing_doc.exists else {}
+            result_per_run = existing_data.get("result_per_run", [])
+            
+            # Append new result
+            result_per_run.append(payload)
+            
+            # Keep only last 100 results to avoid excessive document size
+            if len(result_per_run) > 100:
+                result_per_run = result_per_run[-100:]
+            
+            # Compute 3_run_ave from last 3 results
+            three_run_ave = self._compute_3_run_average(result_per_run)
+            
+            # Set the document with both result_per_run and 3_run_ave
+            difficulty_doc_ref.set(
                 {
                     "domain": domain,
                     "difficulty": difficulty,
-                    "run_bucket": self.RUN_BUCKET_DOCUMENT_ID,
-                    "problem": problem_text,
-                    "problem_normalized": self._normalize_problem_text(problem_text),
-                    "problem_id": problem_id,
-                    "updated_at": firestore.SERVER_TIMESTAMP,
+                    "result_per_run": result_per_run,
+                    "3_run_ave": three_run_ave,
                     "result_count": firestore.Increment(1),
+                    "updated_at": firestore.SERVER_TIMESTAMP,
                 },
                 merge=True,
             )
-
-            result_ref = problem_ref.collection("results").document(payload["result_id"])
-            result_ref.set({
-                **payload,
-                "created_at": firestore.SERVER_TIMESTAMP,
-            })
 
             return {
                 "success": True,
                 "collection": self.collection_name,
                 "domain": domain,
                 "difficulty": difficulty,
-                "problem_id": problem_id,
-                "document_id": problem_ref.id,
                 "result_id": payload.get("result_id"),
+                "result_per_run_count": len(result_per_run),
             }
         except Exception as exc:
             return {
@@ -164,6 +173,43 @@ class FirestoreStore:
                 "reason": "write_failed",
                 "error": str(exc),
             }
+
+    def _compute_3_run_average(self, result_per_run: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Compute aggregated metrics from the last 3 results in result_per_run."""
+        if not result_per_run:
+            return {}
+        
+        # Get last 3 results
+        last_3 = result_per_run[-3:] if len(result_per_run) >= 3 else result_per_run
+        
+        # Aggregate performance scores
+        performance_scores = [r.get("performance_score") for r in last_3 if r.get("performance_score") is not None]
+        avg_performance = sum(performance_scores) / len(performance_scores) if performance_scores else None
+        
+        # Aggregate technique comparisons
+        technique_totals: Dict[str, float] = {}
+        technique_counts: Dict[str, int] = {}
+        
+        for result in last_3:
+            comparisons = result.get("technique_comparison", [])
+            if isinstance(comparisons, list):
+                for comparison in comparisons:
+                    if isinstance(comparison, dict):
+                        technique = comparison.get("technique")
+                        overall = comparison.get("overall")
+                        if technique and isinstance(overall, (int, float)):
+                            technique_totals[technique] = technique_totals.get(technique, 0.0) + float(overall)
+                            technique_counts[technique] = technique_counts.get(technique, 0) + 1
+        
+        technique_averages = {}
+        for technique, count in technique_counts.items():
+            technique_averages[technique] = round(technique_totals[technique] / count, 4)
+        
+        return {
+            "avg_performance_score": round(avg_performance, 4) if avg_performance is not None else None,
+            "technique_averages": technique_averages,
+            "sample_count": len(last_3),
+        }
 
     def _resolve_problem_text(self, benchmark_result: Dict[str, Any], metadata: Dict[str, Any]) -> str:
         problem = metadata.get("problem") or benchmark_result.get("problem") or ""
@@ -240,26 +286,16 @@ class FirestoreStore:
         return document
 
     def _extract_result_entries(self, doc_ref: Any, data: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Return result entries for subcollection schema and legacy document schemas."""
+        """Extract result entries from the new Option A schema.
+        
+        Results are stored in the result_per_run array at domain/difficulty level.
+        """
         entries: List[Dict[str, Any]] = []
 
-        try:
-            for result_doc in doc_ref.collection("results").stream():
-                result_data = result_doc.to_dict() or {}
-                if isinstance(result_data, dict):
-                    entries.append(result_data)
-        except Exception:
-            # If subcollection read fails for a document, continue with legacy fallbacks.
-            pass
-
-        nested_results = data.get("results")
-        if isinstance(nested_results, list):
-            entries.extend(item for item in nested_results if isinstance(item, dict))
-
-        # Backward compatibility: older schema stored one result per document.
-        legacy_comparisons = data.get("technique_comparison")
-        if isinstance(legacy_comparisons, list):
-            entries.append(data)
+        # New schema (Option A): result_per_run is an array
+        result_per_run = data.get("result_per_run", [])
+        if isinstance(result_per_run, list):
+            entries.extend(item for item in result_per_run if isinstance(item, dict))
 
         return entries
 
@@ -397,17 +433,12 @@ class FirestoreStore:
         return normalized or default
 
     def _problem_collection_ref(self, domain: str, difficulty: str) -> Any:
-        """Return collection ref for benchmark_results/{domain}/{difficulty}/3_runs/*."""
-        return (
-            self.db.collection(self.collection_name)
-            .document(domain)
-            .collection(difficulty)
-            .document(self.RUN_BUCKET_DOCUMENT_ID)
-            .collection(self.RUN_BUCKET_PROBLEMS_COLLECTION)
-        )
-
-    def _legacy_problem_collection_ref(self, domain: str, difficulty: str) -> Any:
-        """Legacy schema fallback: benchmark_results/{domain}/{difficulty}/*."""
+        """Return collection ref for domain/difficulty aggregated results (legacy hierarchy fallback).
+        
+        New schema (Option A): benchmark_results/{domain}/{difficulty}/aggregated
+        Legacy schema: benchmark_results/{domain}/{difficulty}/3_runs/problems/{problem_id}
+        """
+        # New schema location
         return (
             self.db.collection(self.collection_name)
             .document(domain)
@@ -415,19 +446,23 @@ class FirestoreStore:
         )
 
     def _stream_problem_docs(self, domain: str, difficulty: str):
-        """Stream docs from new schema first, fallback to legacy when empty/unavailable."""
+        """Stream doc from the aggregated results at domain/difficulty level.
+        
+        Returns the aggregated document at benchmark_results/{domain}/{difficulty}/aggregated
+        """
         try:
-            docs = list(self._problem_collection_ref(domain=domain, difficulty=difficulty).stream())
-            if docs:
-                for doc in docs:
-                    yield doc
-                return
+            aggregated_doc = (
+                self.db.collection(self.collection_name)
+                .document(domain)
+                .collection(difficulty)
+                .document("aggregated")
+                .get()
+            )
+            if aggregated_doc.exists:
+                yield aggregated_doc
         except Exception:
-            # Fallback to legacy hierarchy when the new bucket does not exist yet.
+            # If query fails, no data available
             pass
-
-        for doc in self._legacy_problem_collection_ref(domain=domain, difficulty=difficulty).stream():
-            yield doc
 
     def _resolve_domain(self, benchmark_result: Dict[str, Any], metadata: Dict[str, Any]) -> str:
         domain = (
