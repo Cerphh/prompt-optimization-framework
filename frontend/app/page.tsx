@@ -14,6 +14,40 @@ interface Technique {
   consistency_runs_used?: number
 }
 
+interface IndividualRun {
+  technique: string
+  run_index: number
+  runs_configured: number
+  success: boolean
+  prompt?: string
+  response?: string
+  error?: string
+  metrics: {
+    elapsed_time: number
+    total_tokens: number
+    prompt_tokens: number
+    completion_tokens: number
+    done_reason?: string
+    truncated?: boolean
+    continuation_rounds?: number
+    continuation_error?: string | null
+    verifier_retry_applied?: boolean
+    verifier_verdict?: string
+  }
+  normalized_output?: string
+  scores: {
+    accuracy: number
+    consistency: number | null
+    efficiency: number
+    overall: number
+    consistency_is_provisional: boolean
+    consistency_runs_used: number
+    consistency_matching_runs?: number | null
+    overall_is_provisional: boolean
+    overall_note?: string
+  }
+}
+
 interface TechniqueResult {
   technique: string
   success: boolean
@@ -25,10 +59,9 @@ interface TechniqueResult {
     total_tokens: number
     prompt_tokens: number
     completion_tokens: number
-    done_reason?: string
-    truncated?: boolean
-    continuation_rounds?: number
-    continuation_error?: string | null
+    runs_recorded?: number
+    runs_succeeded?: number
+    runs_failed?: number
   }
   scores: {
     accuracy: number
@@ -41,6 +74,7 @@ interface TechniqueResult {
     overall_is_provisional?: boolean
     overall_note?: string
   }
+  run_history?: IndividualRun[]
 }
 
 interface BenchmarkResult {
@@ -138,6 +172,7 @@ export default function Home() {
   const [result, setResult] = useState<BenchmarkResult | null>(null)
   const [error, setError] = useState('')
   const [expandedTechnique, setExpandedTechnique] = useState<string | null>(null)
+  const [showIndividualRuns, setShowIndividualRuns] = useState(false)
   const [healthStatus, setHealthStatus] = useState<'checking' | 'healthy' | 'unhealthy'>('checking')
   const [validationError, setValidationError] = useState('')
   const [savingToDb, setSavingToDb] = useState(false)
@@ -1652,6 +1687,129 @@ export default function Home() {
                   </pre>
                 </div>
               </div>
+
+              {/* Individual Run Results */}
+              {expandedResult.run_history && expandedResult.run_history.length > 1 && (
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <p
+                      className="text-[11px] font-mono uppercase tracking-wider"
+                      style={{ color: 'var(--text-subtle)' }}
+                    >
+                      Individual Run Results ({expandedResult.run_history.length} - Runs 1-{expandedResult.run_history.length})
+                    </p>
+                    <button
+                      onClick={() => setShowIndividualRuns(!showIndividualRuns)}
+                      className="px-3 py-1 rounded text-xs font-medium transition-colors"
+                      style={{
+                        border: '1px solid var(--blue)',
+                        color: 'var(--blue)',
+                        background: 'var(--surface)',
+                      }}
+                    >
+                      {showIndividualRuns ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                  {showIndividualRuns && (
+                    <div className="space-y-4">
+                      {expandedResult.run_history.slice(0).map((run, idx) => (
+                        <div
+                        key={idx}
+                        className="rounded-md p-4"
+                        style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}
+                      >
+                        {/* Run Header */}
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs font-semibold">
+                              Run {run.run_index}
+                            </span>
+                            {run.success ? (
+                              <span
+                                className="text-[10px] font-mono px-1.5 py-0.5 rounded"
+                                style={{ background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0' }}
+                              >
+                                success
+                              </span>
+                            ) : (
+                              <span
+                                className="text-[10px] font-mono px-1.5 py-0.5 rounded"
+                                style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}
+                              >
+                                failed
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Metrics Grid */}
+                        <div className="grid grid-cols-4 gap-2 mb-4">
+                          <div className="p-2 rounded" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                            <p className="text-[9px] font-mono uppercase" style={{ color: 'var(--text-subtle)' }}>Overall</p>
+                            <p className="text-lg font-mono font-light mt-1" style={{ color: scoreColor(run.scores?.overall ?? 0) }}>
+                              {run.scores?.overall?.toFixed(3) ?? 'N/A'}
+                            </p>
+                          </div>
+                          <div className="p-2 rounded" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                            <p className="text-[9px] font-mono uppercase" style={{ color: 'var(--text-subtle)' }}>Accuracy</p>
+                            <p className="text-lg font-mono font-light mt-1" style={{ color: scoreColor(run.scores?.accuracy ?? 0) }}>
+                              {run.scores?.accuracy?.toFixed(3) ?? 'N/A'}
+                            </p>
+                          </div>
+                          <div className="p-2 rounded" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                            <p className="text-[9px] font-mono uppercase" style={{ color: 'var(--text-subtle)' }}>Consistency</p>
+                            <p className="text-lg font-mono font-light mt-1" style={{ color: scoreColor(run.scores?.consistency ?? 0) }}>
+                              {run.scores?.consistency ? run.scores.consistency.toFixed(3) : 'PROV'}
+                            </p>
+                          </div>
+                          <div className="p-2 rounded" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                            <p className="text-[9px] font-mono uppercase" style={{ color: 'var(--text-subtle)' }}>Efficiency</p>
+                            <p className="text-lg font-mono font-light mt-1" style={{ color: scoreColor(run.scores?.efficiency ?? 0) }}>
+                              {run.scores?.efficiency?.toFixed(3) ?? 'N/A'}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Raw Metrics */}
+                        <div className="grid grid-cols-3 gap-2 text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                          <div>
+                            <span style={{ color: 'var(--text-subtle)' }}>Elapsed:</span> {run.metrics?.elapsed_time?.toFixed(2) ?? 'N/A'}s
+                          </div>
+                          <div>
+                            <span style={{ color: 'var(--text-subtle)' }}>Tokens:</span> {run.metrics?.total_tokens ?? 'N/A'}
+                          </div>
+                          <div>
+                            <span style={{ color: 'var(--text-subtle)' }}>Response:</span> {run.metrics?.completion_tokens ?? 'N/A'}
+                          </div>
+                        </div>
+
+                        {/* Technique */}
+                        <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--border)' }}>
+                          <p className="text-[9px] font-mono uppercase mb-1" style={{ color: 'var(--text-subtle)' }}>Technique</p>
+                          <p className="text-sm font-mono font-semibold">{run.technique?.toUpperCase() ?? 'N/A'}</p>
+                        </div>
+
+                        {/* Prompt */}
+                        <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--border)' }}>
+                          <p className="text-[9px] font-mono uppercase mb-1" style={{ color: 'var(--text-subtle)' }}>Prompt</p>
+                          <pre className="text-xs font-mono whitespace-pre-wrap leading-relaxed max-h-32 overflow-y-auto p-2 rounded" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                            {getDisplayPrompt(run.prompt)}
+                          </pre>
+                        </div>
+
+                        {/* Response Preview */}
+                        <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--border)' }}>
+                          <p className="text-[9px] font-mono uppercase mb-1" style={{ color: 'var(--text-subtle)' }}>Response</p>
+                          <pre className="text-xs font-mono whitespace-pre-wrap leading-relaxed max-h-40 overflow-y-auto p-2 rounded" style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
+                            {run.response || 'No response'}
+                          </pre>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
