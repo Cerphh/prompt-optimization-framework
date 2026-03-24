@@ -464,14 +464,14 @@ def _apply_db_based_selection(
     ]
 
     min_samples = _get_env_int("DB_MIN_SAMPLES_PER_TECHNIQUE", default=3, min_value=1)
-    min_gap = _get_env_float("DB_MIN_AVG_SCORE_GAP", default=0.03, min_value=0.0)
+    min_gap = _get_env_float("DB_MIN_AVG_SCORE_GAP", default=0.05, min_value=0.0)
     profile_min_samples = _get_env_int(
         "DB_PROFILE_MIN_SAMPLES_PER_TECHNIQUE",
         default=1,
         min_value=1,
     )
     min_gap = (
-        _get_env_float("DB_MIN_AVG_SCORE_GAP", default=0.03, min_value=0.0)
+        _get_env_float("DB_MIN_AVG_SCORE_GAP", default=0.05, min_value=0.0)
         if min_gap_override is None
         else max(0.0, float(min_gap_override))
     )
