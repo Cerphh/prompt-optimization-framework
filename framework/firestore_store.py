@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import os
 import hashlib
+import statistics
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional, List, Set, Tuple
 
@@ -525,36 +526,43 @@ class FirestoreStore:
         return len(target.intersection(candidate)) / len(target)
 
     def _profile_similarity(self, target: Dict[str, Any], candidate: Dict[str, Any]) -> float:
-        """Compute weighted profile similarity for IF-THEN pattern matching."""
+        """Compute weighted profile similarity for IF-THEN pattern matching with adaptive weights."""
+        # Get adaptive weights based on available data in TARGET profile
+        weights = self._calculate_adaptive_weights(target)
+        
         weighted_sum = 0.0
         total_weight = 0.0
 
+        # Intent (with adaptive weight)
         target_intent = str(target.get("intent", "") or "")
         candidate_intent = str(candidate.get("intent", "") or "")
         if target_intent and candidate_intent:
-            total_weight += 0.45
-            weighted_sum += 0.45 if target_intent == candidate_intent else 0.0
+            total_weight += weights["intent"]
+            weighted_sum += weights["intent"] if target_intent == candidate_intent else 0.0
 
+        # Features (with adaptive weight)
         target_features = set(self._normalize_profile_labels(target.get("features")))
         candidate_features = set(self._normalize_profile_labels(candidate.get("features")))
         if target_features and candidate_features:
             feature_score = self._overlap_ratio(target_features, candidate_features)
-            total_weight += 0.30
-            weighted_sum += 0.30 * feature_score
+            total_weight += weights["features"]
+            weighted_sum += weights["features"] * feature_score
 
+        # Format (with adaptive weight)
         target_format = set(self._normalize_profile_labels(target.get("format_labels")))
         candidate_format = set(self._normalize_profile_labels(candidate.get("format_labels")))
         if target_format and candidate_format:
             format_score = self._overlap_ratio(target_format, candidate_format)
-            total_weight += 0.20
-            weighted_sum += 0.20 * format_score
+            total_weight += weights["format"]
+            weighted_sum += weights["format"] * format_score
 
+        # Constraints (with adaptive weight)
         target_constraints = set(self._normalize_profile_labels(target.get("constraints")))
         candidate_constraints = set(self._normalize_profile_labels(candidate.get("constraints")))
         if target_constraints and candidate_constraints:
             constraints_score = self._overlap_ratio(target_constraints, candidate_constraints)
-            total_weight += 0.05
-            weighted_sum += 0.05 * constraints_score
+            total_weight += weights["constraints"]
+            weighted_sum += weights["constraints"] * constraints_score
 
         if total_weight == 0:
             return 0.0
@@ -567,6 +575,96 @@ class FirestoreStore:
             return default
         normalized = str(value).strip().lower().replace(" ", "_")
         return normalized or default
+
+    def _calculate_adaptive_weights(self, profile: Dict[str, Any]) -> Dict[str, float]:
+        """
+        Adjust weights dynamically based on how much data we have in the profile.
+        More data = we can rely on that dimension more heavily.
+        """
+        weights = {}
+        
+        # Check availability of each component
+        has_intent = bool(profile.get("intent"))
+        has_features = bool(profile.get("features")) and len(profile.get("features", [])) > 0
+        has_format = bool(profile.get("format_labels")) and len(profile.get("format_labels", [])) > 0
+        has_constraints = bool(profile.get("constraints")) and len(profile.get("constraints", [])) > 0
+        
+        # Count how many components we have
+        components_available = sum([has_intent, has_features, has_format, has_constraints])
+        
+        # Default weights
+        base_weights = {
+            "intent": 0.45,
+            "features": 0.30,
+            "format": 0.20,
+            "constraints": 0.05
+        }
+        
+        # SCENARIO 1: All 4 components available → Use defaults
+        if components_available == 4:
+            weights = base_weights
+        
+        # SCENARIO 2: Missing 1 component (redistribute weight)
+        elif components_available == 3:
+            if not has_constraints:
+                # Redistribute constraints weight to features
+                weights = {
+                    "intent": 0.45,
+                    "features": 0.35,  # +0.05
+                    "format": 0.20,
+                    "constraints": 0.0
+                }
+            elif not has_format:
+                # Redistribute format weight
+                weights = {
+                    "intent": 0.45,
+                    "features": 0.30,
+                    "format": 0.0,
+                    "constraints": 0.25  # +0.20
+                }
+            elif not has_features:
+                # Redistribute features weight
+                weights = {
+                    "intent": 0.45,
+                    "features": 0.0,
+                    "format": 0.35,  # +0.15
+                    "constraints": 0.20  # +0.15
+                }
+            else:  # not has_intent (rare but handle it)
+                weights = {
+                    "intent": 0.0,
+                    "features": 0.40,  # +0.10
+                    "format": 0.35,  # +0.15
+                    "constraints": 0.25  # +0.20
+                }
+        
+        # SCENARIO 3: Only 2 components available
+        elif components_available == 2:
+            if has_intent and has_features:
+                weights = {"intent": 0.50, "features": 0.50, "format": 0.0, "constraints": 0.0}
+            elif has_intent and has_format:
+                weights = {"intent": 0.50, "features": 0.0, "format": 0.50, "constraints": 0.0}
+            elif has_intent and has_constraints:
+                weights = {"intent": 0.60, "features": 0.0, "format": 0.0, "constraints": 0.40}
+            elif has_features and has_format:
+                weights = {"intent": 0.0, "features": 0.50, "format": 0.50, "constraints": 0.0}
+            elif has_features and has_constraints:
+                weights = {"intent": 0.0, "features": 0.60, "format": 0.0, "constraints": 0.40}
+            else:  # has_format and has_constraints
+                weights = {"intent": 0.0, "features": 0.0, "format": 0.60, "constraints": 0.40}
+        
+        # SCENARIO 4: Only 1 component available
+        elif components_available == 1:
+            weights = {"intent": 1.0 if has_intent else 0.0,
+                      "features": 1.0 if has_features else 0.0,
+                      "format": 1.0 if has_format else 0.0,
+                      "constraints": 1.0 if has_constraints else 0.0}
+        
+        # SCENARIO 5: No data at all
+        else:
+            weights = {"intent": 0.25, "features": 0.25, "format": 0.25, "constraints": 0.25}
+        
+        return weights
 
     def _problem_collection_ref(self, domain: str, difficulty: str) -> Any:
         """Return collection ref for domain/difficulty aggregated results (legacy hierarchy fallback).
@@ -727,7 +825,14 @@ class FirestoreStore:
         min_similarity: float = 0.35,
         require_ground_truth: bool = False,
     ) -> Dict[str, Any]:
-        """Get best technique using profile-level IF-THEN matching over historical results."""
+        """Get best technique using profile-level IF-THEN matching over historical results.
+        
+        Improvements:
+        - Implements weighted matching (problems weighted by similarity)
+        - Adaptive threshold based on data availability
+        - Confidence/variance reporting for recommendations
+        - Adaptive weighting based on profile completeness
+        """
         if not self.enabled:
             return {
                 "success": False,
@@ -756,8 +861,6 @@ class FirestoreStore:
             min_similarity = 0.35
 
         try:
-            totals: Dict[str, float] = {}
-            counts: Dict[str, int] = {}
             allowed = set(available_techniques or [])
             allow_unknown_quality = os.getenv("DB_HISTORY_ALLOW_UNKNOWN_QUALITY", "false").strip().lower() == "true"
             normalized_domain = self._normalize_key(domain, default="general")
@@ -770,8 +873,50 @@ class FirestoreStore:
                 )
             )
 
+            # IMPROVEMENT #3 (Adaptive Threshold):
+            # First pass: Count available matches to determine adaptive threshold
+            preliminary_count = 0
+            for doc in query:
+                data = doc.to_dict() or {}
+                for entry in self._extract_result_entries(doc.reference, data):
+                    historical_profile = self._normalize_problem_profile(
+                        entry.get("problem_profile") or data.get("problem_profile")
+                    )
+                    if not historical_profile:
+                        continue
+                    
+                    similarity = self._profile_similarity(normalized_profile, historical_profile)
+                    if similarity >= 0.30:  # Low threshold for counting
+                        preliminary_count += 1
+
+            # Adapt threshold based on available data
+            adaptive_min_similarity = min_similarity  # Start with provided value
+            if preliminary_count > 15:
+                adaptive_min_similarity = 0.55  # Lots of data → be strict
+            elif preliminary_count > 10:
+                adaptive_min_similarity = 0.50
+            elif preliminary_count > 5:
+                adaptive_min_similarity = 0.40
+            elif preliminary_count > 0:
+                adaptive_min_similarity = min(0.30, min_similarity)  # Little data → be lenient
+
+            # IMPROVEMENT #2 & #5 (Weighted problems + Confidence/Variance):
+            # Second pass: Accumulate technique scores with similarity weighting
+            totals: Dict[str, float] = {}
+            similarity_weighted_totals: Dict[str, float] = {}
+            similarity_weights: Dict[str, float] = {}
+            counts: Dict[str, int] = {}
+            scores_per_technique: Dict[str, List[float]] = {}  # For variance calculation
+
             matched_documents = 0
             similarities: List[float] = []
+
+            query = (
+                self._stream_problem_docs(
+                    domain=normalized_domain,
+                    difficulty=normalized_difficulty,
+                )
+            )
 
             for doc in query:
                 data = doc.to_dict() or {}
@@ -790,7 +935,7 @@ class FirestoreStore:
                         continue
 
                     similarity = self._profile_similarity(normalized_profile, historical_profile)
-                    if similarity < min_similarity:
+                    if similarity < adaptive_min_similarity:
                         continue
 
                     matched_documents += 1
@@ -812,8 +957,18 @@ class FirestoreStore:
                         if allowed and technique not in allowed:
                             continue
 
-                        totals[technique] = totals.get(technique, 0.0) + float(overall)
+                        overall_f = float(overall)
+                        
+                        # IMPROVEMENT #2: Weight by similarity
+                        totals[technique] = totals.get(technique, 0.0) + overall_f
+                        similarity_weighted_totals[technique] = similarity_weighted_totals.get(technique, 0.0) + (overall_f * similarity)
+                        similarity_weights[technique] = similarity_weights.get(technique, 0.0) + similarity
                         counts[technique] = counts.get(technique, 0) + 1
+                        
+                        # IMPROVEMENT #5: Track individual scores for variance
+                        if technique not in scores_per_technique:
+                            scores_per_technique[technique] = []
+                        scores_per_technique[technique].append(overall_f)
 
             if not counts:
                 return {
@@ -824,22 +979,56 @@ class FirestoreStore:
                         f"and difficulty '{normalized_difficulty}'."
                     ),
                     "problem_profile": normalized_profile,
-                    "min_similarity": min_similarity,
+                    "min_similarity": adaptive_min_similarity,
                     "matched_documents": matched_documents,
+                    "preliminary_count": preliminary_count,
                 }
 
+            # IMPROVEMENT #5: Calculate statistics including variance and confidence
             ranking = []
             for technique, count in counts.items():
-                average = totals[technique] / count
-                ranking.append(
-                    {
-                        "technique": technique,
-                        "average_overall": round(average, 4),
-                        "samples": count,
-                    }
-                )
+                simple_avg = totals[technique] / count
+                
+                # Weighted average (more similar problems have more influence)
+                weighted_avg = similarity_weighted_totals[technique] / similarity_weights[technique]
+                
+                # Calculate variance and standard deviation
+                scores = scores_per_technique.get(technique, [])
+                std_dev = 0.0
+                variance = 0.0
+                if len(scores) > 1:
+                    try:
+                        variance = statistics.variance(scores)
+                        std_dev = statistics.stdev(scores)
+                    except Exception:
+                        pass
+                
+                # Determine confidence level based on std_dev
+                if std_dev < 0.08:
+                    confidence = "high"
+                elif std_dev < 0.15:
+                    confidence = "medium"
+                else:
+                    confidence = "low"
+                
+                # Consistency score (1.0 = perfect consistency)
+                consistency = max(0.0, 1.0 - std_dev)
+                
+                ranking.append({
+                    "technique": technique,
+                    "simple_average": round(simple_avg, 4),
+                    "weighted_average": round(weighted_avg, 4),  # Primary metric now
+                    "average_overall": round(weighted_avg, 4),  # For backwards compatibility
+                    "unweighted_samples": count,
+                    "effective_samples": round(similarity_weights[technique], 2),
+                    "std_dev": round(std_dev, 4),
+                    "variance": round(variance, 4),
+                    "confidence": confidence,
+                    "consistency": round(consistency, 4),
+                    "individual_scores": [round(s, 4) for s in scores],
+                })
 
-            ranking.sort(key=lambda x: (-x["average_overall"], -x["samples"], x["technique"]))
+            ranking.sort(key=lambda x: (-x["weighted_average"], -x["effective_samples"], x["technique"]))
             best = ranking[0]
             avg_similarity = sum(similarities) / len(similarities) if similarities else 0.0
 
@@ -852,9 +1041,13 @@ class FirestoreStore:
                 "ranking": ranking,
                 "problem_profile": normalized_profile,
                 "match_type": "profile_rule",
-                "min_similarity": min_similarity,
+                "min_similarity_requested": min_similarity,
+                "min_similarity_adaptive": round(adaptive_min_similarity, 4),
+                "preliminary_count": preliminary_count,
                 "average_similarity": round(avg_similarity, 4),
                 "matched_documents": matched_documents,
+                "recommendation_confidence": best.get("confidence"),
+                "recommendation_consistency": best.get("consistency"),
             }
         except Exception as exc:
             return {
