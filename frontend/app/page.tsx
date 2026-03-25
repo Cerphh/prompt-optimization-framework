@@ -162,6 +162,200 @@ const getDisplayPrompt = (prompt?: string): string => {
   return display.trim() || 'No prompt available'
 }
 
+type SelectionSource = 'db_profile_rules' | 'db_history' | 'runtime_scores'
+
+interface TierInfo {
+  tier: number
+  tierName: string
+  strategyName: string
+  description: string
+  bgColor: string
+  borderColor: string
+  textColor: string
+}
+
+const getTierInfo = (source?: SelectionSource): TierInfo => {
+  const tierMap: Record<SelectionSource, TierInfo> = {
+    db_profile_rules: {
+      tier: 1,
+      tierName: 'Tier 1',
+      strategyName: 'Profile-Based Selection',
+      description: 'Selected based on similar problem profiles using weighted similarity scoring. This is the most intelligent selection strategy.',
+      bgColor: '#f0fdf4',
+      borderColor: '#bbf7d0',
+      textColor: 'var(--green)',
+    },
+    db_history: {
+      tier: 2,
+      tierName: 'Tier 2',
+      strategyName: 'Domain-Average Fallback',
+      description: 'Selected based on historical domain/difficulty averages. Used when profile-based selection lacked sufficient confidence.',
+      bgColor: '#eff6ff',
+      borderColor: '#bfdbfe',
+      textColor: 'var(--blue)',
+    },
+    runtime_scores: {
+      tier: 3,
+      tierName: 'Tier 3',
+      strategyName: 'Runtime Selection',
+      description: 'Selected based on live execution scores. Used when database history was unavailable or when benchmark mode is active.',
+      bgColor: '#fffbeb',
+      borderColor: '#fde68a',
+      textColor: 'var(--amber)',
+    },
+  }
+
+  return source && source in tierMap 
+    ? tierMap[source]
+    : {
+        tier: 0,
+        tierName: 'Unknown',
+        strategyName: 'Selection Strategy',
+        description: 'Selection strategy information not available.',
+        bgColor: 'var(--surface)',
+        borderColor: 'var(--border)',
+        textColor: 'var(--text-muted)',
+      }
+}
+
+const formatSelectionReason = (reason?: string): string => {
+  if (!reason) return 'No reason provided'
+  
+  const reasonMap: Record<string, string> = {
+    'db_confidence_rules': 'Did not meet confidence thresholds required by DB selection rules',
+    'exploration_runtime': 'Forced runtime selection for exploration to gather diverse data',
+    'profile_best_missing_result': 'Profile-recommended technique failed during execution',
+    'low_confidence_gap': 'Recommendation confidence was too low, fell back to domain average',
+    'insufficient_samples': 'Insufficient historical data for confident recommendation',
+    'benchmark_forces_runtime_all_techniques': 'Benchmark mode requires testing all techniques to ensure fair comparison',
+    'no_profile_match': 'No similar problems found in database history',
+    'missing_problem_profile': 'Could not extract problem profile',
+  }
+
+  return reasonMap[reason] || reason
+}
+
+interface TierDecisionInfo {
+  tierNumber: number
+  tierName: string
+  wasAttempted: boolean
+  result: 'passed' | 'failed' | 'skipped'
+  reason?: string
+  details?: string
+}
+
+const buildDecisionTree = (details?: Record<string, any>, source?: SelectionSource): TierDecisionInfo[] => {
+  if (!details) return []
+  
+  const profileSelection = details.profile_selection as Record<string, any> || {}
+  const domainSelection = details.domain_selection as Record<string, any> || {}
+  const profileReason = details.profile_decision_reason || ''
+  const dbReason = details.db_decision_reason || ''
+  const profileSuccess = profileSelection.success === true && profileReason !== 'exploration_runtime'
+  const domainSuccess = domainSelection.success === true && dbReason !== 'exploration_runtime' && !dbReason
+
+  const tree: TierDecisionInfo[] = [
+    {
+      tierNumber: 1,
+      tierName: 'Tier 1: Profile-Based Selection',
+      wasAttempted: profileSelection.success !== undefined,
+      result: profileSuccess ? 'passed' : profileSelection.success === false ? 'failed' : 'skipped',
+      reason: profileReason,
+      details: buildTier1Details(profileSelection, details),
+    },
+    {
+      tierNumber: 2,
+      tierName: 'Tier 2: Domain-Average Fallback',
+      wasAttempted: profileSuccess === false,
+      result: (profileSuccess === false && domainSuccess) ? 'passed' : (profileSuccess === false && !domainSuccess) ? 'failed' : 'skipped',
+      reason: dbReason,
+      details: buildTier2Details(domainSelection, details),
+    },
+    {
+      tierNumber: 3,
+      tierName: 'Tier 3: Runtime Selection',
+      wasAttempted: true,
+      result: source === 'runtime_scores' ? 'passed' : 'skipped',
+      reason: details.reason,
+      details: 'All techniques executed; best selected by runtime performance scores.',
+    },
+  ]
+
+  return tree
+}
+
+const buildTier1Details = (prof: Record<string, any>, allDetails: Record<string, any>): string => {
+  if (!prof.success) {
+    const reason = prof.reason || 'unknown'
+    if (reason === 'no_profile_match') {
+      return `No similar problems in database (similarity < ${allDetails.db_confidence_rules?.profile_min_similarity ? (allDetails.db_confidence_rules.profile_min_similarity * 100).toFixed(0) : '50'}%)`
+    }
+    if (reason === 'missing_problem_profile') {
+      return 'Could not extract problem features (intent, math features, format, constraints)'
+    }
+    return `Profile lookup failed: ${reason}`
+  }
+
+  const rules = allDetails.db_confidence_rules || {}
+  const ranking = prof.ranking || []
+  
+  if (ranking.length === 0) return 'No ranking data available'
+
+  const top = ranking[0] as Record<string, any>
+  const topSamples = top.unweighted_samples || 0
+  const minSamples = rules.profile_min_samples_per_technique || 2
+
+  if (topSamples < minSamples) {
+    return `❌ Top technique has ${topSamples} sample(s) — needs ≥${minSamples}`
+  }
+
+  if (ranking.length > 1) {
+    const second = ranking[1] as Record<string, any>
+    const topScore = top.weighted_average || top.average_overall || 0
+    const secondScore = second.weighted_average || second.average_overall || 0
+    const gap = topScore - secondScore
+    const minGap = rules.profile_min_average_gap || 0.01
+
+    if (gap < minGap) {
+      return `❌ Top vs 2nd gap ${(gap * 100).toFixed(2)}% — needs ≥${(minGap * 100).toFixed(2)}%`
+    }
+  }
+
+  return `✓ Passed all checks — ${ranking[0].technique} matched ${prof.matched_documents} similar problems`
+}
+
+const buildTier2Details = (dom: Record<string, any>, allDetails: Record<string, any>): string => {
+  if (!dom.success) {
+    const reason = dom.reason || 'unknown'
+    return `❌ No domain data available: ${reason}`
+  }
+
+  const rules = allDetails.db_confidence_rules || {}
+  const samples = dom.samples || 0
+  const minSamples = rules.min_samples_per_technique || 3
+
+  if (samples < minSamples) {
+    return `❌ Domain has ${samples} sample(s) — needs ≥${minSamples}`
+  }
+
+  const ranking = dom.ranking || []
+  if (ranking.length > 1) {
+    const top = ranking[0] as Record<string, any>
+    const second = ranking[1] as Record<string, any>
+    const topScore = top.average_overall || 0
+    const secondScore = second.average_overall || 0
+    const gap = topScore - secondScore
+    const minGap = rules.min_average_gap || 0.05
+
+    if (gap < minGap) {
+      return `❌ Top vs 2nd gap ${(gap * 100).toFixed(2)}% — needs ≥${(minGap * 100).toFixed(2)}%`
+    }
+  }
+
+  return `✓ Passed all checks — ${ranking[0]?.technique || 'technique'} based on domain/${allDetails.difficulty} history`
+}
+
+
 export default function Home() {
   const [problem, setProblem] = useState('')
   const [subject, setSubject] = useState('algebra')
@@ -1283,14 +1477,17 @@ export default function Home() {
                     >
                       {result.best_technique?.toUpperCase()}
                     </span>
-                    {result.selection_source && (
-                      <span
-                        className="font-mono text-xs px-2 py-1 rounded"
-                        style={{ color: 'var(--text-muted)', border: '1px solid var(--border)' }}
-                      >
-                        source: {result.selection_source}
-                      </span>
-                    )}
+                    {result.selection_source && (() => {
+                      const tierInfo = getTierInfo(result.selection_source as SelectionSource)
+                      return (
+                        <span
+                          className="font-mono text-xs px-2.5 py-1 rounded"
+                          style={{ background: tierInfo.textColor, color: tierInfo.bgColor }}
+                        >
+                          {tierInfo.tierName}
+                        </span>
+                      )
+                    })()}
                   </div>
                   <div className="flex items-center gap-2">
                     <button
@@ -1351,6 +1548,202 @@ export default function Home() {
                       ) : (
                         saveStatus
                       )}
+                    </div>
+                  )
+                })()}
+
+                {/* ── Selection Strategy ── */}
+                {result.selection_source && (() => {
+                  const tierInfo = getTierInfo(result.selection_source as SelectionSource)
+                  const details = result.selection_details as Record<string, any> || {}
+                  const decisionTree = buildDecisionTree(details, result.selection_source as SelectionSource)
+
+                  return (
+                    <div
+                      className="px-6 py-4 border-b"
+                      style={{ background: tierInfo.bgColor, borderColor: tierInfo.borderColor }}
+                    >
+                      <div className="space-y-4">
+                        {/* Tier Header */}
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="text-xs font-mono font-bold px-2.5 py-1 rounded"
+                            style={{ background: tierInfo.textColor, color: tierInfo.bgColor }}
+                          >
+                            {tierInfo.tierName}
+                          </span>
+                          <span
+                            className="text-sm font-semibold"
+                            style={{ color: tierInfo.textColor }}
+                          >
+                            {tierInfo.strategyName}
+                          </span>
+                        </div>
+
+                        {/* Description */}
+                        <p className="text-xs leading-relaxed" style={{ color: 'var(--text)' }}>
+                          {tierInfo.description}
+                        </p>
+
+                        {/* Decision Tree - Why this tier? */}
+                        <div className="space-y-2 text-xs">
+                          <div style={{ color: 'var(--text-subtle)', fontWeight: 500 }}>Decision Flow:</div>
+                          {decisionTree.map((decision) => (
+                            <div
+                              key={decision.tierNumber}
+                              className="pl-3 border-l-2 py-1.5 space-y-1"
+                              style={{
+                                borderColor:
+                                  decision.result === 'passed'
+                                    ? 'var(--green)'
+                                    : decision.result === 'failed'
+                                    ? '#ef4444'
+                                    : 'var(--border)',
+                              }}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span
+                                  style={{
+                                    color:
+                                      decision.result === 'passed'
+                                        ? 'var(--green)'
+                                        : decision.result === 'failed'
+                                        ? '#ef4444'
+                                        : 'var(--text-muted)',
+                                  }}
+                                >
+                                  {decision.result === 'passed' && '✓'}
+                                  {decision.result === 'failed' && '✗'}
+                                  {decision.result === 'skipped' && '–'}
+                                </span>
+                                <strong>{decision.tierName}</strong>
+                                <span
+                                  className="text-xs px-1 rounded"
+                                  style={{
+                                    background:
+                                      decision.result === 'passed'
+                                        ? '#dcfce7'
+                                        : decision.result === 'failed'
+                                        ? '#fee2e2'
+                                        : 'transparent',
+                                    color:
+                                      decision.result === 'passed'
+                                        ? 'var(--green)'
+                                        : decision.result === 'failed'
+                                        ? '#991b1b'
+                                        : 'var(--text-muted)',
+                                  }}
+                                >
+                                  {decision.result === 'passed' && 'USED'}
+                                  {decision.result === 'failed' && 'rejected'}
+                                  {decision.result === 'skipped' && 'skipped'}
+                                </span>
+                              </div>
+                              {decision.reason && (
+                                <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                                  {decision.reason !== 'ok' && formatSelectionReason(decision.reason)}
+                                </div>
+                              )}
+                              {decision.details && (
+                                <div
+                                  className="text-xs leading-relaxed p-2 rounded"
+                                  style={{ background: 'rgba(0,0,0,0.08)', color: 'var(--text)' }}
+                                >
+                                  {decision.details}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Confidence Details for Successful Tier 1 */}
+                        {result.selection_source === 'db_profile_rules' &&
+                          details.profile_selection &&
+                          typeof details.profile_selection === 'object' &&
+                          (() => {
+                            const prof = details.profile_selection as Record<string, any>
+                            return (
+                              <div className="space-y-1 text-xs border-t border-opacity-20 pt-3 mt-3">
+                                {prof.recommendation_confidence && (
+                                  <div>
+                                    <strong>Confidence:</strong> {prof.recommendation_confidence}
+                                    {prof.recommendation_consistency !== undefined &&
+                                      prof.recommendation_consistency !== null && (
+                                        <span className="ml-2">
+                                          (Consistency: {(prof.recommendation_consistency * 100).toFixed(0)}%)
+                                        </span>
+                                      )}
+                                  </div>
+                                )}
+                                {prof.weighted_average !== undefined && (
+                                  <div>
+                                    <strong>Weighted Score:</strong> {(prof.weighted_average * 100).toFixed(1)}%
+                                  </div>
+                                )}
+                                {prof.matched_documents !== undefined && (
+                                  <div>
+                                    <strong>Matched Profiles:</strong> {prof.matched_documents}
+                                    {prof.preliminary_count !== undefined && (
+                                      <span className="ml-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                                        ({prof.preliminary_count} preliminary)
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })()}
+
+                        {/* Thresholds */}
+                        {details.db_confidence_rules && typeof details.db_confidence_rules === 'object' && (() => {
+                          const rules = details.db_confidence_rules as Record<string, any>
+                          return (
+                            <details className="text-xs border-t border-opacity-20 pt-3 mt-3">
+                              <summary
+                                className="cursor-pointer font-medium hover:underline"
+                                style={{ color: tierInfo.textColor }}
+                              >
+                                View all thresholds & rules
+                              </summary>
+                              <div className="mt-2 p-2 rounded space-y-1" style={{ background: 'rgba(0,0,0,0.05)' }}>
+                                <div className="font-mono text-xs space-y-0.5">
+                                  {rules.profile_min_samples_per_technique !== undefined && (
+                                    <div>
+                                      <strong>Profile Min Samples:</strong> {rules.profile_min_samples_per_technique}
+                                    </div>
+                                  )}
+                                  {rules.profile_min_similarity !== undefined && (
+                                    <div>
+                                      <strong>Profile Min Similarity:</strong>{' '}
+                                      {(rules.profile_min_similarity * 100).toFixed(0)}%
+                                    </div>
+                                  )}
+                                  {rules.profile_min_average_gap !== undefined && (
+                                    <div>
+                                      <strong>Profile Min Gap:</strong> {(rules.profile_min_average_gap * 100).toFixed(2)}%
+                                    </div>
+                                  )}
+                                  {rules.min_samples_per_technique !== undefined && (
+                                    <div>
+                                      <strong>Domain Min Samples:</strong> {rules.min_samples_per_technique}
+                                    </div>
+                                  )}
+                                  {rules.min_average_gap !== undefined && (
+                                    <div>
+                                      <strong>Domain Min Gap:</strong> {(rules.min_average_gap * 100).toFixed(2)}%
+                                    </div>
+                                  )}
+                                  {rules.exploration_rate !== undefined && (
+                                    <div>
+                                      <strong>Exploration Rate:</strong> {(rules.exploration_rate * 100).toFixed(1)}%
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </details>
+                          )
+                        })()}
+                      </div>
                     </div>
                   )
                 })()}
