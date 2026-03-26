@@ -713,6 +713,7 @@ def _finalize_benchmark_result(
         )
 
     result["run_mode"] = run_mode
+    result["model_name"] = pipeline.model_runner.model_name
     result["execution_summary"] = {
         "attempted_techniques": attempted_techniques,
         "attempted_count": len(attempted_techniques),

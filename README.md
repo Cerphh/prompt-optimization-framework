@@ -203,6 +203,7 @@ export DB_HISTORY_REQUIRE_GROUND_TRUTH=true
 ```
 
 Notes:
+- **Normal mode uses Tier 1 (profile-based) or Tier 2 (domain-based) selection only.** Tier 3 runtime fallback is exclusive to benchmark mode.
 - `DB_HISTORY_REQUIRE_GROUND_TRUTH=true` keeps normal-mode routing tied to benchmark-grade history.
 - Set `DB_HISTORY_ALLOW_UNKNOWN_QUALITY=true` only when migrating legacy records that do not have quality metadata.
 

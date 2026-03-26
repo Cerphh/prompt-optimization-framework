@@ -89,6 +89,7 @@ interface BenchmarkResult {
   all_responses: Record<string, { response: string; score: number }>
   run_mode?: RunMode
   ground_truth_used?: boolean
+  model_name?: string
   selection_source?:
     | 'db_history'
     | 'db_profile_rules'
@@ -1396,10 +1397,10 @@ export default function Home() {
                   cursor: isDisabled ? 'not-allowed' : 'pointer',
                 }}
               >
-                {loading ? 'Running...' : runMode === 'benchmark' ? 'Run Benchmark (1 Run)' : 'Run Normal Mode (1 Run)'}
+                {loading ? 'Running...' : runMode === 'benchmark' ? 'Run Benchmark (1 Run)' : 'Run'}
               </button>
 
-              {result && (
+              {result && activeMode === 'benchmark' && (
                 <button
                   type="button"
                   onClick={handleRunConsistencyTest}
@@ -1418,7 +1419,7 @@ export default function Home() {
                 </button>
               )}
 
-              {result && bestConsistencyIsProvisional && (
+              {result && activeMode === 'benchmark' && bestConsistencyIsProvisional && (
                 <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
                   First pass uses single-run scoring (accuracy + efficiency). Run the consistency test to compute the full overall score.
                 </p>
@@ -1446,43 +1447,88 @@ export default function Home() {
                 className="animate-spin rounded-full h-10 w-10 mx-auto mb-4"
                 style={{ border: '2px solid var(--border)', borderTopColor: 'var(--text)' }}
               />
-              <p className="text-sm font-medium">{streamingStatus || 'Running benchmark\u2026'}</p>
-              <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+              <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>
                 This may take a few seconds
               </p>
-              {streamingResponse && (
-                <div className="mt-6 text-left">
-                  <div className="flex items-center justify-between mb-2">
-                    <span
-                      className="text-[11px] font-mono uppercase tracking-wider"
-                      style={{ color: 'var(--text-subtle)' }}
-                    >
-                      Live Output
-                    </span>
-                    <span
-                      className="font-mono text-[11px] px-2 py-0.5 rounded"
-                      style={{ color: 'var(--text-muted)', border: '1px solid var(--border)' }}
-                    >
-                      {streamingTechnique || 'preview'}
-                    </span>
-                  </div>
-                  <div
-                    className="p-4 rounded-md max-h-64 overflow-y-auto"
-                    style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}
-                  >
-                    <pre className="text-sm font-mono whitespace-pre-wrap" style={{ color: 'var(--text)' }}>
-                      {streamingResponse}
-                      <span className="animate-pulse">{'\u258d'}</span>
-                    </pre>
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
           {/* ═══ Results ═══ */}
           {result && (
             <>
+              {/* NORMAL MODE: Simplified View */}
+              {activeMode === 'normal' && (
+                <div className="space-y-3">
+                  {/* Used Technique */}
+                  <div
+                    className="rounded-lg p-3"
+                    style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+                  >
+                    <p
+                      className="text-[10px] font-mono uppercase tracking-wider mb-2"
+                      style={{ color: 'var(--text-subtle)' }}
+                    >
+                      Used Technique
+                    </p>
+                    <div className="flex items-center gap-3">
+                      <span
+                        className="font-mono text-sm font-semibold px-3 py-1 rounded"
+                        style={{ background: 'var(--accent)', color: '#fff' }}
+                      >
+                        {result.best_technique?.toUpperCase()}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Prompt Used */}
+                  <div
+                    className="rounded-lg p-6"
+                    style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+                  >
+                    <p
+                      className="text-[11px] font-mono uppercase tracking-wider mb-3"
+                      style={{ color: 'var(--text-subtle)' }}
+                    >
+                      Prompt Used
+                    </p>
+                    <div
+                      className="p-4 rounded-md overflow-auto max-h-72"
+                      style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}
+                    >
+                      <pre className="text-sm font-mono whitespace-pre-wrap leading-relaxed">
+                        {getDisplayPrompt(result.best_result?.prompt)}
+                      </pre>
+                    </div>
+                  </div>
+
+                  {/* Model Response */}
+                  <div
+                    className="rounded-lg p-6"
+                    style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+                  >
+                    <p
+                      className="text-[11px] font-mono uppercase tracking-wider mb-3"
+                      style={{ color: 'var(--text-subtle)' }}
+                    >
+                      Model Response
+                    </p>
+                    <div
+                      className="p-4 rounded-md overflow-auto max-h-96"
+                      style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}
+                    >
+                      <pre className="text-sm font-mono whitespace-pre-wrap leading-relaxed">
+                        {result.best_result?.response || 'No response'}
+                      </pre>
+                    </div>
+                  </div>
+
+                  {/* Save Status */}
+                </div>
+              )}
+
+              {/* BENCHMARK MODE: Full Detail View */}
+              {activeMode === 'benchmark' && (
+                <>
               {/* ── Best Technique ── */}
               <div
                 className="rounded-lg overflow-hidden"
@@ -1981,6 +2027,8 @@ export default function Home() {
                   </table>
                 </div>
               </div>
+                </>
+              )}
             </>
           )}
         </section>
