@@ -145,6 +145,23 @@ const toSafeNumber = (value: unknown): number => {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
+const formatScorePercent = (
+  value: unknown,
+  fallback = 'N/A',
+  digits = 1
+): string => {
+  if (value === null || value === undefined) {
+    return fallback
+  }
+  const parsed = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(parsed)) {
+    return fallback
+  }
+  const percentage = parsed * 100
+  const rounded = Number(percentage.toFixed(digits))
+  return `${rounded}%`
+}
+
 const HIDDEN_PROMPT_PREAMBLES = [
   "Solve the following math problems and give the final answer. Use the following examples only as style references. Do NOT repeat or copy any example answer. You must solve ONLY the target problem shown after 'TARGET PROBLEM'. Think carefully and use the examples only for internal reasoning. Output ONLY the final answer for the TARGET PROBLEM. Do NOT include steps, explanations, or extra text.",
 ]
@@ -1039,7 +1056,7 @@ export default function Home() {
               </strong>
               {' \u00b7 '}
               <strong className="font-medium" style={{ color: 'var(--text)' }}>
-                {result.best_result?.scores?.overall?.toFixed(3)}
+                {formatScorePercent(result.best_result?.scores?.overall)}
               </strong>
             </span>
           )}
@@ -1862,7 +1879,7 @@ export default function Home() {
                         className="text-3xl font-mono font-light"
                         style={{ color: scoreColor(s.value ?? 0) }}
                       >
-                        {s.value === null || s.value === undefined ? 'PROV' : s.value.toFixed(3)}
+                        {formatScorePercent(s.value, 'PROV')}
                       </p>
                     </div>
                   ))}
@@ -1929,19 +1946,19 @@ export default function Home() {
                               )}
                             </td>
                             <td className="text-center px-4 py-3 font-mono">
-                              {tech.accuracy.toFixed(3)}
+                              {formatScorePercent(tech.accuracy)}
                             </td>
                             <td className="text-center px-4 py-3 font-mono">
-                              {tech.consistencyAvailable ? tech.consistency.toFixed(3) : 'PROV'}
+                              {tech.consistencyAvailable ? formatScorePercent(tech.consistency, 'PROV') : 'PROV'}
                             </td>
                             <td className="text-center px-4 py-3 font-mono">
-                              {tech.efficiency.toFixed(3)}
+                              {formatScorePercent(tech.efficiency)}
                             </td>
                             <td
                               className="text-center px-4 py-3 font-mono font-semibold"
                               style={{ color: scoreColor(tech.overall) }}
                             >
-                              {tech.overall.toFixed(3)}
+                              {formatScorePercent(tech.overall)}
                               {tech.overallIsProvisional ? '*' : ''}
                             </td>
                             <td className="text-center px-4 py-3">
@@ -2055,7 +2072,7 @@ export default function Home() {
                         className="text-2xl font-mono font-light"
                         style={{ color: scoreColor(s.value ?? 0) }}
                       >
-                        {s.value === null || s.value === undefined ? 'PROV' : s.value.toFixed(3)}
+                        {formatScorePercent(s.value, 'PROV')}
                       </p>
                     </div>
                   ))}
@@ -2158,25 +2175,27 @@ export default function Home() {
                           <div className="p-2 rounded" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
                             <p className="text-[9px] font-mono uppercase" style={{ color: 'var(--text-subtle)' }}>Overall</p>
                             <p className="text-lg font-mono font-light mt-1" style={{ color: scoreColor(run.scores?.overall ?? 0) }}>
-                              {run.scores?.overall?.toFixed(3) ?? 'N/A'}
+                              {formatScorePercent(run.scores?.overall)}
                             </p>
                           </div>
                           <div className="p-2 rounded" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
                             <p className="text-[9px] font-mono uppercase" style={{ color: 'var(--text-subtle)' }}>Accuracy</p>
                             <p className="text-lg font-mono font-light mt-1" style={{ color: scoreColor(run.scores?.accuracy ?? 0) }}>
-                              {run.scores?.accuracy?.toFixed(3) ?? 'N/A'}
+                              {formatScorePercent(run.scores?.accuracy)}
                             </p>
                           </div>
                           <div className="p-2 rounded" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
                             <p className="text-[9px] font-mono uppercase" style={{ color: 'var(--text-subtle)' }}>Consistency</p>
                             <p className="text-lg font-mono font-light mt-1" style={{ color: scoreColor(run.scores?.consistency ?? 0) }}>
-                              {run.scores?.consistency ? run.scores.consistency.toFixed(3) : 'PROV'}
+                              {run.scores?.consistency === null || run.scores?.consistency === undefined
+                                ? 'PROV'
+                                : formatScorePercent(run.scores.consistency, 'PROV')}
                             </p>
                           </div>
                           <div className="p-2 rounded" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
                             <p className="text-[9px] font-mono uppercase" style={{ color: 'var(--text-subtle)' }}>Efficiency</p>
                             <p className="text-lg font-mono font-light mt-1" style={{ color: scoreColor(run.scores?.efficiency ?? 0) }}>
-                              {run.scores?.efficiency?.toFixed(3) ?? 'N/A'}
+                              {formatScorePercent(run.scores?.efficiency)}
                             </p>
                           </div>
                         </div>
