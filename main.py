@@ -288,9 +288,20 @@ def _evaluate_selection_confidence(
     if not isinstance(ranking, list) or not ranking:
         return False, "no_ranking"
 
+    def _extract_samples(row: Dict[str, Any]) -> int:
+        raw_samples = row.get("samples")
+        if raw_samples is None:
+            raw_samples = row.get("unweighted_samples")
+        if raw_samples is None:
+            raw_samples = row.get("effective_samples")
+        try:
+            return max(0, int(float(raw_samples or 0)))
+        except (TypeError, ValueError):
+            return 0
+
     top = ranking[0] if isinstance(ranking[0], dict) else {}
     try:
-        top_samples = max(0, int(top.get("samples", 0) or 0))
+        top_samples = _extract_samples(top)
         top_average = float(top.get("average_overall", 0.0) or 0.0)
     except (TypeError, ValueError):
         return False, "invalid_ranking_data"
@@ -303,7 +314,7 @@ def _evaluate_selection_confidence(
 
     second = ranking[1] if isinstance(ranking[1], dict) else {}
     try:
-        second_samples = max(0, int(second.get("samples", 0) or 0))
+        second_samples = _extract_samples(second)
         second_average = float(second.get("average_overall", 0.0) or 0.0)
     except (TypeError, ValueError):
         return False, "invalid_ranking_data"
@@ -342,10 +353,6 @@ def _resolve_pre_execution_techniques(
         "require_ground_truth_history": None,
         "profile_min_similarity": None,
     }
-
-    if run_mode == RUN_MODE_BENCHMARK:
-        details["reason"] = "benchmark_forces_runtime_all_techniques"
-        return None, details
 
     if len(technique_names) < 2:
         details["reason"] = "single_technique"
@@ -457,6 +464,15 @@ def _apply_db_based_selection(
     """Apply profile-rule selection first, then domain-average fallback, else runtime greedy."""
     result = _attach_problem_profile(result=result, domain=domain, difficulty=difficulty)
 
+    def _limit_comparison_to_technique(payload: Dict[str, Any], technique: str) -> None:
+        comparison = payload.get("comparison")
+        if not isinstance(comparison, list):
+            return
+        payload["comparison"] = [
+            row for row in comparison
+            if isinstance(row, dict) and row.get("technique") == technique
+        ]
+
     successful_techniques = [
         technique
         for technique, technique_result in result.get("all_results", {}).items()
@@ -547,6 +563,7 @@ def _apply_db_based_selection(
         if profile_best in result.get("all_results", {}):
             result["best_technique"] = profile_best
             result["best_result"] = result["all_results"][profile_best]
+            _limit_comparison_to_technique(result, str(profile_best))
             result["selection_source"] = "db_profile_rules"
             result["selection_details"] = {
                 "profile_selection": profile_selection,
@@ -599,6 +616,7 @@ def _apply_db_based_selection(
         if best_technique in result.get("all_results", {}):
             result["best_technique"] = best_technique
             result["best_result"] = result["all_results"][best_technique]
+            _limit_comparison_to_technique(result, str(best_technique))
             result["selection_source"] = "db_history"
             result["selection_details"] = {
                 "profile_selection": profile_selection,
@@ -646,43 +664,28 @@ def _finalize_benchmark_result(
     """Apply selection strategy and validate winner without persisting."""
     result = _attach_problem_profile(result=result, domain=domain, difficulty=difficulty)
 
-    if run_mode == RUN_MODE_BENCHMARK:
-        all_results = result.get("all_results", {}) if isinstance(result, dict) else {}
-        attempted_count = len(all_results) if isinstance(all_results, dict) else 0
-        if attempted_count < 2:
-            raise HTTPException(
-                status_code=500,
-                detail="Benchmark mode requires runtime execution of at least two techniques.",
-            )
+    normal_min_samples = _get_env_int(
+        "NORMAL_MODE_MIN_SAMPLES_PER_TECHNIQUE",
+        default=15,
+        min_value=1,
+    )
+    normal_min_gap = _get_env_float(
+        "NORMAL_MODE_MIN_AVG_SCORE_GAP",
+        default=0.03,
+        min_value=0.0,
+    )
+    normal_profile_min_samples = _get_env_int(
+        "NORMAL_MODE_PROFILE_MIN_SAMPLES_PER_TECHNIQUE",
+        default=max(2, normal_min_samples),
+        min_value=1,
+    )
+    normal_profile_min_gap = _get_env_float(
+        "NORMAL_MODE_PROFILE_MIN_AVG_SCORE_GAP",
+        default=max(0.01, normal_min_gap / 2),
+        min_value=0.0,
+    )
 
-        result["selection_source"] = "runtime_scores"
-        result["selection_details"] = {
-            "reason": "benchmark_forces_runtime_all_techniques",
-            "profile_selection": None,
-            "domain_selection": None,
-        }
-    else:
-        normal_min_samples = _get_env_int(
-            "NORMAL_MODE_MIN_SAMPLES_PER_TECHNIQUE",
-            default=15,
-            min_value=1,
-        )
-        normal_min_gap = _get_env_float(
-            "NORMAL_MODE_MIN_AVG_SCORE_GAP",
-            default=0.03,
-            min_value=0.0,
-        )
-        normal_profile_min_samples = _get_env_int(
-            "NORMAL_MODE_PROFILE_MIN_SAMPLES_PER_TECHNIQUE",
-            default=max(2, normal_min_samples),
-            min_value=1,
-        )
-        normal_profile_min_gap = _get_env_float(
-            "NORMAL_MODE_PROFILE_MIN_AVG_SCORE_GAP",
-            default=max(0.01, normal_min_gap / 2),
-            min_value=0.0,
-        )
-
+    if run_mode == RUN_MODE_NORMAL:
         result = _apply_db_based_selection(
             result=result,
             domain=domain,
@@ -691,6 +694,13 @@ def _finalize_benchmark_result(
             min_gap_override=normal_min_gap,
             profile_min_samples_override=normal_profile_min_samples,
             profile_min_gap_override=normal_profile_min_gap,
+        )
+    else:
+        # Benchmark mode follows the same tier order, but uses DB_* thresholds.
+        result = _apply_db_based_selection(
+            result=result,
+            domain=domain,
+            difficulty=difficulty,
         )
 
     all_results = result.get("all_results", {}) if isinstance(result, dict) else {}

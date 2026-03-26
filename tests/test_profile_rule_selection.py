@@ -113,6 +113,7 @@ def test_profile_rules_override_domain_average_when_confident(monkeypatch):
     assert result["best_technique"] == "few_shot"
     assert result["selection_source"] == "db_profile_rules"
     assert result["selection_details"]["profile_selection"]["best_technique"] == "few_shot"
+    assert [entry["technique"] for entry in result["comparison"]] == ["few_shot"]
 
 
 def test_profile_rules_fallback_to_domain_average_when_profile_low_confidence(monkeypatch):
@@ -156,6 +157,7 @@ def test_profile_rules_fallback_to_domain_average_when_profile_low_confidence(mo
     assert result["best_technique"] == "zero_shot"
     assert result["selection_source"] == "db_history"
     assert result["selection_details"]["profile_decision_reason"] == "low_confidence_gap"
+    assert [entry["technique"] for entry in result["comparison"]] == ["zero_shot"]
 
 
 def test_profile_and_domain_no_history_falls_back_to_runtime_scores(monkeypatch):
@@ -190,3 +192,87 @@ def test_profile_and_domain_no_history_falls_back_to_runtime_scores(monkeypatch)
 
     assert result["best_technique"] == "few_shot"
     assert result["selection_source"] == "runtime_scores"
+
+
+def test_profile_rules_accept_unweighted_samples_field(monkeypatch):
+    monkeypatch.setenv("DB_EXPLORATION_RATE", "0")
+    monkeypatch.setenv("DB_PROFILE_MIN_SAMPLES_PER_TECHNIQUE", "2")
+    monkeypatch.setenv("DB_PROFILE_MIN_AVG_SCORE_GAP", "0.01")
+
+    monkeypatch.setattr(
+        main.firestore_store,
+        "get_best_technique_by_profile",
+        lambda *args, **kwargs: {
+            "success": True,
+            "best_technique": "few_shot",
+            "ranking": [
+                {"technique": "few_shot", "average_overall": 0.89, "unweighted_samples": 4},
+                {"technique": "zero_shot", "average_overall": 0.81, "unweighted_samples": 4},
+            ],
+            "match_type": "profile_rule",
+        },
+    )
+
+    monkeypatch.setattr(
+        main.firestore_store,
+        "get_best_technique_by_domain",
+        lambda *args, **kwargs: {
+            "success": True,
+            "best_technique": "zero_shot",
+            "ranking": [
+                {"technique": "zero_shot", "average_overall": 0.88, "samples": 8},
+                {"technique": "few_shot", "average_overall": 0.82, "samples": 8},
+            ],
+        },
+    )
+
+    result = main._apply_db_based_selection(
+        result=copy.deepcopy(_mock_result(best_technique="zero_shot")),
+        domain="algebra",
+        difficulty="basic",
+    )
+
+    assert result["selection_source"] == "db_profile_rules"
+    assert result["best_technique"] == "few_shot"
+
+
+def test_profile_rules_accept_effective_samples_field(monkeypatch):
+    monkeypatch.setenv("DB_EXPLORATION_RATE", "0")
+    monkeypatch.setenv("DB_PROFILE_MIN_SAMPLES_PER_TECHNIQUE", "2")
+    monkeypatch.setenv("DB_PROFILE_MIN_AVG_SCORE_GAP", "0.01")
+
+    monkeypatch.setattr(
+        main.firestore_store,
+        "get_best_technique_by_profile",
+        lambda *args, **kwargs: {
+            "success": True,
+            "best_technique": "few_shot",
+            "ranking": [
+                {"technique": "few_shot", "average_overall": 0.9, "effective_samples": 3.7},
+                {"technique": "zero_shot", "average_overall": 0.8, "effective_samples": 3.2},
+            ],
+            "match_type": "profile_rule",
+        },
+    )
+
+    monkeypatch.setattr(
+        main.firestore_store,
+        "get_best_technique_by_domain",
+        lambda *args, **kwargs: {
+            "success": True,
+            "best_technique": "zero_shot",
+            "ranking": [
+                {"technique": "zero_shot", "average_overall": 0.88, "samples": 8},
+                {"technique": "few_shot", "average_overall": 0.82, "samples": 8},
+            ],
+        },
+    )
+
+    result = main._apply_db_based_selection(
+        result=copy.deepcopy(_mock_result(best_technique="zero_shot")),
+        domain="algebra",
+        difficulty="basic",
+    )
+
+    assert result["selection_source"] == "db_profile_rules"
+    assert result["best_technique"] == "few_shot"

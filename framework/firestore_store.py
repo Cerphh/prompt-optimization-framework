@@ -1019,6 +1019,7 @@ class FirestoreStore:
                     "simple_average": round(simple_avg, 4),
                     "weighted_average": round(weighted_avg, 4),  # Primary metric now
                     "average_overall": round(weighted_avg, 4),  # For backwards compatibility
+                    "samples": count,
                     "unweighted_samples": count,
                     "effective_samples": round(similarity_weights[technique], 2),
                     "std_dev": round(std_dev, 4),

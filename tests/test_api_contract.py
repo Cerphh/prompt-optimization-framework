@@ -296,7 +296,7 @@ def test_benchmark_stream_mode_requires_ground_truth(monkeypatch):
     assert "ground_truth" in payload["detail"]
 
 
-def test_benchmark_mode_forces_all_techniques_even_with_history(monkeypatch):
+def test_benchmark_mode_preselects_by_history_when_confident(monkeypatch):
     captured = {}
 
     def fake_benchmark(problem: str, ground_truth=None, subject: str = "general", techniques_to_run=None):
@@ -331,13 +331,13 @@ def test_benchmark_mode_forces_all_techniques_even_with_history(monkeypatch):
     )
 
     assert response.status_code == 200
-    assert captured["techniques_to_run"] is None
+    assert captured["techniques_to_run"] == ["few_shot"]
     payload = response.json()
     assert payload["run_mode"] == "benchmark"
-    assert payload["pre_execution_policy"]["reason"] == "benchmark_forces_runtime_all_techniques"
+    assert payload["pre_execution_policy"]["reason"] == "preselected_by_domain_history"
 
 
-def test_benchmark_mode_rejects_single_technique_result(monkeypatch):
+def test_benchmark_mode_accepts_single_technique_when_preselected(monkeypatch):
     def fake_benchmark(problem: str, ground_truth=None, subject: str = "general", techniques_to_run=None):
         result = _mock_benchmark_result(problem=problem, ground_truth=ground_truth)
         result["all_results"] = {
@@ -370,6 +370,6 @@ def test_benchmark_mode_rejects_single_technique_result(monkeypatch):
         },
     )
 
-    assert response.status_code == 500
+    assert response.status_code == 200
     payload = response.json()
-    assert "at least two techniques" in payload["detail"]
+    assert payload["run_mode"] == "benchmark"

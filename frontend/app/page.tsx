@@ -198,7 +198,7 @@ const getTierInfo = (source?: SelectionSource): TierInfo => {
       tier: 3,
       tierName: 'Tier 3',
       strategyName: 'Runtime Selection',
-      description: 'Selected based on live execution scores. Used when database history was unavailable or when benchmark mode is active.',
+      description: 'Selected based on live execution scores. Used when Tier 1 and Tier 2 did not produce a confident preselection.',
       bgColor: '#fffbeb',
       borderColor: '#fde68a',
       textColor: 'var(--amber)',
@@ -227,7 +227,6 @@ const formatSelectionReason = (reason?: string): string => {
     'profile_best_missing_result': 'Profile-recommended technique failed during execution',
     'low_confidence_gap': 'Recommendation confidence was too low, fell back to domain average',
     'insufficient_samples': 'Insufficient historical data for confident recommendation',
-    'benchmark_forces_runtime_all_techniques': 'Benchmark mode requires testing all techniques to ensure fair comparison',
     'no_profile_match': 'No similar problems found in database history',
     'missing_problem_profile': 'Could not extract problem profile',
   }
@@ -249,25 +248,28 @@ const buildDecisionTree = (details?: Record<string, any>, source?: SelectionSour
   
   const profileSelection = details.profile_selection as Record<string, any> || {}
   const domainSelection = details.domain_selection as Record<string, any> || {}
-  const profileReason = details.profile_decision_reason || ''
-  const dbReason = details.db_decision_reason || ''
-  const profileSuccess = profileSelection.success === true && profileReason !== 'exploration_runtime'
-  const domainSuccess = domainSelection.success === true && dbReason !== 'exploration_runtime' && !dbReason
+  const profileReason = details.profile_decision_reason || profileSelection.reason || ''
+  const dbReason = details.db_decision_reason || domainSelection.reason || ''
+  const profileAttempted = profileSelection.success !== undefined
+  const domainAttempted = domainSelection.success !== undefined
+  const profileSelected = source === 'db_profile_rules'
+  const domainSelected = source === 'db_history'
+  const runtimeSelected = source === 'runtime_scores'
 
   const tree: TierDecisionInfo[] = [
     {
       tierNumber: 1,
       tierName: 'Tier 1: Profile-Based Selection',
-      wasAttempted: profileSelection.success !== undefined,
-      result: profileSuccess ? 'passed' : profileSelection.success === false ? 'failed' : 'skipped',
+      wasAttempted: profileAttempted,
+      result: profileSelected ? 'passed' : profileAttempted ? 'failed' : 'skipped',
       reason: profileReason,
       details: buildTier1Details(profileSelection, details),
     },
     {
       tierNumber: 2,
       tierName: 'Tier 2: Domain-Average Fallback',
-      wasAttempted: profileSuccess === false,
-      result: (profileSuccess === false && domainSuccess) ? 'passed' : (profileSuccess === false && !domainSuccess) ? 'failed' : 'skipped',
+      wasAttempted: domainAttempted,
+      result: domainSelected ? 'passed' : domainAttempted ? 'failed' : 'skipped',
       reason: dbReason,
       details: buildTier2Details(domainSelection, details),
     },
@@ -275,7 +277,7 @@ const buildDecisionTree = (details?: Record<string, any>, source?: SelectionSour
       tierNumber: 3,
       tierName: 'Tier 3: Runtime Selection',
       wasAttempted: true,
-      result: source === 'runtime_scores' ? 'passed' : 'skipped',
+      result: runtimeSelected ? 'passed' : 'skipped',
       reason: details.reason,
       details: 'All techniques executed; best selected by runtime performance scores.',
     },
@@ -302,7 +304,7 @@ const buildTier1Details = (prof: Record<string, any>, allDetails: Record<string,
   if (ranking.length === 0) return 'No ranking data available'
 
   const top = ranking[0] as Record<string, any>
-  const topSamples = top.unweighted_samples || 0
+  const topSamples = top.samples || top.unweighted_samples || top.effective_samples || 0
   const minSamples = rules.profile_min_samples_per_technique || 2
 
   if (topSamples < minSamples) {
@@ -331,16 +333,16 @@ const buildTier2Details = (dom: Record<string, any>, allDetails: Record<string, 
   }
 
   const rules = allDetails.db_confidence_rules || {}
-  const samples = dom.samples || 0
+  const ranking = dom.ranking || []
+  const top = ranking[0] as Record<string, any> || {}
+  const samples = top.samples || 0
   const minSamples = rules.min_samples_per_technique || 3
 
   if (samples < minSamples) {
     return `❌ Domain has ${samples} sample(s) — needs ≥${minSamples}`
   }
 
-  const ranking = dom.ranking || []
   if (ranking.length > 1) {
-    const top = ranking[0] as Record<string, any>
     const second = ranking[1] as Record<string, any>
     const topScore = top.average_overall || 0
     const secondScore = second.average_overall || 0
@@ -951,8 +953,20 @@ export default function Home() {
   const expandedWasExtended = expandedContinuationRounds > 0
   const expandedStillTruncated = expandedMetrics?.truncated === true
 
+  const shouldShowOnlySelectedTechnique =
+    result?.selection_source === 'db_profile_rules' || result?.selection_source === 'db_history'
+
+  const visibleTechniqueEntries = result
+    ? Object.entries(result.all_results || {}).filter(([techniqueName]) => {
+        if (!shouldShowOnlySelectedTechnique) {
+          return true
+        }
+        return techniqueName === result.best_technique
+      })
+    : []
+
   const techniqueRows: TechniqueRow[] = result
-    ? Object.entries(result.all_results || {}).map(([techniqueName, techniqueResult]) => {
+    ? visibleTechniqueEntries.map(([techniqueName, techniqueResult]) => {
         const scores = techniqueResult?.scores || ({} as Partial<TechniqueResult['scores']>)
         return {
           technique: techniqueName,
@@ -987,9 +1001,8 @@ export default function Home() {
     activeMode === 'benchmark'
       ? 'Live comparison of all techniques with required expected answer.'
       : 'Uses historical preselection after enough data; otherwise runs all techniques.'
-  const attemptedTechniqueCount = result?.execution_summary?.attempted_count ?? techniqueRows.length
-  const successfulTechniqueCount =
-    result?.execution_summary?.successful_count ?? techniqueRows.filter((row) => row.success).length
+  const attemptedTechniqueCount = techniqueRows.length
+  const successfulTechniqueCount = techniqueRows.filter((row) => row.success).length
 
   const isDisabled =
     loading ||
