@@ -1049,7 +1049,7 @@ export default function Home() {
       >
         <h1 className="text-base font-semibold tracking-tight">Prompt Optimization Framework</h1>
         <div className="flex items-center gap-4">
-          {result && (
+          {result && activeMode === 'benchmark' && (
             <span className="text-sm font-mono" style={{ color: 'var(--text-muted)' }}>
               Best:{' '}
               <strong className="font-medium" style={{ color: 'var(--text)' }}>
