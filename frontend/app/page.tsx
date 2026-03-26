@@ -1270,8 +1270,8 @@ export default function Home() {
                     background: loading ? 'var(--bg)' : 'var(--surface)',
                   }}
                 >
-                  <option value="normal">Normal mode (smart + fast)</option>
-                  <option value="benchmark">Benchmark mode (thesis)</option>
+                  <option value="normal">Normal</option>
+                  <option value="benchmark">Benchmark</option>
                 </select>
               </div>
 
