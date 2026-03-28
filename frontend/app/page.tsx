@@ -244,6 +244,7 @@ const formatSelectionReason = (reason?: string): string => {
     'exploration_runtime': 'Forced runtime selection for exploration to gather diverse data',
     'profile_best_missing_result': 'Profile-recommended technique failed during execution',
     'low_confidence_gap': 'Recommendation confidence was too low, fell back to domain average',
+    'low_technique_confidence': 'Top technique has inconsistent scores (low confidence), fell back',
     'insufficient_samples': 'Insufficient historical data for confident recommendation',
     'no_profile_match': 'No similar problems found in database history',
     'missing_problem_profile': 'Could not extract problem profile',
@@ -334,7 +335,7 @@ const buildTier1Details = (prof: Record<string, any>, allDetails: Record<string,
     const topScore = top.weighted_average || top.average_overall || 0
     const secondScore = second.weighted_average || second.average_overall || 0
     const gap = topScore - secondScore
-    const minGap = rules.profile_min_average_gap || 0.01
+    const minGap = rules.profile_min_average_gap || 0.005
 
     if (gap < minGap) {
       return `❌ Top vs 2nd gap ${(gap * 100).toFixed(2)}% — needs ≥${(minGap * 100).toFixed(2)}%`

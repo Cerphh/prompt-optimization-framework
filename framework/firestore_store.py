@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import os
 import hashlib
+import re
 import statistics
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional, List, Set, Tuple
@@ -148,6 +149,8 @@ class FirestoreStore:
                 {
                     "problem_id": problem_id,
                     "problem": problem_text,
+                    "has_ground_truth": payload.get("has_ground_truth"),
+                    "evaluation_quality": payload.get("evaluation_quality"),
                     "result_per_run": self._encode_runs_as_named_map(result_per_run),
                     "3_run_ave": three_run_ave,
                 },
@@ -465,6 +468,19 @@ class FirestoreStore:
 
         return None
 
+    def _doc_has_ground_truth(self, data: Dict[str, Any]) -> Optional[bool]:
+        """Check ground truth at the document level, falling back to run entries."""
+        # Check doc-level field first.
+        result = self._entry_has_ground_truth(data, data)
+        if result is not None:
+            return result
+        # Fallback: check inside result_per_run entries (legacy data).
+        for entry in self._extract_result_entries(None, data):
+            result = self._entry_has_ground_truth(entry, data)
+            if result is not None:
+                return result
+        return None
+
     def _normalize_profile_labels(self, value: Any) -> List[str]:
         if value is None:
             return []
@@ -525,49 +541,71 @@ class FirestoreStore:
             return 0.0
         return len(target.intersection(candidate)) / len(target)
 
-    def _profile_similarity(self, target: Dict[str, Any], candidate: Dict[str, Any]) -> float:
-        """Compute weighted profile similarity for IF-THEN pattern matching with adaptive weights."""
-        # Get adaptive weights based on available data in TARGET profile
-        weights = self._calculate_adaptive_weights(target)
-        
-        weighted_sum = 0.0
-        total_weight = 0.0
+    # Common English stop words to strip when refining problem text for matching.
+    _STOP_WORDS: Set[str] = {
+        "a", "an", "the", "is", "are", "was", "were", "be", "been", "being",
+        "have", "has", "had", "do", "does", "did", "will", "would", "shall",
+        "should", "may", "might", "can", "could", "must",
+        "i", "me", "my", "we", "us", "our", "you", "your", "he", "him",
+        "his", "she", "her", "it", "its", "they", "them", "their",
+        "this", "that", "these", "those", "which", "who", "whom", "what",
+        "and", "or", "but", "nor", "not", "no", "so", "if", "then", "else",
+        "when", "where", "how", "why", "than", "because", "since", "while",
+        "of", "in", "on", "at", "to", "for", "with", "by", "from", "as",
+        "into", "through", "during", "before", "after", "about", "between",
+        "above", "below", "up", "down", "out", "off", "over", "under",
+        "again", "further", "once", "here", "there", "all", "each", "every",
+        "both", "few", "more", "most", "other", "some", "such", "only",
+        "own", "same", "too", "very", "just", "also", "now",
+    }
 
-        # Intent (with adaptive weight)
-        target_intent = str(target.get("intent", "") or "")
-        candidate_intent = str(candidate.get("intent", "") or "")
-        if target_intent and candidate_intent:
-            total_weight += weights["intent"]
-            weighted_sum += weights["intent"] if target_intent == candidate_intent else 0.0
+    @staticmethod
+    def _tokenize_text(text: str) -> Set[str]:
+        """Tokenize text into normalized lowercase word tokens."""
+        return set(re.findall(r"[a-zA-Z0-9_]+", text.lower()))
 
-        # Features (with adaptive weight)
-        target_features = set(self._normalize_profile_labels(target.get("features")))
-        candidate_features = set(self._normalize_profile_labels(candidate.get("features")))
-        if target_features and candidate_features:
-            feature_score = self._overlap_ratio(target_features, candidate_features)
-            total_weight += weights["features"]
-            weighted_sum += weights["features"] * feature_score
+    @classmethod
+    def _refine_problem_text(cls, text: str) -> Set[str]:
+        """Refine problem text for matching: tokenize, remove stop words, keep content words.
 
-        # Format (with adaptive weight)
-        target_format = set(self._normalize_profile_labels(target.get("format_labels")))
-        candidate_format = set(self._normalize_profile_labels(candidate.get("format_labels")))
-        if target_format and candidate_format:
-            format_score = self._overlap_ratio(target_format, candidate_format)
-            total_weight += weights["format"]
-            weighted_sum += weights["format"] * format_score
+        For natural-language problems this strips noise words so the
+        remaining tokens (math terms, numbers, variable names) drive
+        the similarity comparison.
+        """
+        tokens = cls._tokenize_text(text)
+        return tokens - cls._STOP_WORDS
 
-        # Constraints (with adaptive weight)
-        target_constraints = set(self._normalize_profile_labels(target.get("constraints")))
-        candidate_constraints = set(self._normalize_profile_labels(candidate.get("constraints")))
-        if target_constraints and candidate_constraints:
-            constraints_score = self._overlap_ratio(target_constraints, candidate_constraints)
-            total_weight += weights["constraints"]
-            weighted_sum += weights["constraints"] * constraints_score
-
-        if total_weight == 0:
+    @classmethod
+    def _lexical_similarity(cls, text_a: str, text_b: str) -> float:
+        """Jaccard similarity between two problem texts based on refined word overlap."""
+        tokens_a = cls._refine_problem_text(text_a)
+        tokens_b = cls._refine_problem_text(text_b)
+        if not tokens_a or not tokens_b:
             return 0.0
+        intersection = len(tokens_a & tokens_b)
+        union = len(tokens_a | tokens_b)
+        return intersection / union if union else 0.0
 
-        return weighted_sum / total_weight
+    def _profile_similarity(
+        self,
+        target: Dict[str, Any],
+        candidate: Dict[str, Any],
+        target_text: str = "",
+        candidate_text: str = "",
+    ) -> float:
+        """Compute similarity between two problems using refined word-based matching.
+
+        The 4 structured components (intent/features/format/constraints) have
+        been removed — similarity is now purely lexical.  Stop words are
+        stripped so that content words (math terms, numbers, variables) drive
+        the comparison.  This is simpler to tune and works equally well for
+        natural-language and symbolic problems.
+        """
+        target_t = str(target_text or "").strip()
+        candidate_t = str(candidate_text or "").strip()
+        if not target_t or not candidate_t:
+            return 0.0
+        return self._lexical_similarity(target_t, candidate_t)
 
     @staticmethod
     def _normalize_key(value: Any, default: str) -> str:
@@ -575,96 +613,6 @@ class FirestoreStore:
             return default
         normalized = str(value).strip().lower().replace(" ", "_")
         return normalized or default
-
-    def _calculate_adaptive_weights(self, profile: Dict[str, Any]) -> Dict[str, float]:
-        """
-        Adjust weights dynamically based on how much data we have in the profile.
-        More data = we can rely on that dimension more heavily.
-        """
-        weights = {}
-        
-        # Check availability of each component
-        has_intent = bool(profile.get("intent"))
-        has_features = bool(profile.get("features")) and len(profile.get("features", [])) > 0
-        has_format = bool(profile.get("format_labels")) and len(profile.get("format_labels", [])) > 0
-        has_constraints = bool(profile.get("constraints")) and len(profile.get("constraints", [])) > 0
-        
-        # Count how many components we have
-        components_available = sum([has_intent, has_features, has_format, has_constraints])
-        
-        # Default weights
-        base_weights = {
-            "intent": 0.45,
-            "features": 0.30,
-            "format": 0.20,
-            "constraints": 0.05
-        }
-        
-        # SCENARIO 1: All 4 components available → Use defaults
-        if components_available == 4:
-            weights = base_weights
-        
-        # SCENARIO 2: Missing 1 component (redistribute weight)
-        elif components_available == 3:
-            if not has_constraints:
-                # Redistribute constraints weight to features
-                weights = {
-                    "intent": 0.45,
-                    "features": 0.35,  # +0.05
-                    "format": 0.20,
-                    "constraints": 0.0
-                }
-            elif not has_format:
-                # Redistribute format weight
-                weights = {
-                    "intent": 0.45,
-                    "features": 0.30,
-                    "format": 0.0,
-                    "constraints": 0.25  # +0.20
-                }
-            elif not has_features:
-                # Redistribute features weight
-                weights = {
-                    "intent": 0.45,
-                    "features": 0.0,
-                    "format": 0.35,  # +0.15
-                    "constraints": 0.20  # +0.15
-                }
-            else:  # not has_intent (rare but handle it)
-                weights = {
-                    "intent": 0.0,
-                    "features": 0.40,  # +0.10
-                    "format": 0.35,  # +0.15
-                    "constraints": 0.25  # +0.20
-                }
-        
-        # SCENARIO 3: Only 2 components available
-        elif components_available == 2:
-            if has_intent and has_features:
-                weights = {"intent": 0.50, "features": 0.50, "format": 0.0, "constraints": 0.0}
-            elif has_intent and has_format:
-                weights = {"intent": 0.50, "features": 0.0, "format": 0.50, "constraints": 0.0}
-            elif has_intent and has_constraints:
-                weights = {"intent": 0.60, "features": 0.0, "format": 0.0, "constraints": 0.40}
-            elif has_features and has_format:
-                weights = {"intent": 0.0, "features": 0.50, "format": 0.50, "constraints": 0.0}
-            elif has_features and has_constraints:
-                weights = {"intent": 0.0, "features": 0.60, "format": 0.0, "constraints": 0.40}
-            else:  # has_format and has_constraints
-                weights = {"intent": 0.0, "features": 0.0, "format": 0.60, "constraints": 0.40}
-        
-        # SCENARIO 4: Only 1 component available
-        elif components_available == 1:
-            weights = {"intent": 1.0 if has_intent else 0.0,
-                      "features": 1.0 if has_features else 0.0,
-                      "format": 1.0 if has_format else 0.0,
-                      "constraints": 1.0 if has_constraints else 0.0}
-        
-        # SCENARIO 5: No data at all
-        else:
-            weights = {"intent": 0.25, "features": 0.25, "format": 0.25, "constraints": 0.25}
-        
-        return weights
 
     def _problem_collection_ref(self, domain: str, difficulty: str) -> Any:
         """Return collection ref for domain/difficulty aggregated results (legacy hierarchy fallback).
@@ -751,33 +699,29 @@ class FirestoreStore:
             )
             for doc in query:
                 data = doc.to_dict() or {}
-                for entry in self._extract_result_entries(doc.reference, data):
-                    if require_ground_truth:
-                        has_ground_truth = self._entry_has_ground_truth(entry, data)
-                        if has_ground_truth is False:
-                            continue
-                        if has_ground_truth is None and not allow_unknown_quality:
-                            continue
 
-                    comparisons = entry.get("technique_comparison", [])
-                    if not isinstance(comparisons, list):
+                if require_ground_truth:
+                    has_ground_truth = self._doc_has_ground_truth(data)
+                    if has_ground_truth is False:
+                        continue
+                    if has_ground_truth is None and not allow_unknown_quality:
                         continue
 
-                    for comparison in comparisons:
-                        if not isinstance(comparison, dict):
-                            continue
+                # Read per-problem averaged scores from 3_run_ave
+                three_run_ave = data.get("3_run_ave") or {}
+                technique_averages = three_run_ave.get("technique_averages") or {}
 
-                        technique = comparison.get("technique")
-                        overall = comparison.get("overall")
+                for technique, metrics in technique_averages.items():
+                    if not isinstance(metrics, dict):
+                        continue
+                    overall = metrics.get("overall")
+                    if overall is None or not isinstance(overall, (int, float)):
+                        continue
+                    if allowed and technique not in allowed:
+                        continue
 
-                        if not technique or not isinstance(overall, (int, float)):
-                            continue
-
-                        if allowed and technique not in allowed:
-                            continue
-
-                        totals[technique] = totals.get(technique, 0.0) + float(overall)
-                        counts[technique] = counts.get(technique, 0) + 1
+                    totals[technique] = totals.get(technique, 0.0) + float(overall)
+                    counts[technique] = counts.get(technique, 0) + 1
 
             if not counts:
                 return {
@@ -824,14 +768,18 @@ class FirestoreStore:
         available_techniques: Optional[List[str]] = None,
         min_similarity: float = 0.35,
         require_ground_truth: bool = False,
+        problem_text: str = "",
     ) -> Dict[str, Any]:
-        """Get best technique using profile-level IF-THEN matching over historical results.
+        """Get best technique using word-based similarity matching over historical results.
+        
+        Similarity is computed purely from problem text (lexical/Jaccard after
+        stop-word removal).  Structured profile components are no longer used
+        for matching — problem_text is the primary input.
         
         Improvements:
         - Implements weighted matching (problems weighted by similarity)
         - Adaptive threshold based on data availability
         - Confidence/variance reporting for recommendations
-        - Adaptive weighting based on profile completeness
         """
         if not self.enabled:
             return {
@@ -848,11 +796,12 @@ class FirestoreStore:
             }
 
         normalized_profile = self._normalize_problem_profile(problem_profile)
-        if not normalized_profile:
+        normalized_text = str(problem_text or "").strip()
+        if not normalized_text:
             return {
                 "success": False,
-                "reason": "missing_problem_profile",
-                "error": "Problem profile is required for profile-based selection.",
+                "reason": "missing_problem_text",
+                "error": "Problem text is required for profile-based selection.",
             }
 
         try:
@@ -873,35 +822,39 @@ class FirestoreStore:
                 )
             )
 
-            # IMPROVEMENT #3 (Adaptive Threshold):
             # First pass: Count available matches to determine adaptive threshold
+            # NOTE: Counts per-problem (not per-run) for honest sample counts.
             preliminary_count = 0
             for doc in query:
                 data = doc.to_dict() or {}
-                for entry in self._extract_result_entries(doc.reference, data):
-                    historical_profile = self._normalize_problem_profile(
-                        entry.get("problem_profile") or data.get("problem_profile")
-                    )
-                    if not historical_profile:
-                        continue
-                    
-                    similarity = self._profile_similarity(normalized_profile, historical_profile)
-                    if similarity >= 0.30:  # Low threshold for counting
-                        preliminary_count += 1
+                historical_text = str(data.get("problem") or "").strip()
+                if not historical_text:
+                    continue
 
-            # Adapt threshold based on available data
+                similarity = self._profile_similarity(
+                    {},
+                    {},
+                    target_text=normalized_text,
+                    candidate_text=historical_text,
+                )
+                if similarity >= 0.20:  # Low threshold for counting
+                    preliminary_count += 1
+
+            # Adapt threshold based on available data (relaxed for easier matching)
             adaptive_min_similarity = min_similarity  # Start with provided value
             if preliminary_count > 15:
-                adaptive_min_similarity = 0.55  # Lots of data → be strict
+                adaptive_min_similarity = 0.45  # Lots of data → moderately strict
             elif preliminary_count > 10:
-                adaptive_min_similarity = 0.50
-            elif preliminary_count > 5:
                 adaptive_min_similarity = 0.40
+            elif preliminary_count > 5:
+                adaptive_min_similarity = 0.30
             elif preliminary_count > 0:
-                adaptive_min_similarity = min(0.30, min_similarity)  # Little data → be lenient
+                adaptive_min_similarity = min(0.20, min_similarity)  # Little data → very lenient
 
             # IMPROVEMENT #2 & #5 (Weighted problems + Confidence/Variance):
-            # Second pass: Accumulate technique scores with similarity weighting
+            # Second pass: Accumulate technique scores with similarity weighting.
+            # Uses per-problem averages (3_run_ave) instead of individual runs
+            # so that 1 problem = 1 sample regardless of how many runs it had.
             totals: Dict[str, float] = {}
             similarity_weighted_totals: Dict[str, float] = {}
             similarity_weights: Dict[str, float] = {}
@@ -920,55 +873,53 @@ class FirestoreStore:
 
             for doc in query:
                 data = doc.to_dict() or {}
-                for entry in self._extract_result_entries(doc.reference, data):
-                    if require_ground_truth:
-                        has_ground_truth = self._entry_has_ground_truth(entry, data)
-                        if has_ground_truth is False:
-                            continue
-                        if has_ground_truth is None and not allow_unknown_quality:
-                            continue
 
-                    historical_profile = self._normalize_problem_profile(
-                        entry.get("problem_profile") or data.get("problem_profile")
-                    )
-                    if not historical_profile:
+                if require_ground_truth:
+                    has_ground_truth = self._doc_has_ground_truth(data)
+                    if has_ground_truth is False:
+                        continue
+                    if has_ground_truth is None and not allow_unknown_quality:
                         continue
 
-                    similarity = self._profile_similarity(normalized_profile, historical_profile)
-                    if similarity < adaptive_min_similarity:
+                historical_text = str(data.get("problem") or "").strip()
+                if not historical_text:
+                    continue
+
+                similarity = self._profile_similarity(
+                    {},
+                    {},
+                    target_text=normalized_text,
+                    candidate_text=historical_text,
+                )
+                if similarity < adaptive_min_similarity:
+                    continue
+
+                matched_documents += 1
+                similarities.append(similarity)
+
+                # Read per-problem averaged scores from 3_run_ave
+                three_run_ave = data.get("3_run_ave") or {}
+                technique_averages = three_run_ave.get("technique_averages") or {}
+
+                for technique, metrics in technique_averages.items():
+                    if not isinstance(metrics, dict):
+                        continue
+                    overall = metrics.get("overall")
+                    if overall is None or not isinstance(overall, (int, float)):
+                        continue
+                    if allowed and technique not in allowed:
                         continue
 
-                    matched_documents += 1
-                    similarities.append(similarity)
+                    overall_f = float(overall)
 
-                    comparisons = entry.get("technique_comparison", [])
-                    if not isinstance(comparisons, list):
-                        continue
+                    totals[technique] = totals.get(technique, 0.0) + overall_f
+                    similarity_weighted_totals[technique] = similarity_weighted_totals.get(technique, 0.0) + (overall_f * similarity)
+                    similarity_weights[technique] = similarity_weights.get(technique, 0.0) + similarity
+                    counts[technique] = counts.get(technique, 0) + 1
 
-                    for comparison in comparisons:
-                        if not isinstance(comparison, dict):
-                            continue
-
-                        technique = comparison.get("technique")
-                        overall = comparison.get("overall")
-
-                        if not technique or not isinstance(overall, (int, float)):
-                            continue
-                        if allowed and technique not in allowed:
-                            continue
-
-                        overall_f = float(overall)
-                        
-                        # IMPROVEMENT #2: Weight by similarity
-                        totals[technique] = totals.get(technique, 0.0) + overall_f
-                        similarity_weighted_totals[technique] = similarity_weighted_totals.get(technique, 0.0) + (overall_f * similarity)
-                        similarity_weights[technique] = similarity_weights.get(technique, 0.0) + similarity
-                        counts[technique] = counts.get(technique, 0) + 1
-                        
-                        # IMPROVEMENT #5: Track individual scores for variance
-                        if technique not in scores_per_technique:
-                            scores_per_technique[technique] = []
-                        scores_per_technique[technique].append(overall_f)
+                    if technique not in scores_per_technique:
+                        scores_per_technique[technique] = []
+                    scores_per_technique[technique].append(overall_f)
 
             if not counts:
                 return {

@@ -276,8 +276,15 @@ def _evaluate_selection_confidence(
     selection: Dict[str, Any],
     min_samples: int,
     min_gap: float,
+    top_only_samples: bool = False,
 ) -> Tuple[bool, str]:
-    """Apply confidence gates to historical selection ranking."""
+    """Apply confidence gates to historical selection ranking.
+
+    Args:
+        top_only_samples: When True, only the top technique needs min_samples
+            (the second technique is not required to meet the threshold).
+            Useful for profile-based selection where data is scarcer.
+    """
     if not isinstance(selection, dict):
         return False, "invalid_selection_payload"
 
@@ -319,11 +326,16 @@ def _evaluate_selection_confidence(
     except (TypeError, ValueError):
         return False, "invalid_ranking_data"
 
-    if min(top_samples, second_samples) < min_samples:
+    if not top_only_samples and min(top_samples, second_samples) < min_samples:
         return False, "insufficient_samples"
 
     if (top_average - second_average) < min_gap:
         return False, "low_confidence_gap"
+
+    # Reject if top technique has erratic/inconsistent scores (std_dev ≥ 0.15).
+    top_confidence = str(top.get("confidence", "") or "").lower()
+    if top_confidence == "low":
+        return False, "low_technique_confidence"
 
     return True, "ok"
 
@@ -395,6 +407,7 @@ def _resolve_pre_execution_techniques(
         available_techniques=technique_names,
         min_similarity=profile_min_similarity,
         require_ground_truth=require_ground_truth_history,
+        problem_text=problem,
     )
     details["profile_selection"] = profile_selection
 
@@ -402,6 +415,7 @@ def _resolve_pre_execution_techniques(
         profile_selection,
         min_samples=min_samples,
         min_gap=min_gap,
+        top_only_samples=True,
     )
     if profile_ok:
         best_technique = str(profile_selection.get("best_technique") or "")
@@ -503,7 +517,7 @@ def _apply_db_based_selection(
     profile_min_gap = (
         _get_env_float(
             "DB_PROFILE_MIN_AVG_SCORE_GAP",
-            default=max(0.01, min_gap / 2),
+            default=0.005,
             min_value=0.0,
         )
         if profile_min_gap_override is None
@@ -511,7 +525,7 @@ def _apply_db_based_selection(
     )
     profile_min_similarity = _get_env_float(
         "DB_PROFILE_MIN_SIMILARITY",
-        default=0.35,
+        default=0.25,
         min_value=0.0,
         max_value=1.0,
     )
@@ -524,6 +538,7 @@ def _apply_db_based_selection(
     )
 
     problem_profile = result.get("problem_profile") if isinstance(result.get("problem_profile"), dict) else None
+    problem_text = str(result.get("problem", "") or "")
 
     profile_selection = firestore_store.get_best_technique_by_profile(
         domain=domain,
@@ -532,6 +547,7 @@ def _apply_db_based_selection(
         available_techniques=successful_techniques,
         min_similarity=profile_min_similarity,
         require_ground_truth=require_ground_truth_history,
+        problem_text=problem_text,
     )
 
     if not isinstance(profile_selection, dict):
@@ -545,6 +561,7 @@ def _apply_db_based_selection(
         profile_selection,
         min_samples=profile_min_samples,
         min_gap=profile_min_gap,
+        top_only_samples=True,
     )
 
     if can_use_profile and exploration_rate > 0:
@@ -676,12 +693,12 @@ def _finalize_benchmark_result(
     )
     normal_profile_min_samples = _get_env_int(
         "NORMAL_MODE_PROFILE_MIN_SAMPLES_PER_TECHNIQUE",
-        default=max(2, normal_min_samples),
+        default=max(1, normal_min_samples // 3),
         min_value=1,
     )
     normal_profile_min_gap = _get_env_float(
         "NORMAL_MODE_PROFILE_MIN_AVG_SCORE_GAP",
-        default=max(0.01, normal_min_gap / 2),
+        default=max(0.005, normal_min_gap / 4),
         min_value=0.0,
     )
 
