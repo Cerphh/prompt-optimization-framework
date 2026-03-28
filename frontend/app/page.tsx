@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 
 type RunMode = 'normal' | 'benchmark'
+type ScoreDisplayFormat = 'percent' | 'decimal'
 
 interface Technique {
   technique: string
@@ -161,6 +162,31 @@ const formatScorePercent = (
   const percentage = parsed * 100
   const rounded = Number(percentage.toFixed(digits))
   return `${rounded}%`
+}
+
+const formatScoreDecimal = (
+  value: unknown,
+  fallback = 'N/A',
+  digits = 4
+): string => {
+  if (value === null || value === undefined) {
+    return fallback
+  }
+  const parsed = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(parsed)) {
+    return fallback
+  }
+  return parsed.toFixed(digits)
+}
+
+const formatScore = (
+  value: unknown,
+  format: ScoreDisplayFormat,
+  fallback = 'N/A',
+): string => {
+  return format === 'percent'
+    ? formatScorePercent(value, fallback)
+    : formatScoreDecimal(value, fallback)
 }
 
 const HIDDEN_PROMPT_PREAMBLES = [
@@ -376,6 +402,35 @@ const buildTier2Details = (dom: Record<string, any>, allDetails: Record<string, 
   return `✓ Passed all checks — ${ranking[0]?.technique || 'technique'} based on domain/${allDetails.difficulty} history`
 }
 
+const buildTierSummary = (
+  source: SelectionSource,
+  details: Record<string, any>,
+  bestTechnique?: string,
+): string => {
+  const profileSelection = details.profile_selection as Record<string, any> || {}
+  const domainSelection = details.domain_selection as Record<string, any> || {}
+  const technique = bestTechnique?.toUpperCase() || 'N/A'
+
+  if (source === 'db_profile_rules') {
+    const matched = profileSelection.matched_documents
+    const ranking = profileSelection.ranking || []
+    const top = ranking[0] as Record<string, any> || {}
+    const samples = top.samples || top.unweighted_samples || matched || 0
+    return `${technique} selected from ${samples} similar problem${samples !== 1 ? 's' : ''} in history`
+  }
+
+  if (source === 'db_history') {
+    const ranking = domainSelection.ranking || []
+    const top = ranking[0] as Record<string, any> || {}
+    const samples = top.samples || 0
+    const domain = domainSelection.domain || 'domain'
+    const difficulty = domainSelection.difficulty || 'basic'
+    return `${technique} selected from ${samples} sample${samples !== 1 ? 's' : ''} in ${domain}/${difficulty}`
+  }
+
+  return 'All techniques executed, best selected by runtime scores'
+}
+
 
 export default function Home() {
   const [problem, setProblem] = useState('')
@@ -399,6 +454,8 @@ export default function Home() {
   const [streamingResponse, setStreamingResponse] = useState('')
   const [streamingTechnique, setStreamingTechnique] = useState('')
   const [streamingStatus, setStreamingStatus] = useState('')
+  const [perfScoreFormat, setPerfScoreFormat] = useState<ScoreDisplayFormat>('percent')
+  const [compScoreFormat, setCompScoreFormat] = useState<ScoreDisplayFormat>('percent')
 
   // Check API health
   useEffect(() => {
@@ -1459,71 +1516,110 @@ export default function Home() {
             <>
               {/* NORMAL MODE: Simplified View */}
               {activeMode === 'normal' && (
-                <div className="space-y-3">
-                  {/* Used Technique */}
+                <div className="space-y-4">
+                  {/* Header row: technique + tier + actions */}
                   <div
-                    className="rounded-lg p-3"
+                    className="rounded-lg overflow-hidden"
                     style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
                   >
-                    <p
-                      className="text-[10px] font-mono uppercase tracking-wider mb-2"
-                      style={{ color: 'var(--text-subtle)' }}
-                    >
-                      Used Technique
-                    </p>
-                    <div className="flex items-center gap-3">
-                      <span
-                        className="font-mono text-sm font-semibold px-3 py-1 rounded"
-                        style={{ background: 'var(--accent)', color: '#fff' }}
-                      >
-                        {result.best_technique?.toUpperCase()}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Prompt Used */}
-                  <div
-                    className="rounded-lg p-6"
-                    style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
-                  >
-                    <p
-                      className="text-[11px] font-mono uppercase tracking-wider mb-3"
-                      style={{ color: 'var(--text-subtle)' }}
-                    >
-                      Prompt Used
-                    </p>
                     <div
-                      className="p-4 rounded-md overflow-auto max-h-72"
-                      style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}
+                      className="flex items-center justify-between px-6 py-3"
+                      style={{ borderBottom: '1px solid var(--border)' }}
                     >
-                      <pre className="text-sm font-mono whitespace-pre-wrap leading-relaxed">
-                        {getDisplayPrompt(result.best_result?.prompt)}
-                      </pre>
+                      <div className="flex items-center gap-3">
+                        <span
+                          className="font-mono text-sm font-semibold px-3 py-1 rounded"
+                          style={{ background: 'var(--accent)', color: '#fff' }}
+                        >
+                          {result.best_technique?.toUpperCase()}
+                        </span>
+                        {result.selection_source && (() => {
+                          const tierInfo = getTierInfo(result.selection_source as SelectionSource)
+                          return (
+                            <span
+                              className="font-mono text-xs px-2 py-0.5 rounded"
+                              style={{ background: tierInfo.textColor, color: tierInfo.bgColor }}
+                            >
+                              {tierInfo.tierName}
+                            </span>
+                          )
+                        })()}
+                        <span
+                          className="font-mono text-xs px-2 py-1 rounded"
+                          style={{ color: 'var(--text)', border: '1px solid var(--border)' }}
+                        >
+                          Normal mode
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        {result.best_result?.scores?.overall !== undefined && (
+                          <span className="text-sm font-mono" style={{ color: 'var(--text-muted)' }}>
+                            Overall:{' '}
+                            <strong style={{ color: scoreColor(result.best_result.scores.overall) }}>
+                              {formatScorePercent(result.best_result.scores.overall)}
+                            </strong>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Tier one-liner */}
+                    {result.selection_source && (() => {
+                      const tierInfo = getTierInfo(result.selection_source as SelectionSource)
+                      const details = result.selection_details as Record<string, any> || {}
+                      const summary = buildTierSummary(
+                        result.selection_source as SelectionSource,
+                        details,
+                        result.best_technique,
+                      )
+                      return (
+                        <div
+                          className="px-6 py-2 text-xs"
+                          style={{ background: tierInfo.bgColor, borderBottom: `1px solid ${tierInfo.borderColor}`, color: 'var(--text-muted)' }}
+                        >
+                          {summary}
+                        </div>
+                      )
+                    })()}
+
+                    <div className="p-6 space-y-5">
+                      {/* Model Response */}
+                      <div>
+                        <p
+                          className="text-[11px] font-mono uppercase tracking-wider mb-2"
+                          style={{ color: 'var(--text-subtle)' }}
+                        >
+                          Model Response
+                        </p>
+                        <div
+                          className="p-4 rounded-md overflow-auto max-h-96"
+                          style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}
+                        >
+                          <pre className="text-sm font-mono whitespace-pre-wrap leading-relaxed">
+                            {result.best_result?.response || 'No response'}
+                          </pre>
+                        </div>
+                      </div>
+
+                      {/* Prompt Used (collapsed by default) */}
+                      <details>
+                        <summary
+                          className="text-[11px] font-mono uppercase tracking-wider cursor-pointer select-none hover:underline"
+                          style={{ color: 'var(--text-subtle)' }}
+                        >
+                          Prompt Used
+                        </summary>
+                        <div
+                          className="mt-2 p-4 rounded-md overflow-auto max-h-72"
+                          style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}
+                        >
+                          <pre className="text-sm font-mono whitespace-pre-wrap leading-relaxed">
+                            {getDisplayPrompt(result.best_result?.prompt)}
+                          </pre>
+                        </div>
+                      </details>
                     </div>
                   </div>
-
-                  {/* Model Response */}
-                  <div
-                    className="rounded-lg p-6"
-                    style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
-                  >
-                    <p
-                      className="text-[11px] font-mono uppercase tracking-wider mb-3"
-                      style={{ color: 'var(--text-subtle)' }}
-                    >
-                      Model Response
-                    </p>
-                    <div
-                      className="p-4 rounded-md overflow-auto max-h-96"
-                      style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}
-                    >
-                      <pre className="text-sm font-mono whitespace-pre-wrap leading-relaxed">
-                        {result.best_result?.response || 'No response'}
-                      </pre>
-                    </div>
-                  </div>
-
-                  {/* Save Status */}
                 </div>
               )}
 
@@ -1629,198 +1725,34 @@ export default function Home() {
                   )
                 })()}
 
-                {/* ── Selection Strategy ── */}
+                {/* ── Selection Strategy (one-line summary) ── */}
                 {result.selection_source && (() => {
                   const tierInfo = getTierInfo(result.selection_source as SelectionSource)
                   const details = result.selection_details as Record<string, any> || {}
-                  const decisionTree = buildDecisionTree(details, result.selection_source as SelectionSource)
+                  const summary = buildTierSummary(
+                    result.selection_source as SelectionSource,
+                    details,
+                    result.best_technique,
+                  )
 
                   return (
                     <div
-                      className="px-6 py-4 border-b"
+                      className="px-6 py-2.5 border-b flex items-center gap-2 text-xs"
                       style={{ background: tierInfo.bgColor, borderColor: tierInfo.borderColor }}
                     >
-                      <div className="space-y-4">
-                        {/* Tier Header */}
-                        <div className="flex items-center gap-2">
-                          <span
-                            className="text-xs font-mono font-bold px-2.5 py-1 rounded"
-                            style={{ background: tierInfo.textColor, color: tierInfo.bgColor }}
-                          >
-                            {tierInfo.tierName}
-                          </span>
-                          <span
-                            className="text-sm font-semibold"
-                            style={{ color: tierInfo.textColor }}
-                          >
-                            {tierInfo.strategyName}
-                          </span>
-                        </div>
-
-                        {/* Description */}
-                        <p className="text-xs leading-relaxed" style={{ color: 'var(--text)' }}>
-                          {tierInfo.description}
-                        </p>
-
-                        {/* Decision Tree - Why this tier? */}
-                        <div className="space-y-2 text-xs">
-                          <div style={{ color: 'var(--text-subtle)', fontWeight: 500 }}>Decision Flow:</div>
-                          {decisionTree.map((decision) => (
-                            <div
-                              key={decision.tierNumber}
-                              className="pl-3 border-l-2 py-1.5 space-y-1"
-                              style={{
-                                borderColor:
-                                  decision.result === 'passed'
-                                    ? 'var(--green)'
-                                    : decision.result === 'failed'
-                                    ? '#ef4444'
-                                    : 'var(--border)',
-                              }}
-                            >
-                              <div className="flex items-center gap-2">
-                                <span
-                                  style={{
-                                    color:
-                                      decision.result === 'passed'
-                                        ? 'var(--green)'
-                                        : decision.result === 'failed'
-                                        ? '#ef4444'
-                                        : 'var(--text-muted)',
-                                  }}
-                                >
-                                  {decision.result === 'passed' && '✓'}
-                                  {decision.result === 'failed' && '✗'}
-                                  {decision.result === 'skipped' && '–'}
-                                </span>
-                                <strong>{decision.tierName}</strong>
-                                <span
-                                  className="text-xs px-1 rounded"
-                                  style={{
-                                    background:
-                                      decision.result === 'passed'
-                                        ? '#dcfce7'
-                                        : decision.result === 'failed'
-                                        ? '#fee2e2'
-                                        : 'transparent',
-                                    color:
-                                      decision.result === 'passed'
-                                        ? 'var(--green)'
-                                        : decision.result === 'failed'
-                                        ? '#991b1b'
-                                        : 'var(--text-muted)',
-                                  }}
-                                >
-                                  {decision.result === 'passed' && 'USED'}
-                                  {decision.result === 'failed' && 'rejected'}
-                                  {decision.result === 'skipped' && 'skipped'}
-                                </span>
-                              </div>
-                              {decision.reason && (
-                                <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-                                  {decision.reason !== 'ok' && formatSelectionReason(decision.reason)}
-                                </div>
-                              )}
-                              {decision.details && (
-                                <div
-                                  className="text-xs leading-relaxed p-2 rounded"
-                                  style={{ background: 'rgba(0,0,0,0.08)', color: 'var(--text)' }}
-                                >
-                                  {decision.details}
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-
-                        {/* Confidence Details for Successful Tier 1 */}
-                        {result.selection_source === 'db_profile_rules' &&
-                          details.profile_selection &&
-                          typeof details.profile_selection === 'object' &&
-                          (() => {
-                            const prof = details.profile_selection as Record<string, any>
-                            return (
-                              <div className="space-y-1 text-xs border-t border-opacity-20 pt-3 mt-3">
-                                {prof.recommendation_confidence && (
-                                  <div>
-                                    <strong>Confidence:</strong> {prof.recommendation_confidence}
-                                    {prof.recommendation_consistency !== undefined &&
-                                      prof.recommendation_consistency !== null && (
-                                        <span className="ml-2">
-                                          (Consistency: {(prof.recommendation_consistency * 100).toFixed(0)}%)
-                                        </span>
-                                      )}
-                                  </div>
-                                )}
-                                {prof.weighted_average !== undefined && (
-                                  <div>
-                                    <strong>Weighted Score:</strong> {(prof.weighted_average * 100).toFixed(1)}%
-                                  </div>
-                                )}
-                                {prof.matched_documents !== undefined && (
-                                  <div>
-                                    <strong>Matched Profiles:</strong> {prof.matched_documents}
-                                    {prof.preliminary_count !== undefined && (
-                                      <span className="ml-2 text-xs" style={{ color: 'var(--text-muted)' }}>
-                                        ({prof.preliminary_count} preliminary)
-                                      </span>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            )
-                          })()}
-
-                        {/* Thresholds */}
-                        {details.db_confidence_rules && typeof details.db_confidence_rules === 'object' && (() => {
-                          const rules = details.db_confidence_rules as Record<string, any>
-                          return (
-                            <details className="text-xs border-t border-opacity-20 pt-3 mt-3">
-                              <summary
-                                className="cursor-pointer font-medium hover:underline"
-                                style={{ color: tierInfo.textColor }}
-                              >
-                                View all thresholds & rules
-                              </summary>
-                              <div className="mt-2 p-2 rounded space-y-1" style={{ background: 'rgba(0,0,0,0.05)' }}>
-                                <div className="font-mono text-xs space-y-0.5">
-                                  {rules.profile_min_samples_per_technique !== undefined && (
-                                    <div>
-                                      <strong>Profile Min Samples:</strong> {rules.profile_min_samples_per_technique}
-                                    </div>
-                                  )}
-                                  {rules.profile_min_similarity !== undefined && (
-                                    <div>
-                                      <strong>Profile Min Similarity:</strong>{' '}
-                                      {(rules.profile_min_similarity * 100).toFixed(0)}%
-                                    </div>
-                                  )}
-                                  {rules.profile_min_average_gap !== undefined && (
-                                    <div>
-                                      <strong>Profile Min Gap:</strong> {(rules.profile_min_average_gap * 100).toFixed(2)}%
-                                    </div>
-                                  )}
-                                  {rules.min_samples_per_technique !== undefined && (
-                                    <div>
-                                      <strong>Domain Min Samples:</strong> {rules.min_samples_per_technique}
-                                    </div>
-                                  )}
-                                  {rules.min_average_gap !== undefined && (
-                                    <div>
-                                      <strong>Domain Min Gap:</strong> {(rules.min_average_gap * 100).toFixed(2)}%
-                                    </div>
-                                  )}
-                                  {rules.exploration_rate !== undefined && (
-                                    <div>
-                                      <strong>Exploration Rate:</strong> {(rules.exploration_rate * 100).toFixed(1)}%
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </details>
-                          )
-                        })()}
-                      </div>
+                      <span
+                        className="font-mono font-bold px-2 py-0.5 rounded shrink-0"
+                        style={{ background: tierInfo.textColor, color: tierInfo.bgColor }}
+                      >
+                        {tierInfo.tierName}
+                      </span>
+                      <span className="font-medium" style={{ color: tierInfo.textColor }}>
+                        {tierInfo.strategyName}
+                      </span>
+                      <span style={{ color: 'var(--text-muted)' }}>·</span>
+                      <span style={{ color: 'var(--text-muted)' }}>
+                        {summary}
+                      </span>
                     </div>
                   )
                 })()}
@@ -1842,23 +1774,23 @@ export default function Home() {
 
                 {/* Body */}
                 <div className="p-6 space-y-6">
-                  {/* Prompt Used */}
-                  <div>
-                    <p
-                      className="text-[11px] font-mono uppercase tracking-wider mb-2"
+                  {/* Prompt Used (collapsible) */}
+                  <details>
+                    <summary
+                      className="text-[11px] font-mono uppercase tracking-wider cursor-pointer select-none hover:underline"
                       style={{ color: 'var(--text-subtle)' }}
                     >
                       Prompt Used
-                    </p>
+                    </summary>
                     <div
-                      className="p-4 rounded-md overflow-auto max-h-72"
+                      className="mt-2 p-4 rounded-md overflow-auto max-h-72"
                       style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}
                     >
                       <pre className="text-sm font-mono whitespace-pre-wrap leading-relaxed">
                         {getDisplayPrompt(result.best_result?.prompt)}
                       </pre>
                     </div>
-                  </div>
+                  </details>
 
                   {/* Model Response */}
                   <div>
@@ -1877,66 +1809,97 @@ export default function Home() {
                       </pre>
                     </div>
                   </div>
-                </div>
-              </div>
 
-              {/* ── Performance Scores ── */}
-              <div
-                className="rounded-lg p-6"
-                style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
-              >
-                <h2 className="text-lg font-semibold mb-4">Performance Scores</h2>
-
-                {!runUsedGroundTruth && (
-                  <div
-                    className="mb-4 px-3 py-2 rounded-md text-xs"
-                    style={{ background: '#fffbeb', border: '1px solid #fde68a', color: 'var(--amber)' }}
-                  >
-                    Accuracy is heuristic for this run because no expected answer was provided.
-                  </div>
-                )}
-
-                <div className="grid grid-cols-4 gap-4">
-                  {[
-                    { label: 'OVERALL', value: result.best_result?.scores?.overall },
-                    {
-                      label: !runUsedGroundTruth ? 'ACCURACY*' : 'ACCURACY',
-                      value: result.best_result?.scores?.accuracy,
-                    },
-                    {
-                      label: result.best_result?.scores?.consistency_is_provisional
-                        ? 'CONSISTENCY*'
-                        : 'CONSISTENCY',
-                      value: result.best_result?.scores?.consistency,
-                    },
-                    { label: 'EFFICIENCY', value: result.best_result?.scores?.efficiency },
-                  ].map((s) => (
-                    <div
-                      key={s.label}
-                      className="p-4 rounded-md text-center"
-                      style={{ border: '1px solid var(--border)' }}
-                    >
+                  {/* Performance Scores (inline) */}
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
                       <p
-                        className="text-[10px] font-mono uppercase tracking-widest mb-2"
+                        className="text-[11px] font-mono uppercase tracking-wider"
                         style={{ color: 'var(--text-subtle)' }}
                       >
-                        {s.label}
+                        Performance Scores
                       </p>
-                      <p
-                        className="text-3xl font-mono font-light"
-                        style={{ color: scoreColor(s.value ?? 0) }}
+                      <div
+                        className="flex items-center rounded-md overflow-hidden text-[10px] font-mono"
+                        style={{ border: '1px solid var(--border)' }}
                       >
-                        {formatScorePercent(s.value, 'PROV')}
-                      </p>
+                        <button
+                          type="button"
+                          onClick={() => setPerfScoreFormat('percent')}
+                          className="px-2.5 py-1 transition-colors"
+                          style={{
+                            background: perfScoreFormat === 'percent' ? 'var(--accent)' : 'var(--surface)',
+                            color: perfScoreFormat === 'percent' ? '#fff' : 'var(--text-muted)',
+                          }}
+                        >
+                          %
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPerfScoreFormat('decimal')}
+                          className="px-2.5 py-1 transition-colors"
+                          style={{
+                            background: perfScoreFormat === 'decimal' ? 'var(--accent)' : 'var(--surface)',
+                            color: perfScoreFormat === 'decimal' ? '#fff' : 'var(--text-muted)',
+                          }}
+                        >
+                          0.00
+                        </button>
+                      </div>
                     </div>
-                  ))}
-                </div>
 
-                {!runUsedGroundTruth && (
-                  <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
-                    * Heuristic accuracy can be directionally useful, but is less reliable than ground-truth scoring.
-                  </p>
-                )}
+                    {!runUsedGroundTruth && (
+                      <div
+                        className="mb-3 px-3 py-2 rounded-md text-xs"
+                        style={{ background: '#fffbeb', border: '1px solid #fde68a', color: 'var(--amber)' }}
+                      >
+                        Accuracy is heuristic — no expected answer was provided.
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-4 gap-3">
+                      {[
+                        { label: 'OVERALL', value: result.best_result?.scores?.overall },
+                        {
+                          label: !runUsedGroundTruth ? 'ACCURACY*' : 'ACCURACY',
+                          value: result.best_result?.scores?.accuracy,
+                        },
+                        {
+                          label: result.best_result?.scores?.consistency_is_provisional
+                            ? 'CONSISTENCY*'
+                            : 'CONSISTENCY',
+                          value: result.best_result?.scores?.consistency,
+                        },
+                        { label: 'EFFICIENCY', value: result.best_result?.scores?.efficiency },
+                      ].map((s) => (
+                        <div
+                          key={s.label}
+                          className="p-3 rounded-md text-center"
+                          style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}
+                        >
+                          <p
+                            className="text-[9px] font-mono uppercase tracking-widest mb-1"
+                            style={{ color: 'var(--text-subtle)' }}
+                          >
+                            {s.label}
+                          </p>
+                          <p
+                            className="text-2xl font-mono font-light"
+                            style={{ color: scoreColor(s.value ?? 0) }}
+                          >
+                            {formatScore(s.value, perfScoreFormat, 'PROV')}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {!runUsedGroundTruth && (
+                      <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                        * Heuristic accuracy is directionally useful but less reliable than ground-truth scoring.
+                      </p>
+                    )}
+                  </div>
+                </div>
               </div>
 
               {/* ── Technique Comparison ── */}
@@ -1949,9 +1912,38 @@ export default function Home() {
                   style={{ borderBottom: '1px solid var(--border)' }}
                 >
                   <h2 className="text-lg font-semibold">Technique Comparison</h2>
-                  <span className="font-mono text-xs" style={{ color: 'var(--text-subtle)' }}>
-                    {attemptedTechniqueCount} techniques - {successfulTechniqueCount} successful
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-xs" style={{ color: 'var(--text-subtle)' }}>
+                      {attemptedTechniqueCount} techniques - {successfulTechniqueCount} successful
+                    </span>
+                    <div
+                      className="flex items-center rounded-md overflow-hidden text-[10px] font-mono"
+                      style={{ border: '1px solid var(--border)' }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setCompScoreFormat('percent')}
+                        className="px-2.5 py-1 transition-colors"
+                        style={{
+                          background: compScoreFormat === 'percent' ? 'var(--accent)' : 'var(--surface)',
+                          color: compScoreFormat === 'percent' ? '#fff' : 'var(--text-muted)',
+                        }}
+                      >
+                        %
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCompScoreFormat('decimal')}
+                        className="px-2.5 py-1 transition-colors"
+                        style={{
+                          background: compScoreFormat === 'decimal' ? 'var(--accent)' : 'var(--surface)',
+                          color: compScoreFormat === 'decimal' ? '#fff' : 'var(--text-muted)',
+                        }}
+                      >
+                        0.00
+                      </button>
+                    </div>
+                  </div>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -1979,10 +1971,22 @@ export default function Home() {
                           <tr
                             key={tech.technique}
                             className={isBest ? 'font-medium' : ''}
-                            style={{ borderBottom: '1px solid var(--border)' }}
+                            style={{
+                              borderBottom: '1px solid var(--border)',
+                              background: isBest ? '#f0fdf4' : undefined,
+                              boxShadow: isBest ? 'inset 3px 0 0 var(--green)' : undefined,
+                            }}
                           >
                             <td className="px-6 py-3 font-medium">
                               {tech.technique?.toUpperCase() ?? 'N/A'}
+                              {isBest && (
+                                <span
+                                  className="ml-2 text-[10px] font-mono px-1.5 py-0.5 rounded"
+                                  style={{ background: '#dcfce7', color: 'var(--green)' }}
+                                >
+                                  best
+                                </span>
+                              )}
                               {!tech.success && (
                                 <span
                                   className="ml-2 text-[10px] font-mono px-1.5 py-0.5 rounded"
@@ -1993,19 +1997,19 @@ export default function Home() {
                               )}
                             </td>
                             <td className="text-center px-4 py-3 font-mono">
-                              {formatScorePercent(tech.accuracy)}
+                              {formatScore(tech.accuracy, compScoreFormat)}
                             </td>
                             <td className="text-center px-4 py-3 font-mono">
-                              {tech.consistencyAvailable ? formatScorePercent(tech.consistency, 'PROV') : 'PROV'}
+                              {tech.consistencyAvailable ? formatScore(tech.consistency, compScoreFormat, 'PROV') : 'PROV'}
                             </td>
                             <td className="text-center px-4 py-3 font-mono">
-                              {formatScorePercent(tech.efficiency)}
+                              {formatScore(tech.efficiency, compScoreFormat)}
                             </td>
                             <td
                               className="text-center px-4 py-3 font-mono font-semibold"
                               style={{ color: scoreColor(tech.overall) }}
                             >
-                              {formatScorePercent(tech.overall)}
+                              {formatScore(tech.overall, compScoreFormat)}
                               {tech.overallIsProvisional ? '*' : ''}
                             </td>
                             <td className="text-center px-4 py-3">
