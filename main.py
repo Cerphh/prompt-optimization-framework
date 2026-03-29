@@ -436,9 +436,21 @@ def _resolve_pre_execution_techniques(
     )
     details["profile_selection"] = profile_selection
 
+    # Adaptive profile min_samples: require more evidence when more similar
+    # problems are available in the DB.
+    _matched = int(profile_selection.get("matched_documents", 0) or 0)
+    if _matched >= 20:
+        adaptive_profile_min = min_samples + 3
+    elif _matched >= 10:
+        adaptive_profile_min = min_samples + 2
+    elif _matched >= 5:
+        adaptive_profile_min = min_samples + 1
+    else:
+        adaptive_profile_min = min_samples
+
     profile_ok, profile_reason = _evaluate_selection_confidence(
         profile_selection,
-        min_samples=min_samples,
+        min_samples=adaptive_profile_min,
         min_gap=min_gap,
         top_only_samples=True,
     )
@@ -585,9 +597,21 @@ def _apply_db_based_selection(
             "error": "Profile selection payload must be a dictionary.",
         }
 
+    # Adaptive profile min_samples: require more evidence when more similar
+    # problems are available in the DB.
+    _matched = int(profile_selection.get("matched_documents", 0) or 0)
+    if _matched >= 20:
+        adaptive_profile_min = profile_min_samples + 3
+    elif _matched >= 10:
+        adaptive_profile_min = profile_min_samples + 2
+    elif _matched >= 5:
+        adaptive_profile_min = profile_min_samples + 1
+    else:
+        adaptive_profile_min = profile_min_samples
+
     can_use_profile, profile_decision_reason = _evaluate_selection_confidence(
         profile_selection,
-        min_samples=profile_min_samples,
+        min_samples=adaptive_profile_min,
         min_gap=profile_min_gap,
         top_only_samples=True,
     )
@@ -616,6 +640,8 @@ def _apply_db_based_selection(
                 "profile_decision_reason": profile_decision_reason,
                 "db_confidence_rules": {
                     "profile_min_samples_per_technique": profile_min_samples,
+                    "adaptive_profile_min_samples": adaptive_profile_min,
+                    "profile_matched_documents": _matched,
                     "profile_min_average_gap": profile_min_gap,
                     "profile_min_similarity": profile_min_similarity,
                     "min_samples_per_technique": min_samples,
@@ -701,6 +727,8 @@ def _apply_db_based_selection(
                 "db_decision_reason": db_decision_reason,
                 "db_confidence_rules": {
                     "profile_min_samples_per_technique": profile_min_samples,
+                    "adaptive_profile_min_samples": adaptive_profile_min,
+                    "profile_matched_documents": _matched,
                     "profile_min_average_gap": profile_min_gap,
                     "profile_min_similarity": profile_min_similarity,
                     "min_samples_per_technique": min_samples,
@@ -719,6 +747,8 @@ def _apply_db_based_selection(
         "db_decision_reason": db_decision_reason,
         "db_confidence_rules": {
             "profile_min_samples_per_technique": profile_min_samples,
+            "adaptive_profile_min_samples": adaptive_profile_min,
+            "profile_matched_documents": _matched,
             "profile_min_average_gap": profile_min_gap,
             "profile_min_similarity": profile_min_similarity,
             "min_samples_per_technique": min_samples,
