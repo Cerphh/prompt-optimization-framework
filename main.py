@@ -618,7 +618,23 @@ def _apply_db_based_selection(
         selection,
         min_samples=min_samples,
         min_gap=min_gap,
+        top_only_samples=True,
     )
+
+    # When the strict gap check fails but the domain has enough samples,
+    # retry with a relaxed gap.  Tier 2 is already a fallback after Tier 1
+    # failed, so a smaller gap is acceptable to avoid falling to Tier 3
+    # unnecessarily (especially with small datasets).
+    if not can_use_db and db_decision_reason == "low_confidence_gap":
+        relaxed_gap = max(0.005, min_gap / 4)
+        can_use_db, db_decision_reason = _evaluate_selection_confidence(
+            selection,
+            min_samples=min_samples,
+            min_gap=relaxed_gap,
+            top_only_samples=True,
+        )
+        if can_use_db:
+            db_decision_reason = "ok_relaxed_gap"
 
     if can_use_db and exploration_rate > 0:
         exploration_key = f"{domain}|{result.get('problem', '')}"

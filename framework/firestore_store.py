@@ -37,8 +37,10 @@ class FirestoreStore:
         (r"\b(quadratic|x\^2|x²)\b", "quadratic"),
         (r"\b(cubic|x\^3|x³)\b", "cubic"),
         (r"\b(quartic|x\^4|x⁴)\b", "quartic"),
-        (r"(?<!\w)(linear)\b|(?:^|[^a-z])(\d*x\s*[+\-]\s*\d+\s*=)", "linear"),
+        (r"(?<!\w)(linear)\b|(?:^|[^a-z/])(\d*x\s*[+\-]\s*\d+\s*=)", "linear"),
         (r"\b(system|simultaneous)\b", "system_of_equations"),
+        # Rational equation — variable appears in a denominator
+        (r"\d+\s*/\s*[a-z]|\d+\s*/\s*\([^)]*[a-z]", "rational_equation"),
         # Operations
         (r"\b(factor|factoring|factorise|factorize)\b", "factoring"),
         (r"\b(simplif|simplify|reduce)\b", "simplify"),
@@ -57,7 +59,7 @@ class FirestoreStore:
         # Functions
         (r"\b(sin|cos|tan|sec|csc|cot|arcsin|arccos|arctan)\b", "trigonometric"),
         (r"\b(logarithm|log|ln)\b|\\log", "logarithm"),
-        (r"\b(exponential|e\^|exp\()\b", "exponential"),
+        (r"\b(exponential|e\^|exp\()\b|\d+\^\s*\(?\s*\d*\s*[a-z]", "exponential"),
         (r"\b(polynomial)\b", "polynomial"),
         (r"\b(rational\s+expression|rational\s+function)\b", "rational"),
         (r"\b(sequence|series|arithmetic\s+sequence|geometric\s+sequence|nth\s+term)\b", "sequence_series"),
@@ -654,7 +656,55 @@ class FirestoreStore:
         for pattern, tag in cls._MATH_FEATURE_PATTERNS:
             if re.search(pattern, value):
                 features.add(tag)
+
+        # Enhanced system-of-equations detection beyond just keywords.
+        # Catches patterns like "solve for x and y: 2x+y=7, x-y=2"
+        if "system_of_equations" not in features:
+            # Signal 1: problem asks to solve for multiple unknowns
+            multi_var = re.search(
+                r"(?:solve|find)\s+(?:for\s+)?[a-z]\s*(?:(?:,\s*|\s+and\s+)[a-z])",
+                value,
+            )
+            if multi_var:
+                features.add("system_of_equations")
+            # Signal 2: multiple equations separated by comma, semicolon, or newline
+            elif value.count("=") >= 2:
+                parts = re.split(r"[,\n;]", value)
+                eq_parts = sum(
+                    1 for p in parts if re.search(r"[a-z].*=", p.strip())
+                )
+                if eq_parts >= 2:
+                    features.add("system_of_equations")
+
         return features
+
+    # Structural type features that represent fundamentally different
+    # problem categories.  When one problem has such a feature and the
+    # other does not, the Jaccard score is penalised so that the hybrid
+    # similarity stays below the Tier-1 threshold.
+    _TYPE_FEATURES: Set[str] = {
+        "linear", "system_of_equations", "quadratic", "cubic", "quartic",
+        "derivative", "integral", "limit", "matrix",
+        "probability", "conditional_probability",
+        "trigonometric", "logarithm", "exponential",
+        "sequence_series", "conic_section",
+        "factoring", "simplify", "expand",
+        "permutation", "combination", "expected_value",
+        "coordinate_geometry", "polynomial", "rational",
+        "rational_equation",
+    }
+
+    @classmethod
+    def _has_type_mismatch(cls, text_a: str, text_b: str) -> bool:
+        """Return True when a type-defining feature exists in one text
+        but not the other (e.g. exponential vs linear)."""
+        feats_a = cls._extract_math_features(text_a)
+        feats_b = cls._extract_math_features(text_b)
+        if not feats_a or not feats_b:
+            return False
+        types_only_a = (feats_a & cls._TYPE_FEATURES) - feats_b
+        types_only_b = (feats_b & cls._TYPE_FEATURES) - feats_a
+        return bool(types_only_a or types_only_b)
 
     @classmethod
     def _math_feature_similarity(cls, text_a: str, text_b: str) -> float:
@@ -663,6 +713,11 @@ class FirestoreStore:
         Returns 1.0 when both texts share the same structural features
         (e.g. both quadratic equations), even if wording differs.
         Returns -1.0 when neither text has detectable features (neutral).
+
+        A penalty (×0.3) is applied when a *type-defining* feature
+        (e.g. system_of_equations, quadratic, derivative) is present in
+        one text but not the other, because such mismatches indicate
+        fundamentally different problem structures.
         """
         feats_a = cls._extract_math_features(text_a)
         feats_b = cls._extract_math_features(text_b)
@@ -672,7 +727,16 @@ class FirestoreStore:
             return 0.0
         intersection = len(feats_a & feats_b)
         union = len(feats_a | feats_b)
-        return intersection / union if union else 0.0
+        jaccard = intersection / union if union else 0.0
+
+        # Penalise when a type-defining feature exists in one set but not
+        # the other (e.g. system vs non-system, quadratic vs linear).
+        types_only_a = (feats_a & cls._TYPE_FEATURES) - feats_b
+        types_only_b = (feats_b & cls._TYPE_FEATURES) - feats_a
+        if types_only_a or types_only_b:
+            jaccard *= 0.3
+
+        return jaccard
 
     # ------------------------------------------------------------------ #
     #  Layer 3: Embedding-based Semantic Similarity (Ollama)              #
@@ -849,6 +913,15 @@ class FirestoreStore:
         else:
             # Fallback: pure lexical
             final = lexical_sim
+
+        # Global type-mismatch penalty: when the problems have
+        # fundamentally different structural types (e.g. exponential vs
+        # linear, system vs single equation), cap the final score so it
+        # stays below the Tier-1 threshold.  Without this, high embedding
+        # similarity alone ("Solve for x: ..." vs "Solve for x: ...")
+        # can push structurally different problems past the 0.55 floor.
+        if self._has_type_mismatch(target_t, candidate_t):
+            final *= 0.45
 
         return max(0.0, min(1.0, final))
 
