@@ -37,7 +37,7 @@ class FirestoreStore:
         (r"\b(quadratic|x\^2|x²)\b", "quadratic"),
         (r"\b(cubic|x\^3|x³)\b", "cubic"),
         (r"\b(quartic|x\^4|x⁴)\b", "quartic"),
-        (r"(?<!\w)(linear)\b|(?:^|[^a-z/])(\d*x\s*[+\-]\s*\d+\s*=)", "linear"),
+        (r"(?<!\w)(linear)\b|(?:^|[^a-z/])(\d*[a-z]\s*[+\-]\s*\d+\s*=)|(?:^|[^a-z/])(\d+[a-z]\s*=\s*\d)", "linear"),
         (r"\b(system|simultaneous)\b", "system_of_equations"),
         # Rational equation — variable appears in a denominator
         (r"\d+\s*/\s*[a-z]|\d+\s*/\s*\([^)]*[a-z]", "rational_equation"),
