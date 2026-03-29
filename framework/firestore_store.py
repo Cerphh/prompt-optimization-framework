@@ -6,6 +6,8 @@ Stores benchmark results in Firebase Firestore.
 from __future__ import annotations
 
 import json
+import logging
+import math
 import os
 import hashlib
 import re
@@ -16,9 +18,60 @@ from typing import Any, Dict, Optional, List, Set, Tuple
 import firebase_admin
 from firebase_admin import credentials, firestore
 
+logger = logging.getLogger(__name__)
+
 
 class FirestoreStore:
     """Handles benchmark result persistence to Firestore."""
+
+    # ------------------------------------------------------------------ #
+    #  In-memory embedding cache  (class-level, shared across instances)  #
+    # ------------------------------------------------------------------ #
+    _embedding_cache: Dict[str, List[float]] = {}
+
+    # ------------------------------------------------------------------ #
+    #  Math-feature regex patterns for structural similarity              #
+    # ------------------------------------------------------------------ #
+    _MATH_FEATURE_PATTERNS: List[Tuple[str, str]] = [
+        # Equation types
+        (r"\b(quadratic|x\^2|x²)\b", "quadratic"),
+        (r"\b(cubic|x\^3|x³)\b", "cubic"),
+        (r"\b(quartic|x\^4|x⁴)\b", "quartic"),
+        (r"(?<!\w)(linear)\b|(?:^|[^a-z])(\d*x\s*[+\-]\s*\d+\s*=)", "linear"),
+        (r"\b(system|simultaneous)\b", "system_of_equations"),
+        # Operations
+        (r"\b(factor|factoring|factorise|factorize)\b", "factoring"),
+        (r"\b(simplif|simplify|reduce)\b", "simplify"),
+        (r"\b(expand|distribute)\b", "expand"),
+        (r"\b(solve|find\s+(?:the\s+)?(?:value|root|solution|x|y|z))\b", "solve"),
+        # Calculus
+        (r"\b(derivative|differentiat|d/dx|dy/dx)\b|∂", "derivative"),
+        (r"\b(integral|integrat)\b|∫", "integral"),
+        (r"\b(limit|lim)\b", "limit"),
+        # Probability & Counting
+        (r"\b(probability|p\(|chance|odds|likely|likelihood)\b", "probability"),
+        (r"\b(given\s+that|conditional|bayes)\b|\|", "conditional_probability"),
+        (r"\b(permutation|arrange|arrangement|how\s+many\s+ways)\b", "permutation"),
+        (r"\b(combination|choose|selecting|subset)\b", "combination"),
+        (r"\b(expected\s+value|expectation|E\()\b", "expected_value"),
+        # Functions
+        (r"\b(sin|cos|tan|sec|csc|cot|arcsin|arccos|arctan)\b", "trigonometric"),
+        (r"\b(logarithm|log|ln)\b|\\log", "logarithm"),
+        (r"\b(exponential|e\^|exp\()\b", "exponential"),
+        (r"\b(polynomial)\b", "polynomial"),
+        (r"\b(rational\s+expression|rational\s+function)\b", "rational"),
+        (r"\b(sequence|series|arithmetic\s+sequence|geometric\s+sequence|nth\s+term)\b", "sequence_series"),
+        (r"\b(matrix|matrices|determinant)\b", "matrix"),
+        # Geometry / Coordinate
+        (r"\b(circle|ellipse|parabola|hyperbola|conic)\b", "conic_section"),
+        (r"\b(slope|intercept|midpoint|distance\s+formula)\b", "coordinate_geometry"),
+        # Structural markers
+        (r"[<>]=?|\\le|\\ge|≤|≥", "inequality"),
+        (r"\\frac|/", "fraction"),
+        (r"\^|²|³|⁴", "exponent"),
+        (r"\\sqrt|√|root", "radical"),
+        (r"%|percent", "percent"),
+    ]
 
     def __init__(
         self,
@@ -31,6 +84,9 @@ class FirestoreStore:
         self.required = required
         self.db = None
         self.initialization_error: Optional[str] = None
+        self._ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
+        self._embedding_model = os.getenv("EMBEDDING_MODEL_NAME") or os.getenv("MODEL_NAME", "llama3")
+        self._embedding_available: Optional[bool] = None  # None = not checked yet
 
         if self.enabled:
             self._initialize()
@@ -586,26 +642,215 @@ class FirestoreStore:
         union = len(tokens_a | tokens_b)
         return intersection / union if union else 0.0
 
+    # ------------------------------------------------------------------ #
+    #  Layer 2: Math Feature Detection + Similarity                       #
+    # ------------------------------------------------------------------ #
+
+    @classmethod
+    def _extract_math_features(cls, text: str) -> Set[str]:
+        """Extract structural math feature tags from problem text via regex."""
+        value = text.lower()
+        features: Set[str] = set()
+        for pattern, tag in cls._MATH_FEATURE_PATTERNS:
+            if re.search(pattern, value):
+                features.add(tag)
+        return features
+
+    @classmethod
+    def _math_feature_similarity(cls, text_a: str, text_b: str) -> float:
+        """Jaccard similarity over extracted math feature tags.
+
+        Returns 1.0 when both texts share the same structural features
+        (e.g. both quadratic equations), even if wording differs.
+        Returns -1.0 when neither text has detectable features (neutral).
+        """
+        feats_a = cls._extract_math_features(text_a)
+        feats_b = cls._extract_math_features(text_b)
+        if not feats_a and not feats_b:
+            return -1.0  # Sentinel: no features detected, caller should skip
+        if not feats_a or not feats_b:
+            return 0.0
+        intersection = len(feats_a & feats_b)
+        union = len(feats_a | feats_b)
+        return intersection / union if union else 0.0
+
+    # ------------------------------------------------------------------ #
+    #  Layer 3: Embedding-based Semantic Similarity (Ollama)              #
+    # ------------------------------------------------------------------ #
+
+    def _check_embedding_availability(self) -> bool:
+        """Probe Ollama once to see if embedding endpoint is reachable."""
+        if self._embedding_available is not None:
+            return self._embedding_available
+        try:
+            import urllib.request
+            req = urllib.request.Request(
+                f"{self._ollama_base_url}/api/embed",
+                data=json.dumps({
+                    "model": self._embedding_model,
+                    "input": "test",
+                }).encode(),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                body = json.loads(resp.read())
+                self._embedding_available = bool(body.get("embeddings"))
+        except Exception:
+            self._embedding_available = False
+            logger.debug("Ollama embedding unavailable — hybrid will use 2-layer fallback.")
+        return self._embedding_available
+
+    def _get_embedding(self, text: str) -> Optional[List[float]]:
+        """Get embedding vector for a single text, with in-memory cache."""
+        text = text.strip()
+        if not text:
+            return None
+        if text in self._embedding_cache:
+            return self._embedding_cache[text]
+        if not self._check_embedding_availability():
+            return None
+        try:
+            import urllib.request
+            req = urllib.request.Request(
+                f"{self._ollama_base_url}/api/embed",
+                data=json.dumps({
+                    "model": self._embedding_model,
+                    "input": text,
+                }).encode(),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                body = json.loads(resp.read())
+                embeddings = body.get("embeddings")
+                if embeddings and len(embeddings) > 0:
+                    vec = embeddings[0]
+                    self._embedding_cache[text] = vec
+                    return vec
+        except Exception as exc:
+            logger.debug("Embedding request failed: %s", exc)
+        return None
+
+    def _get_embeddings_batch(self, texts: List[str]) -> Dict[str, List[float]]:
+        """Batch-embed multiple texts in a single API call. Returns {text: vector}."""
+        result: Dict[str, List[float]] = {}
+        uncached: List[str] = []
+        for t in texts:
+            t = t.strip()
+            if not t:
+                continue
+            if t in self._embedding_cache:
+                result[t] = self._embedding_cache[t]
+            else:
+                uncached.append(t)
+        if not uncached or not self._check_embedding_availability():
+            return result
+        try:
+            import urllib.request
+            req = urllib.request.Request(
+                f"{self._ollama_base_url}/api/embed",
+                data=json.dumps({
+                    "model": self._embedding_model,
+                    "input": uncached,
+                }).encode(),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                body = json.loads(resp.read())
+                embeddings = body.get("embeddings") or []
+                for i, vec in enumerate(embeddings):
+                    if i < len(uncached) and vec:
+                        self._embedding_cache[uncached[i]] = vec
+                        result[uncached[i]] = vec
+        except Exception as exc:
+            logger.debug("Batch embedding request failed: %s", exc)
+        return result
+
+    @staticmethod
+    def _cosine_similarity(vec_a: List[float], vec_b: List[float]) -> float:
+        """Pure-Python cosine similarity between two vectors."""
+        dot = sum(a * b for a, b in zip(vec_a, vec_b))
+        norm_a = math.sqrt(sum(a * a for a in vec_a))
+        norm_b = math.sqrt(sum(b * b for b in vec_b))
+        if norm_a == 0 or norm_b == 0:
+            return 0.0
+        return dot / (norm_a * norm_b)
+
+    # ------------------------------------------------------------------ #
+    #  Hybrid 3-Layer Similarity                                          #
+    # ------------------------------------------------------------------ #
+
+    # Weights for each layer (embedding, math features, lexical)
+    _HYBRID_W_EMBED = 0.60
+    _HYBRID_W_FEATURES = 0.25
+    _HYBRID_W_LEXICAL = 0.15
+
     def _profile_similarity(
         self,
         target: Dict[str, Any],
         candidate: Dict[str, Any],
         target_text: str = "",
         candidate_text: str = "",
+        target_embedding: Optional[List[float]] = None,
+        candidate_embedding: Optional[List[float]] = None,
     ) -> float:
-        """Compute similarity between two problems using refined word-based matching.
+        """Hybrid 3-layer similarity between two math problems.
 
-        The 4 structured components (intent/features/format/constraints) have
-        been removed — similarity is now purely lexical.  Stop words are
-        stripped so that content words (math terms, numbers, variables) drive
-        the comparison.  This is simpler to tune and works equally well for
-        natural-language and symbolic problems.
+        Layer 1 — Semantic Embedding (60%): Understands meaning, paraphrases,
+                  synonyms via Ollama embeddings. Falls back gracefully if
+                  Ollama is unavailable.
+        Layer 2 — Math Feature Detection (25%): Regex-based structural feature
+                  tags (quadratic, linear, probability, derivative, etc.).
+                  Penalizes structurally different problems even if wording
+                  is similar.
+        Layer 3 — Lexical Jaccard (15%): Exact word overlap after stop-word
+                  removal. Catches number/variable matches that embeddings
+                  may miss.
+
+        Within the same domain (e.g. Algebra), this distinguishes linear from
+        quadratic, factoring from simplification, etc.  Across domains it
+        naturally produces low scores.
         """
         target_t = str(target_text or "").strip()
         candidate_t = str(candidate_text or "").strip()
         if not target_t or not candidate_t:
             return 0.0
-        return self._lexical_similarity(target_t, candidate_t)
+
+        # --- Layer 3: Lexical (always available) ---
+        lexical_sim = self._lexical_similarity(target_t, candidate_t)
+
+        # --- Layer 2: Math features ---
+        feature_sim = self._math_feature_similarity(target_t, candidate_t)
+        has_features = feature_sim >= 0  # -1 sentinel means no features detected
+
+        # --- Layer 1: Embeddings ---
+        embed_sim: Optional[float] = None
+        vec_a = target_embedding or self._get_embedding(target_t)
+        vec_b = candidate_embedding or self._get_embedding(candidate_t)
+        if vec_a is not None and vec_b is not None:
+            embed_sim = self._cosine_similarity(vec_a, vec_b)
+
+        # --- Combine layers with adaptive weights ---
+        if embed_sim is not None and has_features:
+            # Full 3-layer hybrid
+            final = (
+                self._HYBRID_W_EMBED * embed_sim
+                + self._HYBRID_W_FEATURES * feature_sim
+                + self._HYBRID_W_LEXICAL * lexical_sim
+            )
+        elif embed_sim is not None:
+            # 2-layer: embedding + lexical (no features detected)
+            final = 0.75 * embed_sim + 0.25 * lexical_sim
+        elif has_features:
+            # 2-layer: features + lexical (no embeddings)
+            final = 0.55 * feature_sim + 0.45 * lexical_sim
+        else:
+            # Fallback: pure lexical
+            final = lexical_sim
+
+        return max(0.0, min(1.0, final))
 
     @staticmethod
     def _normalize_key(value: Any, default: str) -> str:
@@ -770,16 +1015,19 @@ class FirestoreStore:
         require_ground_truth: bool = False,
         problem_text: str = "",
     ) -> Dict[str, Any]:
-        """Get best technique using word-based similarity matching over historical results.
-        
-        Similarity is computed purely from problem text (lexical/Jaccard after
-        stop-word removal).  Structured profile components are no longer used
-        for matching — problem_text is the primary input.
-        
-        Improvements:
-        - Implements weighted matching (problems weighted by similarity)
-        - Adaptive threshold based on data availability
-        - Confidence/variance reporting for recommendations
+        """Get best technique using hybrid 3-layer similarity over historical results.
+
+        Similarity is computed via:
+          Layer 1 — Semantic Embedding (Ollama, 60%): understands meaning/synonyms
+          Layer 2 — Math Feature Detection (regex, 25%): structural type matching
+          Layer 3 — Lexical Jaccard (15%): exact word/number overlap
+
+        This distinguishes problems *within* the same domain (e.g. linear vs
+        quadratic in Algebra, permutation vs conditional probability in
+        Counting & Probability).
+
+        Historical texts are batch-embedded in a single API call for performance.
+        Falls back gracefully if Ollama is unavailable (2-layer or pure lexical).
         """
         if not self.enabled:
             return {
@@ -815,63 +1063,11 @@ class FirestoreStore:
             normalized_domain = self._normalize_key(domain, default="general")
             normalized_difficulty = self._normalize_key(difficulty, default="basic")
 
-            query = (
-                self._stream_problem_docs(
-                    domain=normalized_domain,
-                    difficulty=normalized_difficulty,
-                )
-            )
+            # ── Single-pass: load all docs + collect texts for batch embedding ──
+            docs_data: List[Dict[str, Any]] = []
+            historical_texts: List[str] = []
 
-            # First pass: Count available matches to determine adaptive threshold
-            # NOTE: Counts per-problem (not per-run) for honest sample counts.
-            preliminary_count = 0
-            for doc in query:
-                data = doc.to_dict() or {}
-                historical_text = str(data.get("problem") or "").strip()
-                if not historical_text:
-                    continue
-
-                similarity = self._profile_similarity(
-                    {},
-                    {},
-                    target_text=normalized_text,
-                    candidate_text=historical_text,
-                )
-                if similarity >= 0.20:  # Low threshold for counting
-                    preliminary_count += 1
-
-            # Adapt threshold based on available data (relaxed for easier matching)
-            adaptive_min_similarity = min_similarity  # Start with provided value
-            if preliminary_count > 15:
-                adaptive_min_similarity = 0.45  # Lots of data → moderately strict
-            elif preliminary_count > 10:
-                adaptive_min_similarity = 0.40
-            elif preliminary_count > 5:
-                adaptive_min_similarity = 0.30
-            elif preliminary_count > 0:
-                adaptive_min_similarity = min(0.20, min_similarity)  # Little data → very lenient
-
-            # IMPROVEMENT #2 & #5 (Weighted problems + Confidence/Variance):
-            # Second pass: Accumulate technique scores with similarity weighting.
-            # Uses per-problem averages (3_run_ave) instead of individual runs
-            # so that 1 problem = 1 sample regardless of how many runs it had.
-            totals: Dict[str, float] = {}
-            similarity_weighted_totals: Dict[str, float] = {}
-            similarity_weights: Dict[str, float] = {}
-            counts: Dict[str, int] = {}
-            scores_per_technique: Dict[str, List[float]] = {}  # For variance calculation
-
-            matched_documents = 0
-            similarities: List[float] = []
-
-            query = (
-                self._stream_problem_docs(
-                    domain=normalized_domain,
-                    difficulty=normalized_difficulty,
-                )
-            )
-
-            for doc in query:
+            for doc in self._stream_problem_docs(normalized_domain, normalized_difficulty):
                 data = doc.to_dict() or {}
 
                 if require_ground_truth:
@@ -881,23 +1077,65 @@ class FirestoreStore:
                     if has_ground_truth is None and not allow_unknown_quality:
                         continue
 
-                historical_text = str(data.get("problem") or "").strip()
-                if not historical_text:
+                hist_text = str(data.get("problem") or "").strip()
+                if not hist_text:
                     continue
 
-                similarity = self._profile_similarity(
-                    {},
-                    {},
+                docs_data.append(data)
+                historical_texts.append(hist_text)
+
+            # ── Batch-embed all historical texts + target in one API call ──
+            all_texts = [normalized_text] + historical_texts
+            embedding_map = self._get_embeddings_batch(all_texts)
+            target_embedding = embedding_map.get(normalized_text)
+
+            # ── Compute similarities (preliminary count + adaptive threshold) ──
+            doc_similarities: List[float] = []
+            preliminary_count = 0
+            for hist_text in historical_texts:
+                sim = self._profile_similarity(
+                    {}, {},
                     target_text=normalized_text,
-                    candidate_text=historical_text,
+                    candidate_text=hist_text,
+                    target_embedding=target_embedding,
+                    candidate_embedding=embedding_map.get(hist_text),
                 )
+                doc_similarities.append(sim)
+                if sim >= 0.20:
+                    preliminary_count += 1
+
+            # Adapt threshold based on available data.
+            # Floor of 0.55 ensures only structurally similar problems
+            # qualify for Tier 1 (e.g. linear matches linear, not quadratic).
+            _TIER1_MIN_FLOOR = 0.55
+            adaptive_min_similarity = max(min_similarity, _TIER1_MIN_FLOOR)
+            if preliminary_count > 15:
+                adaptive_min_similarity = max(0.60, _TIER1_MIN_FLOOR)
+            elif preliminary_count > 10:
+                adaptive_min_similarity = max(0.55, _TIER1_MIN_FLOOR)
+            elif preliminary_count > 5:
+                adaptive_min_similarity = _TIER1_MIN_FLOOR
+            elif preliminary_count > 0:
+                adaptive_min_similarity = _TIER1_MIN_FLOOR
+
+            # ── Accumulate technique scores with similarity weighting ──
+            totals: Dict[str, float] = {}
+            similarity_weighted_totals: Dict[str, float] = {}
+            similarity_weights: Dict[str, float] = {}
+            counts: Dict[str, int] = {}
+            scores_per_technique: Dict[str, List[float]] = {}
+
+            matched_documents = 0
+            similarities: List[float] = []
+
+            for i, data in enumerate(docs_data):
+                similarity = doc_similarities[i]
                 if similarity < adaptive_min_similarity:
                     continue
 
                 matched_documents += 1
                 similarities.append(similarity)
 
-                # Read per-problem averaged scores from 3_run_ave
                 three_run_ave = data.get("3_run_ave") or {}
                 technique_averages = three_run_ave.get("technique_averages") or {}
 
@@ -933,6 +1171,7 @@ class FirestoreStore:
                     "min_similarity": adaptive_min_similarity,
                     "matched_documents": matched_documents,
                     "preliminary_count": preliminary_count,
+                    "similarity_method": "hybrid",
                 }
 
             # IMPROVEMENT #5: Calculate statistics including variance and confidence
@@ -984,6 +1223,10 @@ class FirestoreStore:
             best = ranking[0]
             avg_similarity = sum(similarities) / len(similarities) if similarities else 0.0
 
+            # Determine which similarity layers were active
+            embed_active = target_embedding is not None
+            similarity_method = "hybrid_3layer" if embed_active else "hybrid_2layer_no_embedding"
+
             return {
                 "success": True,
                 "domain": normalized_domain,
@@ -993,6 +1236,7 @@ class FirestoreStore:
                 "ranking": ranking,
                 "problem_profile": normalized_profile,
                 "match_type": "profile_rule",
+                "similarity_method": similarity_method,
                 "min_similarity_requested": min_similarity,
                 "min_similarity_adaptive": round(adaptive_min_similarity, 4),
                 "preliminary_count": preliminary_count,
