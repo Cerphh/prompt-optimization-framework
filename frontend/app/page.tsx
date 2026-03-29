@@ -361,10 +361,18 @@ const buildTier1Details = (prof: Record<string, any>, allDetails: Record<string,
     const topScore = top.weighted_average || top.average_overall || 0
     const secondScore = second.weighted_average || second.average_overall || 0
     const gap = topScore - secondScore
-    const minGap = rules.profile_min_average_gap || 0.005
+    const baseGap = rules.profile_min_average_gap || 0.005
+    const dataSamples = Math.max(topSamples, second.samples || second.unweighted_samples || 0)
 
-    if (gap < minGap) {
-      return `❌ Top vs 2nd gap ${(gap * 100).toFixed(2)}% — needs ≥${(minGap * 100).toFixed(2)}%`
+    // Adaptive thresholds: more data → stricter gap detection & wider tie zone
+    const effectiveGap = dataSamples >= 10 ? baseGap * 0.5 : dataSamples >= 5 ? baseGap * 0.75 : baseGap
+    const indistinguishableThreshold = dataSamples >= 10 ? 0.008 : dataSamples >= 5 ? 0.004 : 0.003
+
+    if (gap < effectiveGap) {
+      if (gap < indistinguishableThreshold) {
+        return `✓ Both techniques scored equally — ${ranking[0].technique} selected (${dataSamples} samples, indistinguishable)`
+      }
+      return `❌ Top vs 2nd gap ${(gap * 100).toFixed(2)}% — needs ≥${(effectiveGap * 100).toFixed(2)}% (adaptive, ${dataSamples} samples)`
     }
   }
 
@@ -392,10 +400,17 @@ const buildTier2Details = (dom: Record<string, any>, allDetails: Record<string, 
     const topScore = top.average_overall || 0
     const secondScore = second.average_overall || 0
     const gap = topScore - secondScore
-    const minGap = rules.min_average_gap || 0.05
+    const baseGap = rules.min_average_gap || 0.05
+    const dataSamples = Math.max(samples, second.samples || 0)
 
-    if (gap < minGap) {
-      return `❌ Top vs 2nd gap ${(gap * 100).toFixed(2)}% — needs ≥${(minGap * 100).toFixed(2)}%`
+    const effectiveGap = dataSamples >= 10 ? baseGap * 0.5 : dataSamples >= 5 ? baseGap * 0.75 : baseGap
+    const indistinguishableThreshold = dataSamples >= 10 ? 0.008 : dataSamples >= 5 ? 0.004 : 0.003
+
+    if (gap < effectiveGap) {
+      if (gap < indistinguishableThreshold) {
+        return `✓ Both techniques scored equally — ${ranking[0]?.technique || 'technique'} selected (${dataSamples} samples, indistinguishable)`
+      }
+      return `❌ Top vs 2nd gap ${(gap * 100).toFixed(2)}% — needs ≥${(effectiveGap * 100).toFixed(2)}% (adaptive, ${dataSamples} samples)`
     }
   }
 

@@ -329,7 +329,32 @@ def _evaluate_selection_confidence(
     if not top_only_samples and min(top_samples, second_samples) < min_samples:
         return False, "insufficient_samples"
 
-    if (top_average - second_average) < min_gap:
+    # ── Adaptive thresholds based on data volume ──
+    # With more samples, averages are more stable, so:
+    #   1) Smaller gaps become statistically meaningful → lower effective_min_gap
+    #   2) Consistent equality is a stronger signal → wider indistinguishable zone
+    data_samples = max(top_samples, second_samples)
+    if data_samples >= 10:
+        effective_min_gap = min_gap * 0.5
+        indistinguishable_threshold = 0.008
+    elif data_samples >= 5:
+        effective_min_gap = min_gap * 0.75
+        indistinguishable_threshold = 0.004
+    else:
+        effective_min_gap = min_gap
+        indistinguishable_threshold = 0.003
+
+    actual_gap = top_average - second_average
+
+    if actual_gap < effective_min_gap:
+        # When both techniques score virtually identically, they are
+        # indistinguishable — either choice is equally valid.
+        # With more data the threshold widens: consistent equality
+        # across many samples is a strong signal both are truly equal.
+        if actual_gap < indistinguishable_threshold and top_samples >= min_samples:
+            top_confidence = str(top.get("confidence", "") or "").lower()
+            if top_confidence != "low":
+                return True, "ok_indistinguishable"
         return False, "low_confidence_gap"
 
     # Reject if top technique has erratic/inconsistent scores (std_dev ≥ 0.15).
@@ -493,17 +518,20 @@ def _apply_db_based_selection(
         if technique_result.get("success", False)
     ]
 
-    min_samples = _get_env_int("DB_MIN_SAMPLES_PER_TECHNIQUE", default=3, min_value=1)
-    min_gap = _get_env_float("DB_MIN_AVG_SCORE_GAP", default=0.05, min_value=0.0)
-    profile_min_samples = _get_env_int(
-        "DB_PROFILE_MIN_SAMPLES_PER_TECHNIQUE",
-        default=2,
-        min_value=1,
+    min_samples = (
+        _get_env_int("DB_MIN_SAMPLES_PER_TECHNIQUE", default=3, min_value=1)
+        if min_samples_override is None
+        else max(1, int(min_samples_override))
     )
     min_gap = (
         _get_env_float("DB_MIN_AVG_SCORE_GAP", default=0.05, min_value=0.0)
         if min_gap_override is None
         else max(0.0, float(min_gap_override))
+    )
+    profile_min_samples = _get_env_int(
+        "DB_PROFILE_MIN_SAMPLES_PER_TECHNIQUE",
+        default=2,
+        min_value=1,
     )
     profile_min_samples = (
         _get_env_int(
@@ -635,6 +663,21 @@ def _apply_db_based_selection(
         )
         if can_use_db:
             db_decision_reason = "ok_relaxed_gap"
+
+    # Final Tier 2 fallback: if both strict and relaxed gap checks failed,
+    # the gap sits in a "dead zone" between the indistinguishable threshold
+    # and the relaxed min_gap.  Since Tier 2 is already a fallback (Tier 1
+    # failed) and both techniques ran, accept the top technique as long as
+    # it has enough samples — a small gap in domain-level data shouldn't
+    # force an unnecessary Tier 3 runtime selection.
+    if not can_use_db and db_decision_reason == "low_confidence_gap":
+        ranking = selection.get("ranking", [])
+        if isinstance(ranking, list) and len(ranking) >= 1:
+            top_row = ranking[0] if isinstance(ranking[0], dict) else {}
+            top_samples_t2 = top_row.get("samples", 0)
+            if isinstance(top_samples_t2, (int, float)) and int(top_samples_t2) >= min_samples:
+                can_use_db = True
+                db_decision_reason = "ok_indistinguishable"
 
     if can_use_db and exploration_rate > 0:
         exploration_key = f"{domain}|{result.get('problem', '')}"
