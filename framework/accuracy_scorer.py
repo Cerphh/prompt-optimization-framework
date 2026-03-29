@@ -53,6 +53,12 @@ class AccuracyScorer:
 
         expected_str = str(expected).strip()
 
+        # When expected answer is a set of values, enforce set-level matching
+        # and skip scalar matching paths to avoid false positives.
+        expected_value_set = self._extract_value_set(expected_str)
+        if expected_value_set is not None:
+            return self._score_multi_value_response(response, expected_value_set)
+
         # Prefer explicit/final answer lines over intermediate reasoning steps.
         # This avoids false positives where a correct intermediate number appears
         # before an incorrect final answer.
@@ -91,8 +97,31 @@ class AccuracyScorer:
             return True
         if self._multi_value_match(candidate, expected):
             return True
-            return True
         return False
+
+    def _score_multi_value_response(self, response: str, expected_set: set) -> float:
+        """Score responses when expected answer is a multi-value set."""
+        priority_candidates = self._extract_priority_answers(response)
+
+        if priority_candidates and self._has_explicit_answer_signal(response):
+            for candidate in priority_candidates:
+                candidate_set = self._extract_value_set(candidate)
+                if candidate_set is not None and candidate_set == expected_set:
+                    return 1.0
+
+            # If the model explicitly marks a final answer and the set does not
+            # match, fail closed instead of scanning intermediate text.
+            return 0.0
+
+        candidates = self._unique_preserve_order(
+            priority_candidates + self._extract_answers(response)
+        )
+        for candidate in candidates:
+            candidate_set = self._extract_value_set(candidate)
+            if candidate_set is not None and candidate_set == expected_set:
+                return 1.0
+
+        return 0.0
 
     def _unique_preserve_order(self, values: list) -> list:
         """Remove duplicates while preserving order."""

@@ -62,3 +62,21 @@ def test_efficiency_score_is_bounded():
         },
     )
     assert 0.0 <= score <= 1.0
+
+
+def test_accuracy_multi_value_expected_rejects_partial_single_root_answer():
+    scorer = AccuracyScorer()
+    expected = "x = 1, x = -1, x = 3, x = -3"
+    response = "Final answer: +√3"
+
+    score = scorer.score(response=response, expected=expected)
+    assert score == 0.0
+
+
+def test_accuracy_multi_value_expected_accepts_reordered_complete_set():
+    scorer = AccuracyScorer()
+    expected = "x = 1, x = -1, x = 3, x = -3"
+    response = "Final answer: x = -3, x = 1, x = -1, x = 3"
+
+    score = scorer.score(response=response, expected=expected)
+    assert score == 1.0
