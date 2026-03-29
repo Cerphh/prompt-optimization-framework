@@ -324,6 +324,34 @@ class BenchmarkPipeline:
                     },
                 }
 
+            # The streaming path skips the verifier retry.  Apply it now
+            # so that run 1 has the same quality-check opportunity as the
+            # non-streamed runs 2–N, preventing a systematic run-1 miss.
+            if model_result.get("success", False):
+                preview_prompt = prompts[preview_technique]
+                generation_for_verify = {
+                    "response": model_result.get("response", ""),
+                    "done_reason": model_result.get("metrics", {}).get("done_reason", "stop"),
+                    "metrics": model_result.get("metrics", {}),
+                }
+                verified, overhead, vstate = self.model_runner._maybe_retry_with_verifier(
+                    original_prompt=preview_prompt,
+                    generation=generation_for_verify,
+                )
+                if vstate.get("retry_applied"):
+                    model_result["response"] = verified.get("response", model_result["response"])
+                    merged = dict(model_result["metrics"])
+                    for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
+                        merged[key] = merged.get(key, 0) + overhead.get(key, 0)
+                    for key in ("load_time", "prompt_eval_time", "eval_time"):
+                        merged[key] = merged.get(key, 0) + overhead.get(key, 0)
+                    model_result["metrics"] = merged
+                model_result["metrics"]["verifier_retry_applied"] = vstate.get("retry_applied", False)
+                model_result["metrics"]["verifier_verdict"] = vstate.get("verdict", "skipped")
+                model_result["metrics"]["verifier_heuristic_weak"] = vstate.get("heuristic_weak", False)
+                model_result["metrics"]["verifier_error"] = vstate.get("verifier_error")
+                model_result["metrics"]["verifier_retry_error"] = vstate.get("retry_error")
+
             results[preview_technique] = self._evaluate_technique_runs(
                 technique_name=preview_technique,
                 prompt=prompts[preview_technique],
