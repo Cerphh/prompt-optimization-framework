@@ -191,6 +191,7 @@ const formatScore = (
 
 const HIDDEN_PROMPT_PREAMBLES = [
   "Solve the following math problems and give the final answer. Use the following examples only as style references. Do NOT repeat or copy any example answer. You must solve ONLY the target problem shown after 'TARGET PROBLEM'. Think carefully and use the examples only for internal reasoning. Output ONLY the final answer for the TARGET PROBLEM. Do NOT include steps, explanations, or extra text.",
+  "Solve the following math problem and end with a concise final answer. Do NOT show steps or explanations.",
 ]
 
 const getDisplayPrompt = (prompt?: string): string => {

@@ -206,6 +206,12 @@ class PromptGenerator:
         "probability": "counting-probability",
     }
     
+    # Zero-shot prompt instruction
+    _ZERO_SHOT_INSTRUCTION = (
+        "Solve the following math problem and end with a concise final answer. "
+        "Do NOT show steps or explanations."
+    )
+    
     def __init__(self):
         """Initialize the prompt generator and load example dataset from JSON."""
         self.few_shot_min_examples = int(os.getenv("FEW_SHOT_MIN_EXAMPLES", "1"))
@@ -462,8 +468,7 @@ class PromptGenerator:
         _ = subject
         target_problem_text = str(problem)
         return (
-        "Solve the following math problem and end with a concise final answer. "
-        "Do NOT show steps or explanations.\n\n"
+        f"{self._ZERO_SHOT_INSTRUCTION}\n\n"
         f"Q: {target_problem_text}\n"
         "A:"
     )
