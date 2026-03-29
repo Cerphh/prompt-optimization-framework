@@ -89,6 +89,9 @@ class AccuracyScorer:
             return True
         if self._symbolic_match(candidate, expected):
             return True
+        if self._multi_value_match(candidate, expected):
+            return True
+            return True
         return False
 
     def _unique_preserve_order(self, values: list) -> list:
@@ -465,6 +468,62 @@ class AccuracyScorer:
     def _partial_match(self, candidate: str, expected: str) -> bool:
         """Check for partial matches (substring containment)."""
         return expected.lower() in candidate.lower() or candidate.lower() in expected.lower()
+
+    # ------------------------------------------------------------------ #
+    #  Multi-value answer matching (e.g. roots of polynomial equations)   #
+    # ------------------------------------------------------------------ #
+
+    def _extract_value_set(self, text: str) -> Optional[set]:
+        """Extract a set of numeric values from a multi-value answer string.
+
+        Handles formats like:
+          "x = 1, x = 2, and x = 3"
+          "x = 1, 2, or 3"
+          "1, 2, 3"
+          "x = 1 and x = 2"
+        Returns None when fewer than 2 values are detected.
+        """
+        value = str(text or "").strip()
+        value = re.sub(
+            r'(?i)^\s*(?:final\s+answer|answer|result|solution)\s*[:\-=]\s*',
+            '',
+            value,
+        ).strip()
+
+        # Remove variable assignments like "x = " so "x = 1, x = 2" -> "1, 2"
+        value = re.sub(r'[a-zA-Z]\s*=\s*', '', value)
+        # Remove connectors
+        value = re.sub(r'\b(?:and|or)\b', ',', value, flags=re.IGNORECASE)
+
+        numbers = re.findall(r'[-+]?\d+(?:\.\d+)?(?:\s*/\s*\d+(?:\.\d+)?)?', value)
+        if len(numbers) < 2:
+            return None
+
+        parsed = set()
+        for n in numbers:
+            n = n.strip()
+            if '/' in n:
+                left, right = re.split(r'\s*/\s*', n, maxsplit=1)
+                denom = float(right)
+                if abs(denom) < 1e-12:
+                    continue
+                parsed.add(round(float(left) / denom, 8))
+            else:
+                parsed.add(round(float(n), 8))
+        return parsed if len(parsed) >= 2 else None
+
+    def _multi_value_match(self, candidate: str, expected: str) -> bool:
+        """Check if candidate and expected contain the same set of values.
+
+        Matches answers like "x = 1, 2, or 3" against "x = 1, x = 2, and x = 3".
+        """
+        expected_set = self._extract_value_set(expected)
+        if expected_set is None:
+            return False
+        candidate_set = self._extract_value_set(candidate)
+        if candidate_set is None:
+            return False
+        return expected_set == candidate_set
     
     def _heuristic_score(self, response: str, problem: str = None) -> float:
         """
