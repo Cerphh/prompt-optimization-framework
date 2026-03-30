@@ -418,6 +418,48 @@ const buildTier2Details = (dom: Record<string, any>, allDetails: Record<string, 
   return `✓ Passed all checks — ${ranking[0]?.technique || 'technique'} based on domain/${allDetails.difficulty} history`
 }
 
+interface HistoricalStats {
+  winRate: number | null
+  avgScore: number | null
+  samples: number
+  lead: number | null
+}
+
+const getHistoricalStats = (
+  source?: SelectionSource,
+  details?: Record<string, any>,
+): HistoricalStats => {
+  const empty: HistoricalStats = { winRate: null, avgScore: null, samples: 0, lead: null }
+  if (!details) return empty
+
+  let ranking: Record<string, any>[] = []
+
+  if (source === 'db_profile_rules') {
+    const prof = details.profile_selection as Record<string, any> || {}
+    ranking = (prof.ranking || []) as Record<string, any>[]
+  } else if (source === 'db_history') {
+    const dom = details.domain_selection as Record<string, any> || {}
+    ranking = (dom.ranking || []) as Record<string, any>[]
+  }
+
+  if (ranking.length === 0) return empty
+
+  const top = ranking[0]
+  const winRate = top.win_rate ?? null
+  const avgScore = top.weighted_average ?? top.average_overall ?? null
+  const samples = top.samples || top.unweighted_samples || top.effective_samples || 0
+
+  let lead: number | null = null
+  if (ranking.length > 1) {
+    const second = ranking[1]
+    const topScore = top.weighted_average ?? top.average_overall ?? 0
+    const secondScore = second.weighted_average ?? second.average_overall ?? 0
+    lead = topScore - secondScore
+  }
+
+  return { winRate, avgScore, samples, lead }
+}
+
 const buildTierSummary = (
   source: SelectionSource,
   details: Record<string, any>,
@@ -1679,59 +1721,67 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* Performance Scores — shown when Tier 1/2 selected */}
-                  {result.selection_source !== 'runtime_scores' && (
+                  {/* Historical Performance + Coverage — shown when Tier 1/2 selected */}
+                  {result.selection_source !== 'runtime_scores' && (() => {
+                    const histStats = getHistoricalStats(
+                      result.selection_source as SelectionSource,
+                      result.selection_details as Record<string, any>,
+                    )
+                    return (
                   <div
                     className="rounded-lg overflow-hidden"
                     style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
                   >
                     <div className="p-6">
                       <div className="flex items-center justify-between mb-3">
-                        <p
-                          className="text-[11px] font-mono uppercase tracking-wider"
-                          style={{ color: 'var(--text-subtle)' }}
-                        >
-                          Performance Scores
-                        </p>
-                            <div
-                              className="flex items-center rounded-md overflow-hidden text-[10px] font-mono"
-                              style={{ border: '1px solid var(--border)' }}
-                            >
-                              <button
-                                type="button"
-                                onClick={() => setPerfScoreFormat('percent')}
-                                className="px-2.5 py-1 transition-colors"
-                                style={{
-                                  background: perfScoreFormat === 'percent' ? 'var(--accent)' : 'var(--surface)',
-                                  color: perfScoreFormat === 'percent' ? '#fff' : 'var(--text-muted)',
-                                }}
-                              >
-                                %
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setPerfScoreFormat('decimal')}
-                                className="px-2.5 py-1 transition-colors"
-                                style={{
-                                  background: perfScoreFormat === 'decimal' ? 'var(--accent)' : 'var(--surface)',
-                                  color: perfScoreFormat === 'decimal' ? '#fff' : 'var(--text-muted)',
-                                }}
-                              >
-                                0.00
-                              </button>
-                            </div>
+                        <div className="flex items-center gap-2">
+                          <p
+                            className="text-[11px] font-mono uppercase tracking-wider"
+                            style={{ color: 'var(--text-subtle)' }}
+                          >
+                            Historical Performance
+                          </p>
+                          <span className="text-xs font-mono px-2 py-0.5 rounded" style={{ background: 'var(--bg)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
+                            {subject} &middot; {difficulty}
+                          </span>
+                        </div>
+                        {coverageData && coverageData.problem_count > 0 && (
+                          <div className="flex items-center gap-3 text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
+                            <span>{coverageData.problem_count} benchmarked</span>
+                            {coverageData.ground_truth_count > 0 && (
+                              <span style={{ color: 'var(--green)' }}>{coverageData.ground_truth_count} with ground truth</span>
+                            )}
                           </div>
+                        )}
+                      </div>
                           <div className="grid grid-cols-4 gap-3">
                             {[
-                              { label: 'OVERALL', value: result.best_result?.scores?.overall },
-                              { label: 'ACCURACY', value: result.best_result?.scores?.accuracy },
                               {
-                                label: result.best_result?.scores?.consistency_is_provisional
-                                  ? 'CONSISTENCY*'
-                                  : 'CONSISTENCY',
-                                value: result.best_result?.scores?.consistency,
+                                label: 'WIN RATE',
+                                display: histStats.winRate != null
+                                  ? `${(histStats.winRate * 100).toFixed(0)}%`
+                                  : 'N/A',
+                                raw: histStats.winRate,
                               },
-                              { label: 'EFFICIENCY', value: result.best_result?.scores?.efficiency },
+                              {
+                                label: 'AVG SCORE',
+                                display: histStats.avgScore != null
+                                  ? `${(histStats.avgScore * 100).toFixed(1)}%`
+                                  : 'N/A',
+                                raw: histStats.avgScore,
+                              },
+                              {
+                                label: 'DATA POINTS',
+                                display: `${histStats.samples}`,
+                                raw: histStats.samples > 0 ? histStats.samples / 20 : null,
+                              },
+                              {
+                                label: 'LEAD',
+                                display: histStats.lead != null
+                                  ? `+${(histStats.lead * 100).toFixed(1)}%`
+                                  : 'N/A',
+                                raw: histStats.lead,
+                              },
                             ].map((s) => (
                               <div
                                 key={s.label}
@@ -1746,15 +1796,59 @@ export default function Home() {
                                 </p>
                                 <p
                                   className="text-2xl font-mono font-light"
-                                  style={{ color: scoreColor(s.value ?? 0) }}
+                                  style={{ color: s.raw != null ? scoreColor(s.raw) : 'var(--text-muted)' }}
                                 >
-                                  {formatScore(s.value, perfScoreFormat, 'PROV')}
+                                  {s.display}
                                 </p>
                               </div>
                             ))}
                           </div>
+                          {coverageData && coverageData.total_with_winner > 0 && coverageData.win_counts && (
+                            <div className="mt-3 flex items-center gap-3 text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
+                              {Object.entries(coverageData.win_counts).map(([tech, w]) => (
+                                <span key={tech}>
+                                  {tech}: {Math.round((w / coverageData.total_with_winner) * 100)}% wins
+                                </span>
+                              ))}
+                            </div>
+                          )}
                     </div>
                   </div>
+                    )
+                  })()}
+
+                  {/* Coverage Indicator — only when runtime selection (no historical panel above) */}
+                  {result.selection_source === 'runtime_scores' && coverageData && coverageData.problem_count > 0 && (
+                    <div
+                      className="rounded-lg overflow-hidden px-5 py-3"
+                      style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] font-mono uppercase tracking-wider" style={{ color: 'var(--text-subtle)' }}>
+                            Benchmark Coverage
+                          </span>
+                          <span className="text-xs font-mono px-2 py-0.5 rounded" style={{ background: 'var(--bg)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
+                            {subject} &middot; {difficulty}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3 text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
+                          <span>{coverageData.problem_count} problem{coverageData.problem_count !== 1 ? 's' : ''} benchmarked</span>
+                          {coverageData.ground_truth_count > 0 && (
+                            <span style={{ color: 'var(--green)' }}>{coverageData.ground_truth_count} with ground truth</span>
+                          )}
+                          {coverageData.total_with_winner > 0 && coverageData.win_counts && (
+                            <span>
+                              {Object.entries(coverageData.win_counts).map(([tech, w]) => (
+                                <span key={tech} className="ml-2">
+                                  {tech}: {Math.round((w / coverageData.total_with_winner) * 100)}% wins
+                                </span>
+                              ))}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   )}
 
                   {/* Technique Comparison — only when runtime selection (no DB data) */}
@@ -1887,40 +1981,6 @@ export default function Home() {
                             </tbody>
                           </table>
                         </div>
-                    </div>
-                  )}
-
-                  {/* Coverage Indicator */}
-                  {coverageData && coverageData.problem_count > 0 && (
-                    <div
-                      className="rounded-lg overflow-hidden px-5 py-3"
-                      style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[11px] font-mono uppercase tracking-wider" style={{ color: 'var(--text-subtle)' }}>
-                            Benchmark Coverage
-                          </span>
-                          <span className="text-xs font-mono px-2 py-0.5 rounded" style={{ background: 'var(--bg)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
-                            {subject} &middot; {difficulty}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-3 text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
-                          <span>{coverageData.problem_count} problem{coverageData.problem_count !== 1 ? 's' : ''} benchmarked</span>
-                          {coverageData.ground_truth_count > 0 && (
-                            <span style={{ color: 'var(--green)' }}>{coverageData.ground_truth_count} with ground truth</span>
-                          )}
-                          {coverageData.total_with_winner > 0 && coverageData.win_counts && (
-                            <span>
-                              {Object.entries(coverageData.win_counts).map(([tech, w]) => (
-                                <span key={tech} className="ml-2">
-                                  {tech}: {Math.round((w / coverageData.total_with_winner) * 100)}% wins
-                                </span>
-                              ))}
-                            </span>
-                          )}
-                        </div>
-                      </div>
                     </div>
                   )}
                 </div>
