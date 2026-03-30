@@ -170,7 +170,7 @@ def test_manual_save_persists_result(monkeypatch):
         json={
             "result": _mock_benchmark_result(problem="What is 2 + 2?"),
             "source": "frontend_manual_save",
-            "metadata": {"subject": "algebra", "difficulty": "basic"},
+            "metadata": {"subject": "algebra", "difficulty": "basic", "run_mode": "benchmark"},
         },
     )
 

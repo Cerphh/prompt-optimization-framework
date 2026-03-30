@@ -241,12 +241,12 @@ const getTierInfo = (source?: SelectionSource): TierInfo => {
     },
     runtime_scores: {
       tier: 3,
-      tierName: 'Tier 3',
+      tierName: 'Runtime Selection',
       strategyName: 'Runtime Selection',
-      description: 'Selected based on live execution scores. Used when Tier 1 and Tier 2 did not produce a confident preselection.',
-      bgColor: '#fffbeb',
-      borderColor: '#fde68a',
-      textColor: 'var(--amber)',
+      description: 'Selected based on live execution scores. All techniques executed and compared at runtime.',
+      bgColor: '#f5f5f4',
+      borderColor: '#d6d3d1',
+      textColor: '#57534e',
     },
   }
 
@@ -321,7 +321,7 @@ const buildDecisionTree = (details?: Record<string, any>, source?: SelectionSour
     },
     {
       tierNumber: 3,
-      tierName: 'Tier 3: Runtime Selection',
+      tierName: 'Runtime Selection',
       wasAttempted: true,
       result: runtimeSelected ? 'passed' : 'skipped',
       reason: details.reason,
@@ -472,6 +472,7 @@ export default function Home() {
   const [streamingStatus, setStreamingStatus] = useState('')
   const [perfScoreFormat, setPerfScoreFormat] = useState<ScoreDisplayFormat>('percent')
   const [compScoreFormat, setCompScoreFormat] = useState<ScoreDisplayFormat>('percent')
+  const [benchmarkRuns, setBenchmarkRuns] = useState(CONSISTENCY_TEST_RUNS_PER_TECHNIQUE)
 
   // Check API health
   useEffect(() => {
@@ -971,7 +972,11 @@ export default function Home() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    await runBenchmarkFlow(INITIAL_RUNS_PER_TECHNIQUE, 'initial')
+    if (runMode === 'benchmark') {
+      await runBenchmarkFlow(benchmarkRuns, benchmarkRuns >= CONSISTENCY_TEST_RUNS_PER_TECHNIQUE ? 'consistency' : 'initial')
+    } else {
+      await runBenchmarkFlow(INITIAL_RUNS_PER_TECHNIQUE, 'initial')
+    }
   }
 
   const handleRunConsistencyTest = async () => {
@@ -1123,7 +1128,7 @@ export default function Home() {
       >
         <h1 className="text-base font-semibold tracking-tight">Prompt Optimization Framework</h1>
         <div className="flex items-center gap-4">
-          {result && activeMode === 'benchmark' && (
+          {result && (
             <span className="text-sm font-mono" style={{ color: 'var(--text-muted)' }}>
               Best:{' '}
               <strong className="font-medium" style={{ color: 'var(--text)' }}>
@@ -1291,18 +1296,45 @@ export default function Home() {
                 <span className="text-xs font-mono" style={{ color: 'var(--text-subtle)' }}>
                   {modeLabel}: {modeHint}
                 </span>
-                <button
-                  type="submit"
-                  disabled={isDisabled}
-                  className="px-6 py-2.5 rounded-md text-sm font-medium transition-colors"
-                  style={{
-                    background: isDisabled ? 'var(--border-strong)' : 'var(--accent)',
-                    color: isDisabled ? 'var(--text-muted)' : '#fff',
-                    cursor: isDisabled ? 'not-allowed' : 'pointer',
-                  }}
-                >
-                  {runMode === 'benchmark' ? 'Run Benchmark' : 'Run Normal Mode'} &rarr;
-                </button>
+                {runMode === 'benchmark' ? (
+                  <button
+                    type="submit"
+                    disabled={isDisabled}
+                    className="flex items-center rounded-md text-sm font-medium transition-colors overflow-hidden"
+                    style={{
+                      background: isDisabled ? 'var(--border-strong)' : 'var(--accent)',
+                      color: isDisabled ? 'var(--text-muted)' : '#fff',
+                      cursor: isDisabled ? 'not-allowed' : 'pointer',
+                      padding: 0,
+                    }}
+                  >
+                    <span className="px-5 py-2.5">Run Benchmark</span>
+                    <span
+                      role="button"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setBenchmarkRuns(benchmarkRuns === 1 ? 3 : 1); }}
+                      className="px-3 py-2.5 text-xs font-mono transition-colors"
+                      style={{
+                        borderLeft: '1px solid rgba(255,255,255,0.18)',
+                        color: 'rgba(255,255,255,0.75)',
+                      }}
+                    >
+                      &times;{benchmarkRuns}
+                    </span>
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    disabled={isDisabled}
+                    className="px-6 py-2.5 rounded-md text-sm font-medium transition-colors"
+                    style={{
+                      background: isDisabled ? 'var(--border-strong)' : 'var(--accent)',
+                      color: isDisabled ? 'var(--text-muted)' : '#fff',
+                      cursor: isDisabled ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    Run Normal Mode &rarr;
+                  </button>
+                )}
               </div>
             </form>
           </div>
@@ -1461,42 +1493,44 @@ export default function Home() {
               </div>
 
               {/* Submit */}
-              <button
-                type="submit"
-                disabled={isDisabled}
-                className="w-full py-2.5 rounded-md text-sm font-medium transition-colors"
-                style={{
-                  background: isDisabled ? 'var(--border-strong)' : 'var(--accent)',
-                  color: isDisabled ? 'var(--text-muted)' : '#fff',
-                  cursor: isDisabled ? 'not-allowed' : 'pointer',
-                }}
-              >
-                {loading ? 'Running...' : runMode === 'benchmark' ? 'Run Benchmark (1 Run)' : 'Run'}
-              </button>
-
-              {result && activeMode === 'benchmark' && (
+              {runMode === 'benchmark' ? (
                 <button
-                  type="button"
-                  onClick={handleRunConsistencyTest}
-                  disabled={!canRunConsistencyTest}
-                  className="w-full py-2.5 rounded-md text-sm font-medium transition-colors"
+                  type="submit"
+                  disabled={isDisabled}
+                  className="flex items-center w-full rounded-md text-sm font-medium transition-colors overflow-hidden"
                   style={{
-                    border: `1px solid ${canRunConsistencyTest ? 'var(--blue)' : 'var(--border-strong)'}`,
-                    color: canRunConsistencyTest ? 'var(--blue)' : 'var(--text-muted)',
-                    background: canRunConsistencyTest ? 'var(--surface)' : 'var(--bg)',
-                    cursor: canRunConsistencyTest ? 'pointer' : 'not-allowed',
+                    background: isDisabled ? 'var(--border-strong)' : 'var(--accent)',
+                    color: isDisabled ? 'var(--text-muted)' : '#fff',
+                    cursor: isDisabled ? 'not-allowed' : 'pointer',
+                    padding: 0,
                   }}
                 >
-                  {bestConsistencyIsProvisional
-                    ? `Run Consistency Test (${CONSISTENCY_TEST_RUNS_PER_TECHNIQUE} Runs)`
-                    : `Re-run Consistency Test (${CONSISTENCY_TEST_RUNS_PER_TECHNIQUE} Runs)`}
+                  <span className="flex-1 py-2.5">{loading ? 'Running...' : 'Run Benchmark'}</span>
+                  <span
+                    role="button"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setBenchmarkRuns(benchmarkRuns === 1 ? 3 : 1); }}
+                    className="px-3 py-2.5 text-xs font-mono transition-colors"
+                    style={{
+                      borderLeft: '1px solid rgba(255,255,255,0.18)',
+                      color: 'rgba(255,255,255,0.75)',
+                    }}
+                  >
+                    &times;{benchmarkRuns}
+                  </span>
                 </button>
-              )}
-
-              {result && activeMode === 'benchmark' && bestConsistencyIsProvisional && (
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                  First pass uses single-run scoring (accuracy + efficiency). Run the consistency test to compute the full overall score.
-                </p>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={isDisabled}
+                  className="w-full py-2.5 rounded-md text-sm font-medium transition-colors"
+                  style={{
+                    background: isDisabled ? 'var(--border-strong)' : 'var(--accent)',
+                    color: isDisabled ? 'var(--text-muted)' : '#fff',
+                    cursor: isDisabled ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {loading ? 'Running...' : 'Run'}
+                </button>
               )}
             </form>
 
@@ -1567,16 +1601,7 @@ export default function Home() {
                           Normal mode
                         </span>
                       </div>
-                      <div className="flex items-center gap-4">
-                        {result.best_result?.scores?.overall !== undefined && (
-                          <span className="text-sm font-mono" style={{ color: 'var(--text-muted)' }}>
-                            Overall:{' '}
-                            <strong style={{ color: scoreColor(result.best_result.scores.overall) }}>
-                              {formatScorePercent(result.best_result.scores.overall)}
-                            </strong>
-                          </span>
-                        )}
-                      </div>
+
                     </div>
 
                     {/* Tier one-liner */}
@@ -1599,24 +1624,6 @@ export default function Home() {
                     })()}
 
                     <div className="p-6 space-y-5">
-                      {/* Model Response */}
-                      <div>
-                        <p
-                          className="text-[11px] font-mono uppercase tracking-wider mb-2"
-                          style={{ color: 'var(--text-subtle)' }}
-                        >
-                          Model Response
-                        </p>
-                        <div
-                          className="p-4 rounded-md overflow-auto max-h-96"
-                          style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}
-                        >
-                          <pre className="text-sm font-mono whitespace-pre-wrap leading-relaxed">
-                            {result.best_result?.response || 'No response'}
-                          </pre>
-                        </div>
-                      </div>
-
                       {/* Prompt Used (collapsed by default) */}
                       <details>
                         <summary
@@ -1634,8 +1641,238 @@ export default function Home() {
                           </pre>
                         </div>
                       </details>
+
+                      {/* Model Response */}
+                      <div>
+                        <p
+                          className="text-[11px] font-mono uppercase tracking-wider mb-2"
+                          style={{ color: 'var(--text-subtle)' }}
+                        >
+                          Model Response
+                        </p>
+                        <div
+                          className="p-4 rounded-md overflow-auto max-h-96"
+                          style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}
+                        >
+                          <pre className="text-sm font-mono whitespace-pre-wrap leading-relaxed">
+                            {result.best_result?.response || 'No response'}
+                          </pre>
+                        </div>
+                      </div>
                     </div>
                   </div>
+
+                  {/* Performance Scores + Comparison — shown when runtime selection (no DB data) */}
+                  {result.selection_source === 'runtime_scores' && (
+                    <>
+                      {/* Performance Scores */}
+                      <div
+                        className="rounded-lg overflow-hidden"
+                        style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+                      >
+                        <div className="p-6">
+                          <div className="flex items-center justify-between mb-3">
+                            <p
+                              className="text-[11px] font-mono uppercase tracking-wider"
+                              style={{ color: 'var(--text-subtle)' }}
+                            >
+                              Performance Scores
+                            </p>
+                            <div
+                              className="flex items-center rounded-md overflow-hidden text-[10px] font-mono"
+                              style={{ border: '1px solid var(--border)' }}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => setPerfScoreFormat('percent')}
+                                className="px-2.5 py-1 transition-colors"
+                                style={{
+                                  background: perfScoreFormat === 'percent' ? 'var(--accent)' : 'var(--surface)',
+                                  color: perfScoreFormat === 'percent' ? '#fff' : 'var(--text-muted)',
+                                }}
+                              >
+                                %
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setPerfScoreFormat('decimal')}
+                                className="px-2.5 py-1 transition-colors"
+                                style={{
+                                  background: perfScoreFormat === 'decimal' ? 'var(--accent)' : 'var(--surface)',
+                                  color: perfScoreFormat === 'decimal' ? '#fff' : 'var(--text-muted)',
+                                }}
+                              >
+                                0.00
+                              </button>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-4 gap-3">
+                            {[
+                              { label: 'OVERALL', value: result.best_result?.scores?.overall },
+                              { label: 'ACCURACY', value: result.best_result?.scores?.accuracy },
+                              {
+                                label: result.best_result?.scores?.consistency_is_provisional
+                                  ? 'CONSISTENCY*'
+                                  : 'CONSISTENCY',
+                                value: result.best_result?.scores?.consistency,
+                              },
+                              { label: 'EFFICIENCY', value: result.best_result?.scores?.efficiency },
+                            ].map((s) => (
+                              <div
+                                key={s.label}
+                                className="p-3 rounded-md text-center"
+                                style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}
+                              >
+                                <p
+                                  className="text-[9px] font-mono uppercase tracking-widest mb-1"
+                                  style={{ color: 'var(--text-subtle)' }}
+                                >
+                                  {s.label}
+                                </p>
+                                <p
+                                  className="text-2xl font-mono font-light"
+                                  style={{ color: scoreColor(s.value ?? 0) }}
+                                >
+                                  {formatScore(s.value, perfScoreFormat, 'PROV')}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Technique Comparison */}
+                      <div
+                        className="rounded-lg overflow-hidden"
+                        style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+                      >
+                        <div
+                          className="flex items-center justify-between px-6 py-4"
+                          style={{ borderBottom: '1px solid var(--border)' }}
+                        >
+                          <h2 className="text-lg font-semibold">Technique Comparison</h2>
+                          <div className="flex items-center gap-3">
+                            <span className="font-mono text-xs" style={{ color: 'var(--text-subtle)' }}>
+                              {attemptedTechniqueCount} techniques - {successfulTechniqueCount} successful
+                            </span>
+                            <div
+                              className="flex items-center rounded-md overflow-hidden text-[10px] font-mono"
+                              style={{ border: '1px solid var(--border)' }}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => setCompScoreFormat('percent')}
+                                className="px-2.5 py-1 transition-colors"
+                                style={{
+                                  background: compScoreFormat === 'percent' ? 'var(--accent)' : 'var(--surface)',
+                                  color: compScoreFormat === 'percent' ? '#fff' : 'var(--text-muted)',
+                                }}
+                              >
+                                %
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setCompScoreFormat('decimal')}
+                                className="px-2.5 py-1 transition-colors"
+                                style={{
+                                  background: compScoreFormat === 'decimal' ? 'var(--accent)' : 'var(--surface)',
+                                  color: compScoreFormat === 'decimal' ? '#fff' : 'var(--text-muted)',
+                                }}
+                              >
+                                0.00
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                                {['Technique', 'Accuracy', 'Consistency', 'Efficiency', 'Overall', 'Details'].map(
+                                  (col, i) => (
+                                    <th
+                                      key={col}
+                                      className={`${
+                                        i === 0 ? 'text-left px-6' : 'text-center px-4'
+                                      } py-3 text-[10px] font-mono uppercase tracking-widest font-medium`}
+                                      style={{ color: 'var(--text-subtle)' }}
+                                    >
+                                      {col}
+                                    </th>
+                                  )
+                                )}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {techniqueRows.map((tech) => {
+                                const isBest = tech.technique === result.best_technique
+                                return (
+                                  <tr
+                                    key={tech.technique}
+                                    className={isBest ? 'font-medium' : ''}
+                                    style={{
+                                      borderBottom: '1px solid var(--border)',
+                                      background: isBest ? '#f0fdf4' : undefined,
+                                      boxShadow: isBest ? 'inset 3px 0 0 var(--green)' : undefined,
+                                    }}
+                                  >
+                                    <td className="px-6 py-3 font-medium">
+                                      {tech.technique?.toUpperCase() ?? 'N/A'}
+                                      {isBest && (
+                                        <span
+                                          className="ml-2 text-[10px] font-mono px-1.5 py-0.5 rounded"
+                                          style={{ background: '#dcfce7', color: 'var(--green)' }}
+                                        >
+                                          best
+                                        </span>
+                                      )}
+                                      {!tech.success && (
+                                        <span
+                                          className="ml-2 text-[10px] font-mono px-1.5 py-0.5 rounded"
+                                          style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}
+                                        >
+                                          failed
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="text-center px-4 py-3 font-mono">
+                                      {formatScore(tech.accuracy, compScoreFormat)}
+                                    </td>
+                                    <td className="text-center px-4 py-3 font-mono">
+                                      {tech.consistencyAvailable ? formatScore(tech.consistency, compScoreFormat, 'PROV') : 'PROV'}
+                                    </td>
+                                    <td className="text-center px-4 py-3 font-mono">
+                                      {formatScore(tech.efficiency, compScoreFormat)}
+                                    </td>
+                                    <td
+                                      className="text-center px-4 py-3 font-mono font-semibold"
+                                      style={{ color: scoreColor(tech.overall) }}
+                                    >
+                                      {formatScore(tech.overall, compScoreFormat)}
+                                      {tech.overallIsProvisional ? '*' : ''}
+                                    </td>
+                                    <td className="text-center px-4 py-3">
+                                      <button
+                                        onClick={() =>
+                                          setExpandedTechnique(
+                                            expandedTechnique === tech.technique ? null : tech.technique
+                                          )
+                                        }
+                                        className="text-xs font-medium hover:underline"
+                                        style={{ color: 'var(--blue)' }}
+                                      >
+                                        View &rarr;
+                                      </button>
+                                    </td>
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -1678,31 +1915,33 @@ export default function Home() {
                       )
                     })()}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={handleSaveToDb}
-                      disabled={savingToDb}
-                      className="px-3 py-1.5 rounded-md text-xs font-medium transition-colors disabled:cursor-not-allowed"
-                      style={{
-                        border: '1px solid var(--border)',
-                        color: 'var(--text)',
-                        background: 'var(--surface)',
-                      }}
-                    >
-                      {savingToDb ? 'Saving\u2026' : 'Save to DB'}
-                    </button>
-                    <button
-                      onClick={exportResults}
-                      className="px-3 py-1.5 rounded-md text-xs font-medium transition-colors"
-                      style={{ background: 'var(--accent)', color: '#fff' }}
-                    >
-                      Export JSON
-                    </button>
-                  </div>
+                  {benchmarkRuns > 1 && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleSaveToDb}
+                        disabled={savingToDb}
+                        className="px-3 py-1.5 rounded-md text-xs font-medium transition-colors disabled:cursor-not-allowed"
+                        style={{
+                          border: '1px solid var(--border)',
+                          color: 'var(--text)',
+                          background: 'var(--surface)',
+                        }}
+                      >
+                        {savingToDb ? 'Saving\u2026' : 'Save to DB'}
+                      </button>
+                      <button
+                        onClick={exportResults}
+                        className="px-3 py-1.5 rounded-md text-xs font-medium transition-colors"
+                        style={{ background: 'var(--accent)', color: '#fff' }}
+                      >
+                        Export JSON
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Save / Export status */}
-                {saveStatus && (() => {
+                {benchmarkRuns > 1 && saveStatus && (() => {
                   const isSuccess =
                     saveStatus.startsWith('Saved') ||
                     saveStatus.startsWith('Exported as JSON and saved') ||
@@ -1742,7 +1981,7 @@ export default function Home() {
                 })()}
 
                 {/* ── Selection Strategy (one-line summary) ── */}
-                {result.selection_source && (() => {
+                {result.selection_source && result.selection_source !== 'runtime_scores' && (() => {
                   const tierInfo = getTierInfo(result.selection_source as SelectionSource)
                   const details = result.selection_details as Record<string, any> || {}
                   const summary = buildTierSummary(

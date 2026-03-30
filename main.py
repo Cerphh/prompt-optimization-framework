@@ -802,12 +802,16 @@ def _finalize_benchmark_result(
             profile_min_gap_override=normal_profile_min_gap,
         )
     else:
-        # Benchmark mode follows the same tier order, but uses DB_* thresholds.
-        result = _apply_db_based_selection(
-            result=result,
-            domain=domain,
-            difficulty=difficulty,
-        )
+        # Benchmark mode: pure runtime greedy (Tier 3 only).
+        # No DB-based override — all techniques' comparison data is preserved
+        # so unbiased data accumulates for normal mode's Tier 1/2 queries.
+        result["selection_source"] = "runtime_scores"
+        result["selection_details"] = {
+            "profile_selection": None,
+            "domain_selection": None,
+            "profile_decision_reason": "benchmark_mode_runtime_only",
+            "db_decision_reason": "benchmark_mode_runtime_only",
+        }
 
     all_results = result.get("all_results", {}) if isinstance(result, dict) else {}
     attempted_techniques = sorted(all_results.keys()) if isinstance(all_results, dict) else []
@@ -1175,6 +1179,19 @@ async def save_result(request: SaveResultRequest):
     """Manually save an existing benchmark result to Firestore."""
     try:
         metadata = dict(request.metadata or {})
+
+        # Only benchmark mode results are saved to DB.
+        # Normal mode consumes DB data but never writes to it,
+        # preventing biased / filtered data from polluting the store.
+        save_run_mode = _resolve_run_mode(
+            metadata.get("run_mode") or request.result.get("run_mode")
+        )
+        if save_run_mode != RUN_MODE_BENCHMARK:
+            return {
+                "message": "Skipped: only benchmark mode results are saved to the database.",
+                "storage": {"success": False, "reason": "normal_mode_save_blocked"},
+            }
+
         domain = metadata.get("domain") or metadata.get("subject") or metadata.get("category") or "general"
         difficulty = metadata.get("difficulty") or request.result.get("difficulty") or "basic"
 
