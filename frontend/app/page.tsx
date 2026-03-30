@@ -223,7 +223,7 @@ const getTierInfo = (source?: SelectionSource): TierInfo => {
   const tierMap: Record<SelectionSource, TierInfo> = {
     db_profile_rules: {
       tier: 1,
-      tierName: 'Tier 1',
+      tierName: 'Profile Based Selection',
       strategyName: 'Profile-Based Selection',
       description: 'Selected based on similar problem profiles using weighted similarity scoring. This is the most intelligent selection strategy.',
       bgColor: '#f0fdf4',
@@ -305,7 +305,7 @@ const buildDecisionTree = (details?: Record<string, any>, source?: SelectionSour
   const tree: TierDecisionInfo[] = [
     {
       tierNumber: 1,
-      tierName: 'Tier 1: Profile-Based Selection',
+      tierName: 'Profile Based Selection',
       wasAttempted: profileAttempted,
       result: profileSelected ? 'passed' : profileAttempted ? 'failed' : 'skipped',
       reason: profileReason,
@@ -473,6 +473,7 @@ export default function Home() {
   const [perfScoreFormat, setPerfScoreFormat] = useState<ScoreDisplayFormat>('percent')
   const [compScoreFormat, setCompScoreFormat] = useState<ScoreDisplayFormat>('percent')
   const [benchmarkRuns, setBenchmarkRuns] = useState(CONSISTENCY_TEST_RUNS_PER_TECHNIQUE)
+  const [coverageData, setCoverageData] = useState<{ problem_count: number; ground_truth_count: number; techniques_tested: string[]; win_counts: Record<string, number>; total_with_winner: number } | null>(null)
 
   // Check API health
   useEffect(() => {
@@ -850,6 +851,7 @@ export default function Home() {
     setExpandedTechnique(null)
     setStreamingResponse('')
     setStreamingTechnique('')
+    setCoverageData(null)
     setStreamingStatus(
       mode === 'consistency'
         ? `Running consistency test (${runsPerTechnique} runs per technique)...`
@@ -959,6 +961,11 @@ export default function Home() {
       } else {
         setSaveStatus('Not saved yet. Click Save to DB to save this result.')
       }
+
+      // Fetch coverage for normal mode
+      if (runMode === 'normal') {
+        fetchCoverage(subject, difficulty)
+      }
     } catch (err) {
       if (err instanceof TypeError && err.message.includes('fetch')) {
         setError('🔴 Cannot connect to API. Make sure backend is running on port 8000')
@@ -1041,6 +1048,16 @@ export default function Home() {
   /* Derived data for the technique-details modal */
   const expandedResult = expandedTechnique ? result?.all_results[expandedTechnique] : null
   const bestMetrics = result?.best_result?.metrics
+
+  const fetchCoverage = async (dom: string, diff: string) => {
+    try {
+      const response = await fetch(apiUrl(`/coverage/${encodeURIComponent(dom)}/${encodeURIComponent(diff)}`))
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) setCoverageData(data)
+      }
+    } catch { /* ignore */ }
+  }
   const bestContinuationRounds = bestMetrics?.continuation_rounds ?? 0
   const bestWasExtended = bestContinuationRounds > 0
   const bestStillTruncated = bestMetrics?.truncated === true
@@ -1624,23 +1641,23 @@ export default function Home() {
                     })()}
 
                     <div className="p-6 space-y-5">
-                      {/* Prompt Used (collapsed by default) */}
-                      <details>
-                        <summary
-                          className="text-[11px] font-mono uppercase tracking-wider cursor-pointer select-none hover:underline"
+                      {/* Prompt Used */}
+                      <div>
+                        <p
+                          className="text-[11px] font-mono uppercase tracking-wider mb-2"
                           style={{ color: 'var(--text-subtle)' }}
                         >
                           Prompt Used
-                        </summary>
+                        </p>
                         <div
-                          className="mt-2 p-4 rounded-md overflow-auto max-h-72"
+                          className="p-4 rounded-md overflow-auto max-h-72"
                           style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}
                         >
                           <pre className="text-sm font-mono whitespace-pre-wrap leading-relaxed">
                             {getDisplayPrompt(result.best_result?.prompt)}
                           </pre>
                         </div>
-                      </details>
+                      </div>
 
                       {/* Model Response */}
                       <div>
@@ -1662,22 +1679,20 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* Performance Scores + Comparison — shown when runtime selection (no DB data) */}
-                  {result.selection_source === 'runtime_scores' && (
-                    <>
-                      {/* Performance Scores */}
-                      <div
-                        className="rounded-lg overflow-hidden"
-                        style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
-                      >
-                        <div className="p-6">
-                          <div className="flex items-center justify-between mb-3">
-                            <p
-                              className="text-[11px] font-mono uppercase tracking-wider"
-                              style={{ color: 'var(--text-subtle)' }}
-                            >
-                              Performance Scores
-                            </p>
+                  {/* Performance Scores — shown when Tier 1/2 selected */}
+                  {result.selection_source !== 'runtime_scores' && (
+                  <div
+                    className="rounded-lg overflow-hidden"
+                    style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+                  >
+                    <div className="p-6">
+                      <div className="flex items-center justify-between mb-3">
+                        <p
+                          className="text-[11px] font-mono uppercase tracking-wider"
+                          style={{ color: 'var(--text-subtle)' }}
+                        >
+                          Performance Scores
+                        </p>
                             <div
                               className="flex items-center rounded-md overflow-hidden text-[10px] font-mono"
                               style={{ border: '1px solid var(--border)' }}
@@ -1738,14 +1753,16 @@ export default function Home() {
                               </div>
                             ))}
                           </div>
-                        </div>
-                      </div>
+                    </div>
+                  </div>
+                  )}
 
-                      {/* Technique Comparison */}
-                      <div
-                        className="rounded-lg overflow-hidden"
-                        style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
-                      >
+                  {/* Technique Comparison — only when runtime selection (no DB data) */}
+                  {result.selection_source === 'runtime_scores' && (
+                    <div
+                      className="rounded-lg overflow-hidden"
+                      style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+                    >
                         <div
                           className="flex items-center justify-between px-6 py-4"
                           style={{ borderBottom: '1px solid var(--border)' }}
@@ -1870,8 +1887,41 @@ export default function Home() {
                             </tbody>
                           </table>
                         </div>
+                    </div>
+                  )}
+
+                  {/* Coverage Indicator */}
+                  {coverageData && coverageData.problem_count > 0 && (
+                    <div
+                      className="rounded-lg overflow-hidden px-5 py-3"
+                      style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] font-mono uppercase tracking-wider" style={{ color: 'var(--text-subtle)' }}>
+                            Benchmark Coverage
+                          </span>
+                          <span className="text-xs font-mono px-2 py-0.5 rounded" style={{ background: 'var(--bg)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
+                            {subject} &middot; {difficulty}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3 text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
+                          <span>{coverageData.problem_count} problem{coverageData.problem_count !== 1 ? 's' : ''} benchmarked</span>
+                          {coverageData.ground_truth_count > 0 && (
+                            <span style={{ color: 'var(--green)' }}>{coverageData.ground_truth_count} with ground truth</span>
+                          )}
+                          {coverageData.total_with_winner > 0 && coverageData.win_counts && (
+                            <span>
+                              {Object.entries(coverageData.win_counts).map(([tech, w]) => (
+                                <span key={tech} className="ml-2">
+                                  {tech}: {Math.round((w / coverageData.total_with_winner) * 100)}% wins
+                                </span>
+                              ))}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </>
+                    </div>
                   )}
                 </div>
               )}

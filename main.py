@@ -395,6 +395,11 @@ def _resolve_pre_execution_techniques(
         details["reason"] = "single_technique"
         return None, details
 
+    # Benchmark mode always runs all techniques (runtime selection only).
+    if run_mode == RUN_MODE_BENCHMARK:
+        details["reason"] = "benchmark_mode_runs_all"
+        return None, details
+
     enabled = _get_env_bool("NORMAL_MODE_HISTORY_PRESELECTION_ENABLED", True)
     details["enabled"] = enabled
     if not enabled:
@@ -402,7 +407,7 @@ def _resolve_pre_execution_techniques(
 
     min_samples = _get_env_int(
         "NORMAL_MODE_MIN_SAMPLES_PER_TECHNIQUE",
-        default=15,
+        default=3,
         min_value=1,
     )
     min_gap = _get_env_float(
@@ -772,7 +777,7 @@ def _finalize_benchmark_result(
 
     normal_min_samples = _get_env_int(
         "NORMAL_MODE_MIN_SAMPLES_PER_TECHNIQUE",
-        default=15,
+        default=3,
         min_value=1,
     )
     normal_min_gap = _get_env_float(
@@ -1228,6 +1233,15 @@ async def save_result(request: SaveResultRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/coverage/{domain}/{difficulty}", tags=["Coverage"])
+async def get_coverage(domain: str, difficulty: str):
+    """Get benchmark coverage stats for a domain/difficulty."""
+    result = firestore_store.get_coverage(domain=domain, difficulty=difficulty)
+    if not result.get("success"):
+        raise HTTPException(status_code=500, detail=result.get("error", "Coverage query failed"))
+    return result
 
 
 if __name__ == "__main__":

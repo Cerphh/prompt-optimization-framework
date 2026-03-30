@@ -203,6 +203,9 @@ class FirestoreStore:
             # Compute 3_run_ave from last 3 results
             three_run_ave = self._compute_3_run_average(result_per_run)
 
+            # Determine winner technique from 3-run averages
+            winner_technique = self._determine_winner(three_run_ave)
+
             problem_doc_ref.set(
                 {
                     "problem_id": problem_id,
@@ -211,6 +214,7 @@ class FirestoreStore:
                     "evaluation_quality": payload.get("evaluation_quality"),
                     "result_per_run": self._encode_runs_as_named_map(result_per_run),
                     "3_run_ave": three_run_ave,
+                    "winner_technique": winner_technique,
                 },
                 merge=True,
             )
@@ -426,6 +430,22 @@ class FirestoreStore:
 
     def _normalize_problem_text(self, problem: str) -> str:
         return " ".join(str(problem or "").strip().lower().split())
+
+    def _determine_winner(self, three_run_ave: Dict[str, Any]) -> Optional[str]:
+        """Return the technique with the highest overall average from 3-run averages."""
+        if not three_run_ave:
+            return None
+        technique_averages = three_run_ave.get("technique_averages", {})
+        best_technique = None
+        best_overall = -1.0
+        for tech, metrics in technique_averages.items():
+            if not isinstance(metrics, dict):
+                continue
+            overall = self._to_float(metrics.get("overall"))
+            if overall is not None and overall > best_overall:
+                best_overall = overall
+                best_technique = tech
+        return best_technique
 
     def _build_problem_document_id(self, problem: str) -> str:
         normalized_problem = self._normalize_problem_text(problem)
@@ -1004,6 +1024,8 @@ class FirestoreStore:
         try:
             totals: Dict[str, float] = {}
             counts: Dict[str, int] = {}
+            wins: Dict[str, int] = {}
+            total_problems = 0
             allowed = set(available_techniques or [])
             allow_unknown_quality = os.getenv("DB_HISTORY_ALLOW_UNKNOWN_QUALITY", "false").strip().lower() == "true"
             normalized_domain = self._normalize_key(domain, default="general")
@@ -1024,6 +1046,13 @@ class FirestoreStore:
                         continue
                     if has_ground_truth is None and not allow_unknown_quality:
                         continue
+
+                # Track winner
+                winner = data.get("winner_technique")
+                if winner:
+                    if not allowed or winner in allowed:
+                        wins[winner] = wins.get(winner, 0) + 1
+                    total_problems += 1
 
                 # Read per-problem averaged scores from 3_run_ave
                 three_run_ave = data.get("3_run_ave") or {}
@@ -1054,10 +1083,13 @@ class FirestoreStore:
             ranking = []
             for technique, count in counts.items():
                 average = totals[technique] / count
+                tech_wins = wins.get(technique, 0)
                 ranking.append({
                     "technique": technique,
                     "average_overall": round(average, 4),
                     "samples": count,
+                    "wins": tech_wins,
+                    "win_rate": round(tech_wins / total_problems, 4) if total_problems > 0 else 0.0,
                 })
 
             ranking.sort(key=lambda x: (-x["average_overall"], -x["samples"], x["technique"]))
@@ -1070,6 +1102,7 @@ class FirestoreStore:
                 "require_ground_truth": require_ground_truth,
                 "best_technique": best["technique"],
                 "ranking": ranking,
+                "total_problems": total_problems,
             }
         except Exception as exc:
             return {
@@ -1197,6 +1230,8 @@ class FirestoreStore:
             similarity_weights: Dict[str, float] = {}
             counts: Dict[str, int] = {}
             scores_per_technique: Dict[str, List[float]] = {}
+            wins: Dict[str, int] = {}
+            total_matched_with_winner = 0
 
             matched_documents = 0
             similarities: List[float] = []
@@ -1208,6 +1243,13 @@ class FirestoreStore:
 
                 matched_documents += 1
                 similarities.append(similarity)
+
+                # Track winner among matched docs
+                winner = data.get("winner_technique")
+                if winner:
+                    if not allowed or winner in allowed:
+                        wins[winner] = wins.get(winner, 0) + 1
+                    total_matched_with_winner += 1
 
                 three_run_ave = data.get("3_run_ave") or {}
                 technique_averages = three_run_ave.get("technique_averages") or {}
@@ -1290,6 +1332,8 @@ class FirestoreStore:
                     "confidence": confidence,
                     "consistency": round(consistency, 4),
                     "individual_scores": [round(s, 4) for s in scores],
+                    "wins": wins.get(technique, 0),
+                    "win_rate": round(wins.get(technique, 0) / total_matched_with_winner, 4) if total_matched_with_winner > 0 else 0.0,
                 })
 
             ranking.sort(key=lambda x: (-x["weighted_average"], -x["effective_samples"], x["technique"]))
@@ -1324,3 +1368,53 @@ class FirestoreStore:
                 "reason": "query_failed",
                 "error": str(exc),
             }
+
+    def get_coverage(
+        self,
+        domain: str,
+        difficulty: str,
+    ) -> Dict[str, Any]:
+        """Get benchmark coverage stats for a domain/difficulty."""
+        if not self.enabled or self.db is None:
+            return {"success": False, "reason": "disabled_or_not_initialized"}
+
+        try:
+            normalized_domain = self._normalize_key(domain, default="general")
+            normalized_difficulty = self._normalize_key(difficulty, default="basic")
+
+            problem_count = 0
+            ground_truth_count = 0
+            techniques_seen: Set[str] = set()
+            wins: Dict[str, int] = {}
+            total_with_winner = 0
+
+            for doc in self._stream_problem_docs(normalized_domain, normalized_difficulty):
+                data = doc.to_dict() or {}
+                problem_count += 1
+
+                if self._doc_has_ground_truth(data):
+                    ground_truth_count += 1
+
+                three_run_ave = data.get("3_run_ave") or {}
+                for tech in (three_run_ave.get("technique_averages") or {}):
+                    techniques_seen.add(tech)
+
+                winner = data.get("winner_technique")
+                if winner:
+                    wins[winner] = wins.get(winner, 0) + 1
+                    total_with_winner += 1
+
+            return {
+                "success": True,
+                "domain": normalized_domain,
+                "difficulty": normalized_difficulty,
+                "problem_count": problem_count,
+                "ground_truth_count": ground_truth_count,
+                "techniques_tested": sorted(techniques_seen),
+                "win_counts": wins,
+                "total_with_winner": total_with_winner,
+            }
+        except Exception as exc:
+            return {"success": False, "reason": "query_failed", "error": str(exc)}
+
+

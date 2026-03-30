@@ -228,7 +228,7 @@ def test_benchmark_skips_weakest_technique_when_history_has_15_samples(monkeypat
     assert payload["pre_execution_policy"]["skipped_technique"] == "zero_shot"
 
 
-def test_benchmark_does_not_skip_weakest_technique_when_samples_below_15(monkeypatch):
+def test_benchmark_does_not_skip_weakest_technique_when_samples_below_min(monkeypatch):
     captured = {}
 
     def fake_benchmark(problem: str, ground_truth=None, subject: str = "general", techniques_to_run=None):
@@ -244,8 +244,8 @@ def test_benchmark_does_not_skip_weakest_technique_when_samples_below_15(monkeyp
             "success": True,
             "best_technique": "few_shot",
             "ranking": [
-                {"technique": "few_shot", "average_overall": 0.91, "samples": 14},
-                {"technique": "zero_shot", "average_overall": 0.82, "samples": 14},
+                {"technique": "few_shot", "average_overall": 0.91, "samples": 2},
+                {"technique": "zero_shot", "average_overall": 0.82, "samples": 2},
             ],
         },
     )
@@ -296,7 +296,7 @@ def test_benchmark_stream_mode_requires_ground_truth(monkeypatch):
     assert "ground_truth" in payload["detail"]
 
 
-def test_benchmark_mode_preselects_by_history_when_confident(monkeypatch):
+def test_benchmark_mode_runs_all_techniques_ignoring_history(monkeypatch):
     captured = {}
 
     def fake_benchmark(problem: str, ground_truth=None, subject: str = "general", techniques_to_run=None):
@@ -331,10 +331,11 @@ def test_benchmark_mode_preselects_by_history_when_confident(monkeypatch):
     )
 
     assert response.status_code == 200
-    assert captured["techniques_to_run"] == ["few_shot"]
+    # Benchmark mode must run ALL techniques (no preselection)
+    assert captured["techniques_to_run"] is None
     payload = response.json()
     assert payload["run_mode"] == "benchmark"
-    assert payload["pre_execution_policy"]["reason"] == "preselected_by_domain_history"
+    assert payload["pre_execution_policy"]["reason"] == "benchmark_mode_runs_all"
 
 
 def test_benchmark_mode_accepts_single_technique_when_preselected(monkeypatch):
