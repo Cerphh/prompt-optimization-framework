@@ -214,11 +214,11 @@ class PromptGenerator:
     
     def __init__(self):
         """Initialize the prompt generator and load example dataset from JSON."""
-        self.few_shot_min_examples = int(os.getenv("FEW_SHOT_MIN_EXAMPLES", "1"))
+        self.few_shot_min_examples = int(os.getenv("FEW_SHOT_MIN_EXAMPLES", "2"))
         # Keep few-shot concise by default to reduce unrelated support examples.
-        self.few_shot_max_examples = int(os.getenv("FEW_SHOT_MAX_EXAMPLES", "1"))
-        self.few_shot_medium_examples = int(os.getenv("FEW_SHOT_MEDIUM_EXAMPLES", "1"))
-        self.few_shot_hard_examples = int(os.getenv("FEW_SHOT_HARD_EXAMPLES", "1"))
+        self.few_shot_max_examples = int(os.getenv("FEW_SHOT_MAX_EXAMPLES", "2"))
+        self.few_shot_medium_examples = int(os.getenv("FEW_SHOT_MEDIUM_EXAMPLES", "2"))
+        self.few_shot_hard_examples = int(os.getenv("FEW_SHOT_HARD_EXAMPLES", "2"))
         self.few_shot_diversity_lambda = float(os.getenv("FEW_SHOT_DIVERSITY_LAMBDA", "0.15"))
         self.few_shot_min_relevance = float(os.getenv("FEW_SHOT_MIN_RELEVANCE", "0.35"))
 
@@ -772,6 +772,10 @@ class PromptGenerator:
             features.add("function_notation")
         if re.search(r"\b[a-z]\s*\(\s*[a-z]\s*\(", value):
             features.add("composition")
+        if re.search(r"\d+\.\d+", value):
+            features.add("decimal")
+        if re.search(r"\d{3,}", value):
+            features.add("big_number")
         if "%" in value or "\\%" in value:
             features.add("percent")
         if any(marker in value for marker in ["ratio", "proportion", "directly proportional", "inversely proportional"]):
@@ -1283,6 +1287,10 @@ class PromptGenerator:
         if signature["has_abs"]:
             return "absolute"
 
+        # Detect exponential equations where the variable appears in an exponent.
+        if re.search(r"\d+\s*\^\s*\{?\s*[a-z]", value) or re.search(r"\d+\s*\^\s*[a-z]", value):
+            return "exponential"
+
         has_variable = bool(re.search(r"\b[a-z]\b|\d+[a-z]|[a-z]\d+", value))
         if has_variable:
             return "linear"
@@ -1454,15 +1462,30 @@ class PromptGenerator:
                 if isinstance(example, dict)
                 and self._problem_pattern_signature(str(example.get("problem", ""))) == target_signature
             ]
-            # In strict mode, require same structure from the example bank.
+            # In strict mode, prefer same structure but keep broader pool when
+            # signature matches are too few to satisfy the requested example count.
             if signature_matches:
                 non_identical_signature_matches = [
                     example for example in signature_matches
                     if self._canonical_problem_text(str(example.get("problem", ""))) != target_canonical
                 ]
-                filtered_examples = non_identical_signature_matches
+                if len(non_identical_signature_matches) >= self.few_shot_min_examples:
+                    filtered_examples = non_identical_signature_matches
+                else:
+                    # Not enough signature matches — fall back to the pre-signature pool
+                    # so the relevance ranker can still pick the best available examples.
+                    non_identical = [
+                        example for example in filtered_examples
+                        if self._canonical_problem_text(str(example.get("problem", ""))) != target_canonical
+                    ]
+                    filtered_examples = non_identical
             else:
-                filtered_examples = []
+                # No signature matches at all — keep broader pool instead of emptying.
+                non_identical = [
+                    example for example in filtered_examples
+                    if self._canonical_problem_text(str(example.get("problem", ""))) != target_canonical
+                ]
+                filtered_examples = non_identical
 
         problem_constraints = self._extract_constraints_from_text(problem)
         effective_constraints = set(problem_constraints)
@@ -1561,6 +1584,16 @@ class PromptGenerator:
             if missing_critical:
                 score -= 0.08 * len(missing_critical)
 
+            # Penalize examples that introduce complexity absent from the target.
+            # This keeps simple-problem few-shot examples structurally aligned.
+            extra_features = example_features - problem_features
+            extra_complex = extra_features.intersection({
+                "exponent", "root", "fraction", "logarithm", "trigonometric",
+                "system", "composition", "inequality", "decimal", "big_number",
+            })
+            if extra_complex:
+                score -= 0.25 * len(extra_complex)
+
         problem_assigned_vars = self._extract_assigned_variables(problem_lower)
         example_assigned_vars = self._extract_assigned_variables(example_lower)
         if problem_assigned_vars:
@@ -1568,7 +1601,7 @@ class PromptGenerator:
             score += assignment_var_overlap * 0.40
 
             if len(example_assigned_vars) < len(problem_assigned_vars):
-                score -= 0.14
+                score -= 0.25
 
             if len(problem_assigned_vars) >= 2 and len(example_assigned_vars) >= 2:
                 score += 0.10
@@ -1590,6 +1623,15 @@ class PromptGenerator:
         # Equation-structure alignment (critical for solve-equation few-shot quality)
         problem_sig = self._extract_equation_signature(problem_lower)
         example_sig = self._extract_equation_signature(example_lower)
+
+        # Equation-family alignment: strongly prefer same degree/type
+        problem_family = self._detect_equation_family(problem_lower)
+        example_family = self._detect_equation_family(example_lower)
+        if problem_family and example_family:
+            if problem_family == example_family:
+                score += 0.35
+            else:
+                score -= 0.20
 
         if problem_sig["has_equation"] and example_sig["has_equation"]:
             score += 0.08
@@ -1630,6 +1672,13 @@ class PromptGenerator:
         for problem_marker, example_marker in STRATEGY_PAIRS:
             if problem_marker in problem_lower and example_marker in example_text:
                 score += 0.08
+
+        # Character-length proximity: penalize examples much longer than the target.
+        problem_chars = len(problem_lower)
+        example_chars = len(example_lower)
+        char_ratio = example_chars / max(problem_chars, 1)
+        if char_ratio > 1.8:
+            score -= 0.18 * min(char_ratio - 1.8, 4.0)
 
         score += self._score_metadata_alignment(example, problem, problem_keywords, problem_features)
         
@@ -2069,7 +2118,10 @@ class PromptGenerator:
                 min(target_examples, self.few_shot_max_examples),
             )
 
-        num_examples = max(self.few_shot_min_examples, min(num_examples, self.few_shot_max_examples))
+        num_examples = max(
+                self.few_shot_min_examples if auto_mode else 1,
+                min(num_examples, self.few_shot_max_examples),
+            )
 
         available_examples = self.example_dataset.get(subject, [])
         
