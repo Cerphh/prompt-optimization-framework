@@ -158,6 +158,56 @@
           "polynomial_factoring_with_difference_of_squares"
         ],
         "anchor_priority": 0.8
+      },
+      {
+        "problem": "Solve for x: |x + 2| = 9",
+        "solution": "Since |x + 2| = 9, we split into two cases:\n\nx + 2 = 9 → x = 7\nx + 2 = -9 → x = -11",
+        "type": "absolute_value_equation_solving",
+        "constraints": [],
+        "concept": "distance_from_zero",
+        "skills": [
+          "absolute_value_equation_solving"
+        ],
+        "format": {
+          "template": "single_equation",
+          "equation_count": 1,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": false,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "basic",
+        "tags": [
+          "algebra",
+          "absolute_value_equation_solving"
+        ],
+        "anchor_priority": 0.8
+      },
+      {
+        "problem": "Solve for x: |x - 6| = 10",
+        "solution": "Since |x - 6| = 10, we split into two cases:\n\nx - 6 = 10 → x = 16\nx - 6 = -10 → x = -4",
+        "type": "absolute_value_equation_solving",
+        "constraints": [],
+        "concept": "distance_from_zero",
+        "skills": [
+          "absolute_value_equation_solving"
+        ],
+        "format": {
+          "template": "single_equation",
+          "equation_count": 1,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": false,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "basic",
+        "tags": [
+          "algebra",
+          "absolute_value_equation_solving"
+        ],
+        "anchor_priority": 0.8
       }
     ],
     "intermediate": [

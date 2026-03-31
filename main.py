@@ -448,22 +448,25 @@ def _resolve_pre_execution_techniques(
     )
     details["profile_selection"] = profile_selection
 
-    # Adaptive profile thresholds: require more evidence and a wider gap
-    # when more similar problems are available in the DB.  This prevents
-    # Tier 1 from firing on every query once data accumulates.
+    # Adaptive profile thresholds: Tier 1 matched specific similar problems,
+    # so its data is more trustworthy than Tier 2's broad domain averages.
+    # Base gap is LOWER than Tier 2 (more trust in specific data).
+    # With more matches, averages are more stable → gap decreases further.
+    # min_samples still scales UP with more data to require broader evidence.
     _matched = int(profile_selection.get("matched_documents", 0) or 0)
+    tier1_base_gap = max(0.005, min_gap * 0.5)  # half of Tier 2's gap
     if _matched >= 20:
         adaptive_profile_min = min_samples + 3
-        adaptive_profile_gap = min_gap + 0.04   # 0.07
+        adaptive_profile_gap = tier1_base_gap * 0.3   # ~0.005 (very confident)
     elif _matched >= 10:
         adaptive_profile_min = min_samples + 2
-        adaptive_profile_gap = min_gap + 0.03   # 0.06
+        adaptive_profile_gap = tier1_base_gap * 0.5   # ~0.008
     elif _matched >= 5:
         adaptive_profile_min = min_samples + 1
-        adaptive_profile_gap = min_gap + 0.02   # 0.05
+        adaptive_profile_gap = tier1_base_gap * 0.75  # ~0.011
     else:
         adaptive_profile_min = min_samples
-        adaptive_profile_gap = min_gap + 0.01   # 0.04  (still stricter than Tier 2's 0.03)
+        adaptive_profile_gap = tier1_base_gap          # ~0.015
 
     profile_ok, profile_reason = _evaluate_selection_confidence(
         profile_selection,

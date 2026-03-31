@@ -234,7 +234,7 @@ const getTierInfo = (source?: SelectionSource): TierInfo => {
     },
     db_history: {
       tier: 2,
-      tierName: 'Tier 2',
+      tierName: 'Domain-Average Fallback',
       strategyName: 'Domain-Average Fallback',
       description: 'Selected based on historical domain/difficulty averages. Used when profile-based selection lacked sufficient confidence.',
       bgColor: '#eff6ff',
@@ -543,6 +543,15 @@ export default function Home() {
   const [addExStatus, setAddExStatus] = useState('')
   const [addExExistingTypes, setAddExExistingTypes] = useState<Record<string, string[]>>({})
   const [addExDetectionMethod, setAddExDetectionMethod] = useState('')
+  // Example 2
+  const [addExProblem2, setAddExProblem2] = useState('')
+  const [addExSolution2, setAddExSolution2] = useState('')
+  const [addExSubject2, setAddExSubject2] = useState('')
+  const [addExDifficulty2, setAddExDifficulty2] = useState('')
+  const [addExType2, setAddExType2] = useState('')
+  const [addExConcept2, setAddExConcept2] = useState('')
+  const [addExAnalyzed2, setAddExAnalyzed2] = useState(false)
+  const [addExDetectionMethod2, setAddExDetectionMethod2] = useState('')
   // Check API health
   useEffect(() => {
     const checkHealth = async () => {
@@ -609,6 +618,7 @@ export default function Home() {
     setAddExAnalyzing(true)
     setAddExStatus('')
     try {
+      // Analyze example 1
       const res = await fetch(apiUrl('/examples/analyze'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -623,6 +633,24 @@ export default function Home() {
       setAddExExistingTypes(data.existing_types || {})
       setAddExDetectionMethod(data.detection_method || 'rule-based')
       setAddExAnalyzed(true)
+
+      // Analyze example 2 if filled
+      if (addExProblem2.trim() && addExSolution2.trim()) {
+        const res2 = await fetch(apiUrl('/examples/analyze'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ problem: addExProblem2, solution: addExSolution2 }),
+        })
+        if (res2.ok) {
+          const data2 = await res2.json()
+          setAddExSubject2(data2.detected_subject)
+          setAddExDifficulty2(data2.detected_difficulty)
+          setAddExType2(data2.detected_type)
+          setAddExConcept2(data2.detected_concept || data2.detected_type)
+          setAddExDetectionMethod2(data2.detection_method || 'rule-based')
+          setAddExAnalyzed2(true)
+        }
+      }
     } catch (e: unknown) {
       setAddExStatus(`Analysis error: ${e instanceof Error ? e.message : 'Unknown error'}`)
     } finally {
@@ -638,6 +666,7 @@ export default function Home() {
     setAddExSaving(true)
     setAddExStatus('')
     try {
+      // Save example 1
       const res = await fetch(apiUrl('/examples'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -652,12 +681,34 @@ export default function Home() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.detail || 'Save failed')
-      setAddExStatus(data.message || 'Saved!')
+
+      let savedCount = 1
+
+      // Save example 2 if filled and analyzed
+      if (addExProblem2.trim() && addExSolution2.trim() && addExAnalyzed2) {
+        const res2 = await fetch(apiUrl('/examples'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            problem: addExProblem2,
+            solution: addExSolution2,
+            subject: addExSubject2,
+            difficulty: addExDifficulty2,
+            type: addExType2,
+            concept: addExConcept2,
+          }),
+        })
+        const data2 = await res2.json()
+        if (!res2.ok) throw new Error(data2.detail || 'Save failed for example 2')
+        savedCount = 2
+      }
+
+      setAddExStatus(`Saved ${savedCount} example${savedCount > 1 ? 's' : ''}!`)
       // Reset form after success
       setTimeout(() => {
-        setAddExProblem('')
-        setAddExSolution('')
-        setAddExAnalyzed(false)
+        setAddExProblem(''); setAddExSolution('')
+        setAddExProblem2(''); setAddExSolution2('')
+        setAddExAnalyzed(false); setAddExAnalyzed2(false)
         setAddExStatus('')
         setShowAddExample(false)
         // Refresh example types
@@ -1444,8 +1495,8 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Available Few-Shot Concepts (opens modal) */}
-              {Object.keys(exampleTypes).length > 0 && (
+              {/* Available Few-Shot Concepts (opens modal) — benchmark only */}
+              {runMode === 'benchmark' && Object.keys(exampleTypes).length > 0 && (
                 <div className="mb-4 flex gap-2">
                   <button
                     type="button"
@@ -1457,7 +1508,7 @@ export default function Home() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => { setShowAddExample(true); setAddExStatus(''); setAddExAnalyzed(false) }}
+                    onClick={() => { setShowAddExample(true); setAddExStatus(''); setAddExAnalyzed(false); setAddExAnalyzed2(false); setAddExProblem2(''); setAddExSolution2('') }}
                     className="flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded"
                     style={{ color: '#fff', background: 'var(--accent)', border: 'none' }}
                   >
@@ -1658,8 +1709,8 @@ export default function Home() {
                 </select>
               </div>
 
-              {/* Available Few-Shot Concepts (opens modal) */}
-              {Object.keys(exampleTypes).length > 0 && (
+              {/* Available Few-Shot Concepts (opens modal) — benchmark only */}
+              {runMode === 'benchmark' && Object.keys(exampleTypes).length > 0 && (
                 <div className="flex gap-2">
                   <button
                     type="button"
@@ -1671,7 +1722,7 @@ export default function Home() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => { setShowAddExample(true); setAddExStatus(''); setAddExAnalyzed(false) }}
+                    onClick={() => { setShowAddExample(true); setAddExStatus(''); setAddExAnalyzed(false); setAddExAnalyzed2(false); setAddExProblem2(''); setAddExSolution2('') }}
                     className="flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded"
                     style={{ color: '#fff', background: 'var(--accent)', border: 'none' }}
                   >
@@ -1815,8 +1866,9 @@ export default function Home() {
                       style={{ borderBottom: '1px solid var(--border)' }}
                     >
                       <div className="flex items-center gap-3">
+                        <h2 className="text-lg font-semibold">Best Technique</h2>
                         <span
-                          className="font-mono text-sm font-semibold px-3 py-1 rounded"
+                          className="font-mono text-xs px-2.5 py-1 rounded"
                           style={{ background: 'var(--accent)', color: '#fff' }}
                         >
                           {result.best_technique?.toUpperCase()}
@@ -1825,19 +1877,13 @@ export default function Home() {
                           const tierInfo = getTierInfo(result.selection_source as SelectionSource)
                           return (
                             <span
-                              className="font-mono text-xs px-2 py-0.5 rounded"
+                              className="font-mono text-xs px-2.5 py-1 rounded"
                               style={{ background: tierInfo.textColor, color: tierInfo.bgColor }}
                             >
                               {tierInfo.tierName}
                             </span>
                           )
                         })()}
-                        <span
-                          className="font-mono text-xs px-2 py-1 rounded"
-                          style={{ color: 'var(--text)', border: '1px solid var(--border)' }}
-                        >
-                          Normal mode
-                        </span>
                       </div>
 
                     </div>
@@ -2180,12 +2226,6 @@ export default function Home() {
                 >
                   <div className="flex items-center gap-3">
                     <h2 className="text-lg font-semibold">Best Technique</h2>
-                    <span
-                      className="font-mono text-xs px-2 py-1 rounded"
-                      style={{ color: 'var(--text)', border: '1px solid var(--border)' }}
-                    >
-                      {modeLabel}
-                    </span>
                     <span
                       className="font-mono text-xs px-2.5 py-1 rounded"
                       style={{ background: 'var(--accent)', color: '#fff' }}
@@ -2949,30 +2989,61 @@ export default function Home() {
 
             {/* Body */}
             <div className="px-5 py-4 overflow-y-auto space-y-4">
-              {/* Problem */}
-              <div>
-                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text)' }}>Problem</label>
-                <textarea
-                  value={addExProblem}
-                  onChange={(e) => { setAddExProblem(e.target.value); setAddExAnalyzed(false) }}
-                  rows={3}
-                  placeholder="e.g., Solve for x: 3x - 7 = 20"
-                  className="w-full px-3 py-2 rounded-md text-sm font-mono outline-none resize-y"
-                  style={{ border: '1px solid var(--border)', color: 'var(--text)', background: 'var(--bg)' }}
-                />
+              {/* ── Example 1 ── */}
+              <div className="space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-subtle)' }}>Example 1</p>
+                <div>
+                  <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text)' }}>Problem</label>
+                  <textarea
+                    value={addExProblem}
+                    onChange={(e) => { setAddExProblem(e.target.value); setAddExAnalyzed(false) }}
+                    rows={3}
+                    placeholder="e.g., Solve for x: 3x - 7 = 20"
+                    className="w-full px-3 py-2 rounded-md text-sm font-mono outline-none resize-y"
+                    style={{ border: '1px solid var(--border)', color: 'var(--text)', background: 'var(--bg)' }}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text)' }}>Solution</label>
+                  <textarea
+                    value={addExSolution}
+                    onChange={(e) => setAddExSolution(e.target.value)}
+                    rows={3}
+                    placeholder="e.g., Add 7 to both sides: 3x = 27. Divide by 3: x = 9."
+                    className="w-full px-3 py-2 rounded-md text-sm font-mono outline-none resize-y"
+                    style={{ border: '1px solid var(--border)', color: 'var(--text)', background: 'var(--bg)' }}
+                  />
+                </div>
               </div>
 
-              {/* Solution */}
-              <div>
-                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text)' }}>Solution</label>
-                <textarea
-                  value={addExSolution}
-                  onChange={(e) => setAddExSolution(e.target.value)}
-                  rows={3}
-                  placeholder="e.g., Add 7 to both sides: 3x = 27. Divide by 3: x = 9."
-                  className="w-full px-3 py-2 rounded-md text-sm font-mono outline-none resize-y"
-                  style={{ border: '1px solid var(--border)', color: 'var(--text)', background: 'var(--bg)' }}
-                />
+              {/* Divider */}
+              <div style={{ borderTop: '1px solid var(--border)' }} />
+
+              {/* ── Example 2 ── */}
+              <div className="space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-subtle)' }}>Example 2 <span className="font-normal normal-case">(optional)</span></p>
+                <div>
+                  <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text)' }}>Problem</label>
+                  <textarea
+                    value={addExProblem2}
+                    onChange={(e) => { setAddExProblem2(e.target.value); setAddExAnalyzed2(false) }}
+                    rows={3}
+                    placeholder="e.g., Solve for y: 5y + 3 = 28"
+                    className="w-full px-3 py-2 rounded-md text-sm font-mono outline-none resize-y"
+                    style={{ border: '1px solid var(--border)', color: 'var(--text)', background: 'var(--bg)' }}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text)' }}>Solution</label>
+                  <textarea
+                    value={addExSolution2}
+                    onChange={(e) => setAddExSolution2(e.target.value)}
+                    rows={3}
+                    placeholder="e.g., Subtract 3 from both sides: 5y = 25. Divide by 5: y = 5."
+                    className="w-full px-3 py-2 rounded-md text-sm font-mono outline-none resize-y"
+                    style={{ border: '1px solid var(--border)', color: 'var(--text)', background: 'var(--bg)' }}
+                  />
+                </div>
               </div>
 
               {/* Analyze button */}
@@ -2988,15 +3059,15 @@ export default function Home() {
                     cursor: (!addExProblem.trim() || !addExSolution.trim()) ? 'not-allowed' : 'pointer',
                   }}
                 >
-                  {addExAnalyzing ? 'Asking Ollama...' : '🤖 Auto-Detect Metadata'}
+                  {addExAnalyzing ? 'Asking Ollama...' : 'Auto-Detect Metadata'}
                 </button>
               )}
 
-              {/* Detected / editable metadata */}
+              {/* Detected / editable metadata — Example 1 */}
               {addExAnalyzed && (
                 <div className="space-y-3 p-3 rounded-md" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
                   <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-subtle)' }}>
-                    Detected Metadata <span className="font-normal normal-case">(override if incorrect)</span>
+                    Example 1 — Detected Metadata <span className="font-normal normal-case">(override if incorrect)</span>
                     {addExDetectionMethod && (
                       <span
                         className="ml-2 inline-block px-1.5 py-0.5 rounded text-[10px] font-medium normal-case"
@@ -3005,12 +3076,11 @@ export default function Home() {
                           color: addExDetectionMethod === 'ollama-llm' ? 'rgb(99,102,241)' : 'rgb(161,128,17)',
                         }}
                       >
-                        {addExDetectionMethod === 'ollama-llm' ? '🤖 LLM' : '📏 Rule-based'}
+                        {addExDetectionMethod === 'ollama-llm' ? 'LLM' : 'Rule-based'}
                       </span>
                     )}
                   </p>
                   <div className="grid grid-cols-2 gap-3">
-                    {/* Subject */}
                     <div>
                       <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Subject</label>
                       <select
@@ -3024,7 +3094,6 @@ export default function Home() {
                         <option value="pre-calculus">Pre-Calculus</option>
                       </select>
                     </div>
-                    {/* Difficulty */}
                     <div>
                       <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Difficulty</label>
                       <select
@@ -3038,7 +3107,6 @@ export default function Home() {
                         <option value="advanced">Advanced</option>
                       </select>
                     </div>
-                    {/* Type */}
                     <div>
                       <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Type</label>
                       <input
@@ -3055,7 +3123,6 @@ export default function Home() {
                         ))}
                       </datalist>
                     </div>
-                    {/* Concept */}
                     <div>
                       <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Concept</label>
                       <input
@@ -3067,22 +3134,98 @@ export default function Home() {
                       />
                     </div>
                   </div>
-
-                  {/* Save button */}
-                  <button
-                    type="button"
-                    onClick={saveExample}
-                    disabled={addExSaving || !addExSolution.trim()}
-                    className="w-full py-2 rounded-md text-sm font-medium transition-colors mt-2"
-                    style={{
-                      background: !addExSolution.trim() ? 'var(--border)' : '#16a34a',
-                      color: !addExSolution.trim() ? 'var(--text-muted)' : '#fff',
-                      cursor: !addExSolution.trim() ? 'not-allowed' : 'pointer',
-                    }}
-                  >
-                    {addExSaving ? 'Saving...' : 'Save to Example Bank'}
-                  </button>
                 </div>
+              )}
+
+              {/* Detected / editable metadata — Example 2 */}
+              {addExAnalyzed2 && (
+                <div className="space-y-3 p-3 rounded-md" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                  <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-subtle)' }}>
+                    Example 2 — Detected Metadata <span className="font-normal normal-case">(override if incorrect)</span>
+                    {addExDetectionMethod2 && (
+                      <span
+                        className="ml-2 inline-block px-1.5 py-0.5 rounded text-[10px] font-medium normal-case"
+                        style={{
+                          background: addExDetectionMethod2 === 'ollama-llm' ? 'rgba(99,102,241,0.15)' : 'rgba(234,179,8,0.15)',
+                          color: addExDetectionMethod2 === 'ollama-llm' ? 'rgb(99,102,241)' : 'rgb(161,128,17)',
+                        }}
+                      >
+                        {addExDetectionMethod2 === 'ollama-llm' ? 'LLM' : 'Rule-based'}
+                      </span>
+                    )}
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Subject</label>
+                      <select
+                        value={addExSubject2}
+                        onChange={(e) => setAddExSubject2(e.target.value)}
+                        className="w-full px-2 py-1.5 rounded text-sm outline-none"
+                        style={{ border: '1px solid var(--border)', color: 'var(--text)', background: 'var(--surface)' }}
+                      >
+                        <option value="algebra">Algebra</option>
+                        <option value="counting-probability">Counting & Probability</option>
+                        <option value="pre-calculus">Pre-Calculus</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Difficulty</label>
+                      <select
+                        value={addExDifficulty2}
+                        onChange={(e) => setAddExDifficulty2(e.target.value)}
+                        className="w-full px-2 py-1.5 rounded text-sm outline-none"
+                        style={{ border: '1px solid var(--border)', color: 'var(--text)', background: 'var(--surface)' }}
+                      >
+                        <option value="basic">Basic</option>
+                        <option value="intermediate">Intermediate</option>
+                        <option value="advanced">Advanced</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Type</label>
+                      <input
+                        value={addExType2}
+                        onChange={(e) => setAddExType2(e.target.value)}
+                        list="existing-types-list-2"
+                        className="w-full px-2 py-1.5 rounded text-sm font-mono outline-none"
+                        style={{ border: '1px solid var(--border)', color: 'var(--text)', background: 'var(--surface)' }}
+                        placeholder="e.g., solve_equation"
+                      />
+                      <datalist id="existing-types-list-2">
+                        {(addExExistingTypes[addExSubject2] || []).map((t) => (
+                          <option key={t} value={t} />
+                        ))}
+                      </datalist>
+                    </div>
+                    <div>
+                      <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Concept</label>
+                      <input
+                        value={addExConcept2}
+                        onChange={(e) => setAddExConcept2(e.target.value)}
+                        className="w-full px-2 py-1.5 rounded text-sm font-mono outline-none"
+                        style={{ border: '1px solid var(--border)', color: 'var(--text)', background: 'var(--surface)' }}
+                        placeholder="e.g., linear_equation_solving"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Save button */}
+              {addExAnalyzed && (
+                <button
+                  type="button"
+                  onClick={saveExample}
+                  disabled={addExSaving || !addExSolution.trim()}
+                  className="w-full py-2 rounded-md text-sm font-medium transition-colors"
+                  style={{
+                    background: !addExSolution.trim() ? 'var(--border)' : '#16a34a',
+                    color: !addExSolution.trim() ? 'var(--text-muted)' : '#fff',
+                    cursor: !addExSolution.trim() ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {addExSaving ? 'Saving...' : `Save ${addExAnalyzed2 ? '2 Examples' : '1 Example'} to Bank`}
+                </button>
               )}
 
               {/* Status message */}
