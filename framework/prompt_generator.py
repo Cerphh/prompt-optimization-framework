@@ -304,6 +304,9 @@ class PromptGenerator:
             print(f"Warning: Error parsing JSON file: {e}, few-shot will be unavailable")
             self.example_dataset = {}
 
+        # Build a reverse map: example type → subject, derived from the JSON.
+        self._type_to_subject: Dict[str, str] = self._build_type_to_subject_map()
+
         # Pre-cache example bank embeddings for hybrid similarity
         self._warm_example_embeddings()
 
@@ -727,6 +730,16 @@ class PromptGenerator:
             normalized[str(subject)] = subject_examples
 
         return normalized
+
+    def _build_type_to_subject_map(self) -> Dict[str, str]:
+        """Build a reverse map from example type → subject key using the loaded JSON."""
+        mapping: Dict[str, str] = {}
+        for subject, examples in self.example_dataset.items():
+            for ex in examples:
+                ex_type = ex.get("type")
+                if ex_type:
+                    mapping[ex_type] = subject
+        return mapping
     
     def generate_zero_shot(self, problem: str, subject: str = "general") -> str:
         """
@@ -2167,6 +2180,17 @@ class PromptGenerator:
         text = self._normalize_detection_text(problem)
 
         intent = self._detect_primary_intent(text)
+
+        # ── Primary: look up intent in the JSON-derived type→subject map ──
+        # This automatically stays in sync with example_problems.json.
+        if intent != "general" and intent in self._type_to_subject:
+            return self._type_to_subject[intent]
+        # Also check after resolving TYPE_ALIASES (e.g. "expand"→"polynomial_expansion").
+        resolved = self._normalize_type_label(intent)
+        if resolved != intent and resolved in self._type_to_subject:
+            return self._type_to_subject[resolved]
+
+        # ── Secondary: hardcoded sets for intents that have no example in JSON ──
         if intent in {
             "derivative",
             "integral",
@@ -2305,6 +2329,7 @@ class PromptGenerator:
 
         # Resolve subject, with auto-detection fallback when needed.
         self.example_dataset = self._normalize_example_dataset(self.example_dataset)
+        self._type_to_subject = self._build_type_to_subject_map()
         subject = self._resolve_subject_for_problem(normalized_problem, subject)
 
         # Auto-determine number of examples based on subject if not specified
