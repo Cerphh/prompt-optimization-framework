@@ -888,6 +888,38 @@ async def root():
     }
 
 
+@app.get("/example-types", tags=["Info"])
+async def example_types():
+    """Return the available few-shot example types grouped by subject and difficulty."""
+    raw = pipeline.prompt_generator.example_dataset
+    # raw is already normalized: subject -> flat list of examples
+    # Rebuild subject -> difficulty -> types from example metadata.
+    import json as _json, os as _os
+    json_path = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "framework", "example_problems.json")
+    try:
+        with open(json_path, "r", encoding="utf-8-sig") as f:
+            source = _json.load(f)
+    except Exception:
+        source = {}
+
+    result = {}
+    for subject, subject_val in source.items():
+        subject_out: dict = {}
+        if isinstance(subject_val, dict):
+            for diff, examples in subject_val.items():
+                if not isinstance(examples, list):
+                    continue
+                concepts: dict = {}
+                for ex in examples:
+                    c = ex.get("concept", ex.get("type", "general"))
+                    if c not in concepts:
+                        concepts[c] = {"concept": c, "count": 0, "sample": ex.get("problem", "")}
+                    concepts[c]["count"] += 1
+                subject_out[diff] = list(concepts.values())
+        result[subject] = subject_out
+    return result
+
+
 @app.get("/health", tags=["Health"])
 async def health_check():
     """Check if the API and model are operational."""

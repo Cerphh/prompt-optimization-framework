@@ -525,6 +525,8 @@ export default function Home() {
   const [compScoreFormat, setCompScoreFormat] = useState<ScoreDisplayFormat>('percent')
   const [benchmarkRuns, setBenchmarkRuns] = useState(CONSISTENCY_TEST_RUNS_PER_TECHNIQUE)
   const [coverageData, setCoverageData] = useState<{ problem_count: number; ground_truth_count: number; techniques_tested: string[]; win_counts: Record<string, number>; total_with_winner: number } | null>(null)
+  const [exampleTypes, setExampleTypes] = useState<Record<string, Record<string, { concept: string; count: number; sample: string }[]>>>({})
+  const [showExampleTypes, setShowExampleTypes] = useState(false)
 
   // Check API health
   useEffect(() => {
@@ -562,11 +564,29 @@ export default function Home() {
     return () => clearInterval(interval)
   }, [])
 
+  // Fetch available few-shot example types
+  useEffect(() => {
+    const fetchExampleTypes = async () => {
+      try {
+        const res = await fetch(apiUrl('/example-types'))
+        if (res.ok) {
+          const data = await res.json()
+          setExampleTypes(data)
+        }
+      } catch {
+        // silent – non-critical
+      }
+    }
+    fetchExampleTypes()
+  }, [])
+
   useEffect(() => {
     if (runMode === 'normal' && validationError === 'Benchmark mode requires an expected answer') {
       setValidationError('')
     }
   }, [runMode, validationError])
+
+  const formatTypeName = (t: string) => t.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 
   const normalizeDetectionText = (text: string): string => {
     const replacements: Record<string, string> = {
@@ -1318,6 +1338,42 @@ export default function Home() {
                 </div>
               </div>
 
+              {/* Available Few-Shot Concepts */}
+              {Object.keys(exampleTypes).length > 0 && (
+                <div className="mb-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowExampleTypes(!showExampleTypes)}
+                    className="flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded"
+                    style={{ color: 'var(--text-subtle)', background: 'var(--bg)', border: '1px solid var(--border)' }}
+                  >
+                    <span style={{ display: 'inline-block', transform: showExampleTypes ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}>▶</span>
+                    Available Few-Shot Concepts
+                  </button>
+                  {showExampleTypes && (
+                    <div className="mt-2 p-3 rounded-md text-xs space-y-3" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                      {Object.entries(exampleTypes).map(([subj, diffs]) => (
+                        <div key={subj}>
+                          <p className="font-semibold mb-1 capitalize" style={{ color: 'var(--text)' }}>{subj.replace(/-/g, ' & ').replace(/\b\w/g, c => c.toUpperCase())}</p>
+                          {Object.entries(diffs).map(([diff, types]) => (
+                            <div key={diff} className="ml-3 mb-1.5">
+                              <p className="font-medium capitalize" style={{ color: 'var(--text-subtle)' }}>{diff}</p>
+                              <ul className="ml-3 mt-0.5 space-y-0.5">
+                                {types.map((t) => (
+                                  <li key={t.concept} style={{ color: 'var(--text-muted)' }}>
+                                    {formatTypeName(t.concept)} <span className="opacity-60">({t.count} example{t.count !== 1 ? 's' : ''})</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {runMode === 'benchmark' && (
                 <div className="mb-4 p-3 rounded-md" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
                   <label htmlFor="ground-truth-landing" className="block text-sm font-medium mb-1.5">
@@ -1509,6 +1565,42 @@ export default function Home() {
                   <option value="advanced">Advanced</option>
                 </select>
               </div>
+
+              {/* Available Few-Shot Concepts (sidebar) */}
+              {Object.keys(exampleTypes).length > 0 && (
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setShowExampleTypes(!showExampleTypes)}
+                    className="flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded"
+                    style={{ color: 'var(--text-subtle)', background: 'var(--bg)', border: '1px solid var(--border)' }}
+                  >
+                    <span style={{ display: 'inline-block', transform: showExampleTypes ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}>▶</span>
+                    Available Few-Shot Concepts
+                  </button>
+                  {showExampleTypes && (
+                    <div className="mt-2 p-3 rounded-md text-xs space-y-3" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                      {Object.entries(exampleTypes).map(([subj, diffs]) => (
+                        <div key={subj}>
+                          <p className="font-semibold mb-1 capitalize" style={{ color: 'var(--text)' }}>{subj.replace(/-/g, ' & ').replace(/\b\w/g, c => c.toUpperCase())}</p>
+                          {Object.entries(diffs).map(([diff, types]) => (
+                            <div key={diff} className="ml-3 mb-1.5">
+                              <p className="font-medium capitalize" style={{ color: 'var(--text-subtle)' }}>{diff}</p>
+                              <ul className="ml-3 mt-0.5 space-y-0.5">
+                                {types.map((t) => (
+                                  <li key={t.concept} style={{ color: 'var(--text-muted)' }}>
+                                    {formatTypeName(t.concept)} <span className="opacity-60">({t.count} example{t.count !== 1 ? 's' : ''})</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {runMode === 'benchmark' && (
                 <div className="p-3 rounded-md" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
@@ -2159,6 +2251,33 @@ export default function Home() {
 
                 {/* Body */}
                 <div className="p-6 space-y-6">
+                  {/* Available Few-Shot Concepts (always visible reference) */}
+                  {Object.keys(exampleTypes).length > 0 && (
+                    <details className="text-xs">
+                      <summary
+                        className="text-[11px] font-mono uppercase tracking-wider cursor-pointer select-none hover:underline"
+                        style={{ color: 'var(--text-subtle)' }}
+                      >
+                        Available Few-Shot Concepts
+                      </summary>
+                      <div className="mt-2 p-4 rounded-md space-y-3" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                        {Object.entries(exampleTypes).map(([subj, diffs]) => (
+                          <div key={subj}>
+                            <p className="font-semibold mb-1" style={{ color: 'var(--text)' }}>{subj.replace(/-/g, ' & ').replace(/\b\w/g, c => c.toUpperCase())}</p>
+                            {Object.entries(diffs).map(([diff, types]) => (
+                              <div key={diff} className="ml-3 mb-1">
+                                <span className="font-medium capitalize" style={{ color: 'var(--text-subtle)' }}>{diff}:</span>{' '}
+                                <span style={{ color: 'var(--text-muted)' }}>
+                                  {types.map(t => `${formatTypeName(t.concept)} (${t.count})`).join(', ')}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+
                   {/* Prompt Used (collapsible) */}
                   <details>
                     <summary
