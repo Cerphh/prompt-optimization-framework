@@ -1422,8 +1422,75 @@ class PromptGenerator:
         if re.search(r"\b[a-z]\s*\(\s*[a-z]\s*\(", value):
             return "function_composition"
 
+        # ── Pre-Calculus specific detectors ──
         trig_markers = ["sin", "cos", "tan", "sec", "csc", "cot", "arcsin", "arccos", "arctan", "radian", "degrees"]
-        if any(re.search(rf"\b{re.escape(marker)}\b", value) for marker in trig_markers):
+        has_trig = any(re.search(rf"\b{re.escape(marker)}\b", value) for marker in trig_markers)
+
+        # Parametric / vector function evaluation: r(t) = ⟨...⟩, find r(number)
+        # Must come before function_evaluation to avoid false positive on r(6).
+        if re.search(r'[⟨<]', value) and re.search(r'\b[a-z]\s*\(\s*\d+\s*\)', value) and \
+           re.search(r'\b[a-z]\s*\(\s*[a-z]\s*\)', value):
+            return "parametric_vector_function"
+
+        # Function evaluation: "f(number)" or "find f(3)" patterns
+        if re.search(r'\b[a-z]\s*\(\s*[-+]?\d+\s*\)', value) and \
+           any(m in value for m in ["find", "evaluate", "calculate", "what is", "let"]) and \
+           not has_trig and "solve" not in value:
+            return "function_evaluation"
+
+        # Slope formula: "slope of the line through" two points
+        if "slope" in value and any(m in value for m in ["through", "between", "passing"]) and \
+           re.search(r'\(\s*[-+]?\d+\s*,\s*[-+]?\d+\s*\)', value):
+            return "slope_formula"
+
+        # Angle conversion: "convert ... degrees/radians"
+        if any(m in value for m in ["convert", "express"]) and \
+           any(m in value for m in ["degree", "degrees", "radian", "radians", "°"]):
+            return "angle_conversion"
+
+        # Matrix determinant / singular: "non-invertible", "singular", "det"
+        if any(m in value for m in ["matrix", "det("]) and \
+           any(m in value for m in ["non-invertible", "singular", "invertible", "determinant"]):
+            return "matrix_determinant"
+
+        # Law of sines / cosines: triangle side-angle problems
+        if any(m in value for m in ["law of sines", "law of cosines", "sine rule", "cosine rule"]):
+            return "law_of_sines"
+        # Triangle problems with named sides/angles: "In △ABC, a = 9, ... A = 45°"
+        if re.search(r'△|\\triangle|\btriangle\b', value) and has_trig and \
+           re.search(r'find\s+sin\b', value):
+            return "law_of_sines"
+
+        # Vector magnitude: |u + v| or |u - v| with unit vectors
+        if "unit vector" in value and re.search(r'\|[a-z]\s*[+\-]\s*[a-z]\|', value):
+            return "vector_magnitude"
+
+        # Dot product / orthogonality: "orthogonal" or "perpendicular" with vectors
+        if any(m in value for m in ["orthogonal", "perpendicular"]) and \
+           (re.search(r'[⟨<]\s*[-+]?\d+', value) or "vector" in value or "dot product" in value):
+            return "dot_product_orthogonality"
+
+        # Harmonic form: "maximum/minimum value of a cos x + b sin x"
+        if has_trig and re.search(r'\b(maximum|minimum)\s+(value)', value) and \
+           re.search(r'\d+\s*(cos|sin)\s*[a-z]\s*[+\-]\s*\d+\s*(cos|sin)', value):
+            return "harmonic_form"
+
+        # Trigonometric equation: "solve" + trig function
+        if has_trig and any(m in value for m in ["solve", "find x", "find all", "for x"]) and "=" in value:
+            return "trigonometric_equation"
+
+        # Trigonometric identity: "simplify" / "show that" / "prove" + trig
+        if has_trig and any(m in value for m in ["simplify", "show that", "prove", "verify", "identity"]):
+            return "trigonometric_identity"
+
+        # Trigonometric exact values: "evaluate sin/cos/tan(number°)"
+        if has_trig and re.search(r'\b(evaluate|find|what is)\b', value) and \
+           re.search(r'(sin|cos|tan|sec|csc|cot)\s*\(?\s*\d+\s*°?\s*\)?', value) and \
+           "=" not in value:
+            return "trigonometric_values"
+
+        # Generic trig fallback (must come after all specific pre-calc trig detectors)
+        if has_trig:
             return "trigonometric"
 
         if "derivative" in value or "differentiate" in value:
@@ -1610,6 +1677,14 @@ class PromptGenerator:
         "counting_arrangements", "counting_principle", "combination",
         "counting_with_restrictions", "division_into_groups",
     })
+    _TRIG_TYPES = frozenset({
+        "trigonometric", "trigonometric_values", "trigonometric_identity",
+        "trigonometric_equation", "harmonic_form",
+    })
+    _VECTOR_TYPES = frozenset({
+        "dot_product_orthogonality", "vector_magnitude",
+        "parametric_vector_function",
+    })
 
     def _intents_compatible(self, intent_a: str, intent_b: str) -> bool:
         """Check whether two intents are compatible for strict matching."""
@@ -1620,6 +1695,10 @@ class PromptGenerator:
         if intent_a in self._PROBABILITY_TYPES and intent_b in self._PROBABILITY_TYPES:
             return True
         if intent_a in self._COUNTING_TYPES and intent_b in self._COUNTING_TYPES:
+            return True
+        if intent_a in self._TRIG_TYPES and intent_b in self._TRIG_TYPES:
+            return True
+        if intent_a in self._VECTOR_TYPES and intent_b in self._VECTOR_TYPES:
             return True
         return False
 
@@ -2200,6 +2279,18 @@ class PromptGenerator:
             "function_analysis",
             "coordinate_conversion",
             "function_composition",
+            "function_evaluation",
+            "slope_formula",
+            "angle_conversion",
+            "trigonometric_values",
+            "harmonic_form",
+            "trigonometric_identity",
+            "dot_product_orthogonality",
+            "trigonometric_equation",
+            "law_of_sines",
+            "parametric_vector_function",
+            "vector_magnitude",
+            "matrix_determinant",
         }:
             return "pre-calculus"
         if intent in {

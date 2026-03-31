@@ -1201,5 +1201,493 @@
         "anchor_priority": 0.85
       }
     ]
+  },
+  "pre-calculus": {
+    "basic": [
+      {
+        "problem": "Let f(x) = 3x\u00b2 + 1. Find f(3).",
+        "solution": "Substitute x = 3: f(3) = 3(9) + 1 = 27 + 1 = \\boxed{28}.",
+        "type": "function_evaluation",
+        "constraints": [],
+        "concept": "function_evaluation",
+        "skills": ["substitution", "arithmetic"],
+        "format": {
+          "template": "function_evaluation",
+          "equation_count": 1,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": false,
+          "has_exponent": true,
+          "has_system": false
+        },
+        "difficulty": "basic",
+        "tags": ["pre-calculus", "function_evaluation", "substitution"],
+        "anchor_priority": 0.95
+      },
+      {
+        "problem": "Let g(x) = 5x\u00b2 \u2212 7. Find g(\u22122).",
+        "solution": "Substitute x = \u22122: g(\u22122) = 5(4) \u2212 7 = 20 \u2212 7 = \\boxed{13}.",
+        "type": "function_evaluation",
+        "constraints": [],
+        "concept": "function_evaluation",
+        "skills": ["substitution", "arithmetic"],
+        "format": {
+          "template": "function_evaluation",
+          "equation_count": 1,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": false,
+          "has_exponent": true,
+          "has_system": false
+        },
+        "difficulty": "basic",
+        "tags": ["pre-calculus", "function_evaluation", "substitution"],
+        "anchor_priority": 0.95
+      },
+      {
+        "problem": "Find the slope of the line through (1, 5) and (7, \u22127).",
+        "solution": "slope = (\u22127 \u2212 5)/(7 \u2212 1) = \u221212/6 = \\boxed{-2}.",
+        "type": "slope_formula",
+        "constraints": [],
+        "concept": "slope_formula",
+        "skills": ["slope_calculation", "coordinate_geometry"],
+        "format": {
+          "template": "slope_between_points",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": true,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "basic",
+        "tags": ["pre-calculus", "slope", "coordinate_geometry"],
+        "anchor_priority": 0.90
+      },
+      {
+        "problem": "Find the slope of the line through (3, \u22121) and (\u22123, 11).",
+        "solution": "slope = (11 \u2212 (\u22121))/(\u22123 \u2212 3) = 12/(\u22126) = \\boxed{-2}.",
+        "type": "slope_formula",
+        "constraints": [],
+        "concept": "slope_formula",
+        "skills": ["slope_calculation", "coordinate_geometry"],
+        "format": {
+          "template": "slope_between_points",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": true,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "basic",
+        "tags": ["pre-calculus", "slope", "coordinate_geometry"],
+        "anchor_priority": 0.90
+      },
+      {
+        "problem": "Convert 150\u00b0 to radians.",
+        "solution": "150\u00b0 \u00d7 \u03c0/180 = 150\u03c0/180 = \\boxed{5\\pi/6}.",
+        "type": "angle_conversion",
+        "constraints": [],
+        "concept": "angle_conversion",
+        "skills": ["unit_conversion", "radian_degree"],
+        "format": {
+          "template": "degree_to_radian",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": true,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "basic",
+        "tags": ["pre-calculus", "angle_conversion", "radians"],
+        "anchor_priority": 0.90
+      },
+      {
+        "problem": "Convert 300\u00b0 to radians.",
+        "solution": "300\u00b0 \u00d7 \u03c0/180 = 300\u03c0/180 = \\boxed{5\\pi/3}.",
+        "type": "angle_conversion",
+        "constraints": [],
+        "concept": "angle_conversion",
+        "skills": ["unit_conversion", "radian_degree"],
+        "format": {
+          "template": "degree_to_radian",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": true,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "basic",
+        "tags": ["pre-calculus", "angle_conversion", "radians"],
+        "anchor_priority": 0.90
+      },
+      {
+        "problem": "Evaluate cos(60\u00b0).",
+        "solution": "cos(60\u00b0) = \\boxed{1/2}.",
+        "type": "trigonometric_values",
+        "constraints": [],
+        "concept": "trigonometric_values",
+        "skills": ["trig_evaluation", "unit_circle"],
+        "format": {
+          "template": "trig_exact_value",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": true,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "basic",
+        "tags": ["pre-calculus", "trigonometry", "exact_values"],
+        "anchor_priority": 0.90
+      },
+      {
+        "problem": "Evaluate sin(30\u00b0).",
+        "solution": "sin(30\u00b0) = \\boxed{1/2}.",
+        "type": "trigonometric_values",
+        "constraints": [],
+        "concept": "trigonometric_values",
+        "skills": ["trig_evaluation", "unit_circle"],
+        "format": {
+          "template": "trig_exact_value",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": true,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "basic",
+        "tags": ["pre-calculus", "trigonometry", "exact_values"],
+        "anchor_priority": 0.90
+      }
+    ],
+    "intermediate": [
+      {
+        "problem": "Find the maximum value of 3 cos x + 4 sin x.",
+        "solution": "Maximum = \u221a(3\u00b2 + 4\u00b2) = \u221a(9 + 16) = \u221a25 = \\boxed{5}.",
+        "type": "harmonic_form",
+        "constraints": [],
+        "concept": "harmonic_form",
+        "skills": ["harmonic_form", "amplitude"],
+        "format": {
+          "template": "trig_optimization",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": false,
+          "has_exponent": true,
+          "has_system": false
+        },
+        "difficulty": "intermediate",
+        "tags": ["pre-calculus", "harmonic_form", "trig_optimization"],
+        "anchor_priority": 0.90
+      },
+      {
+        "problem": "Find the maximum value of 7 cos x + 24 sin x.",
+        "solution": "Maximum = \u221a(7\u00b2 + 24\u00b2) = \u221a(49 + 576) = \u221a625 = \\boxed{25}.",
+        "type": "harmonic_form",
+        "constraints": [],
+        "concept": "harmonic_form",
+        "skills": ["harmonic_form", "amplitude"],
+        "format": {
+          "template": "trig_optimization",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": false,
+          "has_exponent": true,
+          "has_system": false
+        },
+        "difficulty": "intermediate",
+        "tags": ["pre-calculus", "harmonic_form", "trig_optimization"],
+        "anchor_priority": 0.90
+      },
+      {
+        "problem": "Simplify: cos\u00b2x \u2212 sin\u00b2x + 2sin x cos x.",
+        "solution": "cos\u00b2x \u2212 sin\u00b2x = cos 2x and 2 sin x cos x = sin 2x, so the expression equals cos 2x + sin 2x = \\boxed{\\cos 2x + \\sin 2x}.",
+        "type": "trigonometric_identity",
+        "constraints": [],
+        "concept": "trigonometric_identity",
+        "skills": ["double_angle", "identity_simplification"],
+        "format": {
+          "template": "trig_simplification",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": false,
+          "has_exponent": true,
+          "has_system": false
+        },
+        "difficulty": "intermediate",
+        "tags": ["pre-calculus", "trigonometric_identity", "double_angle"],
+        "anchor_priority": 0.85
+      },
+      {
+        "problem": "Show that (1 \u2212 cos 2\u03b8)/(sin 2\u03b8) = tan \u03b8.",
+        "solution": "1 \u2212 cos 2\u03b8 = 2 sin\u00b2\u03b8 and sin 2\u03b8 = 2 sin \u03b8 cos \u03b8. So (2 sin\u00b2\u03b8)/(2 sin \u03b8 cos \u03b8) = sin \u03b8/cos \u03b8 = \\boxed{\\tan \\theta}.",
+        "type": "trigonometric_identity",
+        "constraints": [],
+        "concept": "trigonometric_identity",
+        "skills": ["double_angle", "identity_proof"],
+        "format": {
+          "template": "trig_identity_proof",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": true,
+          "has_exponent": true,
+          "has_system": false
+        },
+        "difficulty": "intermediate",
+        "tags": ["pre-calculus", "trigonometric_identity", "double_angle"],
+        "anchor_priority": 0.85
+      },
+      {
+        "problem": "Vectors u = \u27e83, a\u27e9 and v = \u27e86, \u22129\u27e9 are orthogonal. Find a.",
+        "solution": "u \u00b7 v = 0 \u2192 3(6) + a(\u22129) = 0 \u2192 18 \u2212 9a = 0 \u2192 a = \\boxed{2}.",
+        "type": "dot_product_orthogonality",
+        "constraints": [],
+        "concept": "dot_product_orthogonality",
+        "skills": ["dot_product", "orthogonality_condition"],
+        "format": {
+          "template": "orthogonal_vectors",
+          "equation_count": 1,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": false,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "intermediate",
+        "tags": ["pre-calculus", "vectors", "dot_product", "orthogonality"],
+        "anchor_priority": 0.90
+      },
+      {
+        "problem": "Vectors p = \u27e82, b\u27e9 and q = \u27e85, \u221210\u27e9 are perpendicular. Find b.",
+        "solution": "p \u00b7 q = 0 \u2192 2(5) + b(\u221210) = 0 \u2192 10 \u2212 10b = 0 \u2192 b = \\boxed{1}.",
+        "type": "dot_product_orthogonality",
+        "constraints": [],
+        "concept": "dot_product_orthogonality",
+        "skills": ["dot_product", "orthogonality_condition"],
+        "format": {
+          "template": "orthogonal_vectors",
+          "equation_count": 1,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": false,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "intermediate",
+        "tags": ["pre-calculus", "vectors", "dot_product", "orthogonality"],
+        "anchor_priority": 0.90
+      },
+      {
+        "problem": "Solve 2 sin 2x = 1 for x \u2208 [0\u00b0, 360\u00b0].",
+        "solution": "sin 2x = 1/2 \u2192 2x = 30\u00b0, 150\u00b0, 390\u00b0, 510\u00b0 \u2192 x = \\boxed{15\u00b0, 75\u00b0, 195\u00b0, 255\u00b0}.",
+        "type": "trigonometric_equation",
+        "constraints": ["interval_restriction"],
+        "concept": "trigonometric_equation",
+        "skills": ["trig_equation_solving", "double_angle"],
+        "format": {
+          "template": "trig_equation",
+          "equation_count": 1,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": true,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "intermediate",
+        "tags": ["pre-calculus", "trigonometric_equation", "double_angle"],
+        "anchor_priority": 0.85
+      },
+      {
+        "problem": "Solve cos 2x = 0 for x \u2208 [0\u00b0, 360\u00b0].",
+        "solution": "2x = 90\u00b0, 270\u00b0, 450\u00b0, 630\u00b0 \u2192 x = \\boxed{45\u00b0, 135\u00b0, 225\u00b0, 315\u00b0}.",
+        "type": "trigonometric_equation",
+        "constraints": ["interval_restriction"],
+        "concept": "trigonometric_equation",
+        "skills": ["trig_equation_solving", "double_angle"],
+        "format": {
+          "template": "trig_equation",
+          "equation_count": 1,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": false,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "intermediate",
+        "tags": ["pre-calculus", "trigonometric_equation", "double_angle"],
+        "anchor_priority": 0.85
+      }
+    ],
+    "advanced": [
+      {
+        "problem": "In \u25b3ABC, a = 8, b = 15, A = 30\u00b0. Find sin B.",
+        "solution": "By the Law of Sines: sin B / b = sin A / a \u2192 sin B = 15 sin 30\u00b0 / 8 = 15(1/2)/8 = \\boxed{15/16}.",
+        "type": "law_of_sines",
+        "constraints": [],
+        "concept": "law_of_sines",
+        "skills": ["law_of_sines", "triangle_solving"],
+        "format": {
+          "template": "triangle_sines",
+          "equation_count": 1,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": true,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "advanced",
+        "tags": ["pre-calculus", "law_of_sines", "triangle"],
+        "anchor_priority": 0.90
+      },
+      {
+        "problem": "In \u25b3PQR, p = 7, q = 14, P = 30\u00b0. Find sin Q.",
+        "solution": "By the Law of Sines: sin Q / q = sin P / p \u2192 sin Q = 14 sin 30\u00b0 / 7 = 14(1/2)/7 = \\boxed{1}.",
+        "type": "law_of_sines",
+        "constraints": [],
+        "concept": "law_of_sines",
+        "skills": ["law_of_sines", "triangle_solving"],
+        "format": {
+          "template": "triangle_sines",
+          "equation_count": 1,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": true,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "advanced",
+        "tags": ["pre-calculus", "law_of_sines", "triangle"],
+        "anchor_priority": 0.90
+      },
+      {
+        "problem": "r(t) = \u27e81 + 2t, 5 \u2212 t, 3 + 4t\u27e9. Find r(3).",
+        "solution": "r(3) = \u27e81 + 6, 5 \u2212 3, 3 + 12\u27e9 = \\boxed{\u27e87, 2, 15\u27e9}.",
+        "type": "parametric_vector_function",
+        "constraints": [],
+        "concept": "parametric_vector_function",
+        "skills": ["parametric_evaluation", "vector_functions"],
+        "format": {
+          "template": "vector_function_eval",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": false,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "advanced",
+        "tags": ["pre-calculus", "parametric", "vector_function"],
+        "anchor_priority": 0.85
+      },
+      {
+        "problem": "r(t) = \u27e84t, 3 \u2212 2t, 1 + t\u27e9. Find r(5).",
+        "solution": "r(5) = \u27e820, 3 \u2212 10, 1 + 5\u27e9 = \\boxed{\u27e820, -7, 6\u27e9}.",
+        "type": "parametric_vector_function",
+        "constraints": [],
+        "concept": "parametric_vector_function",
+        "skills": ["parametric_evaluation", "vector_functions"],
+        "format": {
+          "template": "vector_function_eval",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": false,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "advanced",
+        "tags": ["pre-calculus", "parametric", "vector_function"],
+        "anchor_priority": 0.85
+      },
+      {
+        "problem": "Unit vectors u and v satisfy |u + v| = \u221a3. Find |u \u2212 v|.",
+        "solution": "|u + v|\u00b2 = |u|\u00b2 + 2u\u00b7v + |v|\u00b2 = 1 + 2u\u00b7v + 1 = 3 \u2192 u\u00b7v = 1/2. Then |u \u2212 v|\u00b2 = 1 \u2212 2(1/2) + 1 = 1 \u2192 |u \u2212 v| = \\boxed{1}.",
+        "type": "vector_magnitude",
+        "constraints": [],
+        "concept": "vector_magnitude",
+        "skills": ["vector_magnitude", "dot_product_identity"],
+        "format": {
+          "template": "vector_magnitude_relation",
+          "equation_count": 1,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": false,
+          "has_exponent": true,
+          "has_system": false
+        },
+        "difficulty": "advanced",
+        "tags": ["pre-calculus", "vectors", "magnitude", "dot_product"],
+        "anchor_priority": 0.85
+      },
+      {
+        "problem": "Unit vectors a and b satisfy |a \u2212 b| = 1. Find |a + b|.",
+        "solution": "|a \u2212 b|\u00b2 = |a|\u00b2 \u2212 2a\u00b7b + |b|\u00b2 = 1 \u2212 2a\u00b7b + 1 = 1 \u2192 a\u00b7b = 1/2. Then |a + b|\u00b2 = 1 + 2(1/2) + 1 = 3 \u2192 |a + b| = \\boxed{\\sqrt{3}}.",
+        "type": "vector_magnitude",
+        "constraints": [],
+        "concept": "vector_magnitude",
+        "skills": ["vector_magnitude", "dot_product_identity"],
+        "format": {
+          "template": "vector_magnitude_relation",
+          "equation_count": 1,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": false,
+          "has_exponent": true,
+          "has_system": false
+        },
+        "difficulty": "advanced",
+        "tags": ["pre-calculus", "vectors", "magnitude", "dot_product"],
+        "anchor_priority": 0.85
+      },
+      {
+        "problem": "Matrix A = [[2, k],[8, 12]]. For what value of k is A non-invertible?",
+        "solution": "A is non-invertible when det(A) = 0 \u2192 2(12) \u2212 8k = 0 \u2192 24 \u2212 8k = 0 \u2192 k = \\boxed{3}.",
+        "type": "matrix_determinant",
+        "constraints": [],
+        "concept": "matrix_determinant",
+        "skills": ["determinant", "singular_matrix"],
+        "format": {
+          "template": "matrix_singular_condition",
+          "equation_count": 1,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": false,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "advanced",
+        "tags": ["pre-calculus", "matrix", "determinant", "singular"],
+        "anchor_priority": 0.90
+      },
+      {
+        "problem": "Matrix B = [[5, 15],[k, 9]]. For what value of k is B singular?",
+        "solution": "B is singular when det(B) = 0 \u2192 5(9) \u2212 15k = 0 \u2192 45 \u2212 15k = 0 \u2192 k = \\boxed{3}.",
+        "type": "matrix_determinant",
+        "constraints": [],
+        "concept": "matrix_determinant",
+        "skills": ["determinant", "singular_matrix"],
+        "format": {
+          "template": "matrix_singular_condition",
+          "equation_count": 1,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": false,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "advanced",
+        "tags": ["pre-calculus", "matrix", "determinant", "singular"],
+        "anchor_priority": 0.90
+      }
+    ]
   }
 }

@@ -35,7 +35,7 @@ def test_detect_primary_intent_counting_and_expected_value_goals():
 def test_detect_primary_intent_precalculus_goal_patterns():
     generator = PromptGenerator()
 
-    assert generator._detect_primary_intent("Find sin(75 degrees).") == "trigonometric"
+    assert generator._detect_primary_intent("Find sin(75 degrees).") == "trigonometric_values"
     assert (
         generator._detect_primary_intent("Find the domain and asymptote of f(x) = 1/(x-2).")
         == "function_analysis"

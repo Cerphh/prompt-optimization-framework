@@ -622,7 +622,8 @@ export default function Home() {
     const hasVariable = /\b[a-z]\b|\d+[a-z]|[a-z]\d/.test(lowerText)
     if (!hasVariable) return false
 
-    const explicitPrecalculus = /\bd\/dx\b|\bdy\/dx\b|∫|\bderivative\b|\bdifferentiate\b|\bintegral\b|\bintegrate\b|\blimit\b|\blim\b|\bsin\b|\bcos\b|\btan\b|\bsec\b|\bcsc\b|\bcot\b|\barcsin\b|\barccos\b|\barctan\b/.test(lowerText)
+    // Exclude pre-calculus / trig / vector / matrix problems
+    const explicitPrecalculus = /\bd\/dx\b|\bdy\/dx\b|∫|\bderivative\b|\bdifferentiate\b|\bintegral\b|\bintegrate\b|\blimit\b|\blim\b|\bsin\b|\bcos\b|\btan\b|\bsec\b|\bcsc\b|\bcot\b|\barcsin\b|\barccos\b|\barctan\b|\bslope\b|\bconvert\b|\bradian|\bdegree|\bmatrix\b|\bdet\b|\bsingular\b|\bnon-invertible\b|\binvertible\b|\bdeterminant\b|\borthogonal\b|\bperpendicular\b|\bvector|\bunit vector|\b[⟨<]|\btriangle\b|△|\blaw of sines\b|\blaw of cosines\b|\br\s*\(\s*t\s*\)/.test(lowerText)
     if (explicitPrecalculus) return false
 
     if (/\bsolve\b|\bsolution\b|\bsolutions\b|\broot\b|\broots\b|\bequation\b|\bpolynomial\b|\bfactor\b|\bfind x\b|\bsolve for\b/.test(lowerText)) {
@@ -655,9 +656,18 @@ export default function Home() {
                  'second derivative', 'critical point', 'antiderivative', 'riemann', 'area under',
                  'function', 'exponential', 'logarithmic', 'sequence', 'series', 'convergence',
                  'graph', 'asymptote', 'domain', 'range', 'inverse function', 'composite function',
-                 'trigonometric', 'sine', 'cosine', 'tangent function', 'periodic'],
+                 'trigonometric', 'sine', 'cosine', 'tangent function', 'periodic',
+                 'radian', 'degrees', 'convert', 'angle', 'unit circle',
+                 'vector', 'orthogonal', 'perpendicular', 'dot product', 'magnitude',
+                 'matrix', 'determinant', 'singular', 'non-invertible', 'invertible',
+                 'law of sines', 'law of cosines', 'triangle', 'parametric',
+                 'harmonic', 'identity', 'double angle'],
       patterns: [/d\/dx/, /∫/, /lim|limit/, /derivative|derivatives/, /integral|integrate/i, 
-             /exponential|logarithm|log\(/, /sin|cos|tan|graph|function/, /find.*(derivative|integral|limit|domain|range|asymptote)/],
+             /exponential|logarithm|log\(/, /sin|cos|tan|graph|function/, /find.*(derivative|integral|limit|domain|range|asymptote)/,
+             /\bslope\b.*through/, /convert.*(?:degree|radian)/, /evaluate\s+(?:sin|cos|tan)/,
+             /maximum\s+value\s+of\s+\d+\s*(?:cos|sin)/, /orthogonal|perpendicular/,
+             /matrix.*(?:singular|invertible|determinant)/, /△|\\triangle/,
+             /\br\s*\(\s*t\s*\)/, /unit\s+vector/, /⟨|⟩/],
       problemGoals: ['solve', 'find', 'graph', 'calculate', 'determine'],  // What user wants to do
       symbols: ['dx', 'dy', 'dy/dx', '∫', 'e^', 'ln(', 'sin', 'cos', 'tan', '^'],
       operations: ['derivative', 'integral', 'limit', 'exponential growth'],
@@ -684,11 +694,11 @@ export default function Home() {
     }
     
     const algebraPatterns = {
-      keywords: ['solve', 'solve for', 'factor', 'factorize', 'simplify', 'expand', 'quadratic', 
-                 'equation', 'polynomial', 'linear', 'matrix', 'system of equations', 'roots', 'zero', 'parabola',
+      keywords: ['solve', 'solve for', 'factor', 'factorize', 'expand', 'quadratic', 
+                 'equation', 'polynomial', 'linear', 'system of equations', 'roots', 'zero', 'parabola',
                  'binomial', 'trinomial', 'monomial', 'rational', 'radical', 'algebraic', 'real solutions', 'real roots',
-                 'expression', 'substitute', 'inequality', 'variable', 'coefficient'],
-      patterns: [/solve (for|x|y|z)/, /factor|factorize/, /simplify/, /expand/, /quadratic/i,
+                 'substitute', 'inequality', 'variable', 'coefficient'],
+      patterns: [/solve (for|x|y|z)/, /factor|factorize/, /expand/, /quadratic/i,
                  /equation(s)?/, /polynomial/, /inequality/, /system.*equation/],
       problemGoals: ['solve', 'find', 'factor', 'simplify', 'expand'],
       symbols: ['=', '≠', '<', '>', '≤', '≥', 'x', 'x²', 'y'],
