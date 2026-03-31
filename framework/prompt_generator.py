@@ -5,8 +5,12 @@ Generates multiple prompting strategies for comparative benchmarking.
 
 from typing import Any, List, Dict, Optional, Set, Tuple
 import json
+import logging
+import math
 import os
 import re
+
+logger = logging.getLogger(__name__)
 
 PROBLEM_KEYWORDS = {
     # Algebra - solving
@@ -211,7 +215,78 @@ class PromptGenerator:
         "Solve the following math problem and end with a concise final answer. "
         "Do NOT show steps or explanations."
     )
-    
+
+    # ------------------------------------------------------------------ #
+    #  Hybrid 3-layer similarity (mirrors Tier-1 profile matching)        #
+    # ------------------------------------------------------------------ #
+    _HYBRID_W_EMBED = 0.60
+    _HYBRID_W_FEATURES = 0.25
+    _HYBRID_W_LEXICAL = 0.15
+
+    _TYPE_FEATURES = {
+        "linear", "quadratic", "cubic", "quartic",
+        "system_of_equations", "rational_equation",
+        "factoring", "simplify", "expand",
+        "derivative", "integral", "limit",
+        "probability", "conditional_probability",
+        "permutation", "combination", "expected_value",
+        "trigonometric", "logarithm", "exponential",
+        "sequence_series", "conic_section",
+        "coordinate_geometry", "polynomial", "rational",
+        "matrix",
+    }
+
+    _MATH_FEATURE_PATTERNS_HYBRID = [
+        (r"\b(quadratic|[a-z]\^2|[a-z]²)\b", "quadratic"),
+        (r"\b(cubic|[a-z]\^3|[a-z]³)\b", "cubic"),
+        (r"\b(quartic|[a-z]\^4|[a-z]⁴)\b", "quartic"),
+        (r"(?<!\w)(linear)\b|(?:^|[^a-z/])(\d*[a-z]\s*[+\-]\s*\d+\s*=)|(?:^|[^a-z/])(\d+[a-z]\s*=\s*\d)", "linear"),
+        (r"\b(system|simultaneous)\b", "system_of_equations"),
+        (r"\d+\s*/\s*[a-z]|\d+\s*/\s*\([^)]*[a-z]", "rational_equation"),
+        (r"\b(factor|factoring|factorise|factorize)\b", "factoring"),
+        (r"\b(simplif|simplify|reduce)\b", "simplify"),
+        (r"\b(expand|distribute)\b", "expand"),
+        (r"\b(solve|find\s+(?:the\s+)?(?:value|root|solution|x|y|z))\b", "solve"),
+        (r"\b(derivative|differentiat|d/dx|dy/dx)\b|∂", "derivative"),
+        (r"\b(integral|integrat)\b|∫", "integral"),
+        (r"\b(limit|lim)\b", "limit"),
+        (r"\b(probability|p\(|chance|odds|likely|likelihood)\b", "probability"),
+        (r"\b(given\s+that|conditional|bayes)\b|\|", "conditional_probability"),
+        (r"\b(permutation|arrange|arrangement|how\s+many\s+ways)\b", "permutation"),
+        (r"\b(combination|choose|selecting|subset)\b", "combination"),
+        (r"\b(expected\s+value|expectation|E\()\b", "expected_value"),
+        (r"\b(sin|cos|tan|sec|csc|cot|arcsin|arccos|arctan)\b", "trigonometric"),
+        (r"\b(logarithm|log|ln)\b|\\log", "logarithm"),
+        (r"\b(exponential|e\^|exp\()\b|\d+\^\s*\(?\s*\d*\s*[a-z]", "exponential"),
+        (r"\b(polynomial)\b", "polynomial"),
+        (r"\b(rational\s+expression|rational\s+function)\b", "rational"),
+        (r"\b(sequence|series|arithmetic\s+sequence|geometric\s+sequence|nth\s+term)\b", "sequence_series"),
+        (r"\b(matrix|matrices|determinant)\b", "matrix"),
+        (r"\b(circle|ellipse|parabola|hyperbola|conic)\b", "conic_section"),
+        (r"\b(slope|intercept|midpoint|distance\s+formula)\b", "coordinate_geometry"),
+        (r"[<>]=?|\\le|\\ge|≤|≥", "inequality"),
+        (r"\\frac|/", "fraction"),
+        (r"\^|²|³|⁴", "exponent"),
+        (r"\bwhen\b[^.?]*[a-z]\s*=\s*\S+\s*(?:,?\s*(?:and|&)\s*)[a-z]\s*=", "multi_variable_substitution"),
+        (r"\\sqrt|√|root", "radical"),
+        (r"%|percent", "percent"),
+    ]
+
+    _STOP_WORDS = {
+        "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
+        "have", "has", "had", "do", "does", "did", "will", "would", "could",
+        "should", "may", "might", "shall", "can", "need", "dare", "ought",
+        "used", "to", "of", "in", "for", "on", "with", "at", "by", "from",
+        "as", "into", "through", "during", "before", "after", "above",
+        "below", "between", "out", "off", "over", "under", "again",
+        "further", "then", "once", "here", "there", "when", "where", "why",
+        "how", "all", "both", "each", "few", "more", "most", "other",
+        "some", "such", "no", "nor", "not", "only", "own", "same", "so",
+        "than", "too", "very", "just", "because", "but", "and", "or", "if",
+        "while", "that", "this", "these", "those", "it", "its", "what",
+        "which", "who", "whom",
+    }
+
     def __init__(self):
         """Initialize the prompt generator and load example dataset from JSON."""
         self.few_shot_min_examples = int(os.getenv("FEW_SHOT_MIN_EXAMPLES", "2"))
@@ -221,6 +296,12 @@ class PromptGenerator:
         self.few_shot_hard_examples = int(os.getenv("FEW_SHOT_HARD_EXAMPLES", "2"))
         self.few_shot_diversity_lambda = float(os.getenv("FEW_SHOT_DIVERSITY_LAMBDA", "0.15"))
         self.few_shot_min_relevance = float(os.getenv("FEW_SHOT_MIN_RELEVANCE", "0.35"))
+
+        # Ollama embedding config (mirrors FirestoreStore)
+        self._ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
+        self._embedding_model = os.getenv("EMBEDDING_MODEL_NAME") or os.getenv("MODEL_NAME", "llama3")
+        self._embedding_available = None
+        self._embedding_cache = {}
 
         # Get the path to the JSON file (in the same directory as this module)
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -257,6 +338,234 @@ class PromptGenerator:
                     {"problem": "What is 12 + 8?", "solution": "12 + 8 = 20"}
                 ]
             })
+
+        # Pre-cache example bank embeddings for hybrid similarity
+        self._warm_example_embeddings()
+
+    # ------------------------------------------------------------------ #
+    #  Embedding infrastructure (mirrors FirestoreStore)                  #
+    # ------------------------------------------------------------------ #
+
+    def _check_embedding_availability(self):
+        """Probe Ollama once to see if embedding endpoint is reachable."""
+        if self._embedding_available is not None:
+            return self._embedding_available
+        try:
+            import urllib.request
+            req = urllib.request.Request(
+                f"{self._ollama_base_url}/api/embed",
+                data=json.dumps({
+                    "model": self._embedding_model,
+                    "input": "test",
+                }).encode(),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                body = json.loads(resp.read())
+                self._embedding_available = bool(body.get("embeddings"))
+        except Exception:
+            self._embedding_available = False
+            logger.debug("Ollama embedding unavailable -- hybrid will use 2-layer fallback.")
+        return self._embedding_available
+
+    def _get_embedding(self, text):
+        """Get embedding vector for a single text, with in-memory cache."""
+        text = text.strip()
+        if not text:
+            return None
+        if text in self._embedding_cache:
+            return self._embedding_cache[text]
+        if not self._check_embedding_availability():
+            return None
+        try:
+            import urllib.request
+            req = urllib.request.Request(
+                f"{self._ollama_base_url}/api/embed",
+                data=json.dumps({
+                    "model": self._embedding_model,
+                    "input": text,
+                }).encode(),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                body = json.loads(resp.read())
+                embeddings = body.get("embeddings")
+                if embeddings and len(embeddings) > 0:
+                    vec = embeddings[0]
+                    self._embedding_cache[text] = vec
+                    return vec
+        except Exception as exc:
+            logger.debug("Embedding request failed: %s", exc)
+        return None
+
+    def _get_embeddings_batch(self, texts):
+        """Batch-embed multiple texts in a single API call."""
+        result = {}
+        uncached = []
+        for t in texts:
+            t = t.strip()
+            if not t:
+                continue
+            if t in self._embedding_cache:
+                result[t] = self._embedding_cache[t]
+            else:
+                uncached.append(t)
+        if not uncached or not self._check_embedding_availability():
+            return result
+        try:
+            import urllib.request
+            req = urllib.request.Request(
+                f"{self._ollama_base_url}/api/embed",
+                data=json.dumps({
+                    "model": self._embedding_model,
+                    "input": uncached,
+                }).encode(),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                body = json.loads(resp.read())
+                embeddings = body.get("embeddings") or []
+                for i, vec in enumerate(embeddings):
+                    if i < len(uncached) and vec:
+                        self._embedding_cache[uncached[i]] = vec
+                        result[uncached[i]] = vec
+        except Exception as exc:
+            logger.debug("Batch embedding request failed: %s", exc)
+        return result
+
+    @staticmethod
+    def _cosine_similarity(vec_a, vec_b):
+        """Pure-Python cosine similarity between two vectors."""
+        dot = sum(a * b for a, b in zip(vec_a, vec_b))
+        norm_a = math.sqrt(sum(a * a for a in vec_a))
+        norm_b = math.sqrt(sum(b * b for b in vec_b))
+        if norm_a == 0 or norm_b == 0:
+            return 0.0
+        return dot / (norm_a * norm_b)
+
+    def _warm_example_embeddings(self):
+        """Pre-cache embeddings for all examples in the bank on startup."""
+        texts = []
+        for examples in self.example_dataset.values():
+            if not isinstance(examples, list):
+                continue
+            for ex in examples:
+                if isinstance(ex, dict) and ex.get("problem"):
+                    texts.append(str(ex["problem"]).strip())
+        if texts:
+            self._get_embeddings_batch(texts)
+
+    # ------------------------------------------------------------------ #
+    #  Hybrid 3-layer similarity scoring                                  #
+    # ------------------------------------------------------------------ #
+
+    def _extract_hybrid_features(self, text):
+        """Extract structural math feature tags using regex patterns."""
+        value = text.lower()
+        features = set()
+        for pattern, tag in self._MATH_FEATURE_PATTERNS_HYBRID:
+            if re.search(pattern, value):
+                features.add(tag)
+        if "system_of_equations" not in features:
+            multi_var = re.search(
+                r"(?:solve|find)\s+(?:for\s+)?[a-z]\s*(?:(?:,\s*|\s+and\s+)[a-z])",
+                value,
+            )
+            if multi_var:
+                features.add("system_of_equations")
+            elif value.count("=") >= 2:
+                parts = re.split(r"[,\n;]", value)
+                eq_parts = sum(1 for p in parts if re.search(r"[a-z].*=", p.strip()))
+                if eq_parts >= 2:
+                    features.add("system_of_equations")
+        return features
+
+    def _refine_problem_tokens(self, text):
+        """Tokenize and remove stop words for lexical similarity."""
+        tokens = set(re.findall(r"[a-zA-Z0-9_]+", text.lower()))
+        return tokens - self._STOP_WORDS
+
+    def _hybrid_lexical_similarity(self, text_a, text_b):
+        """Jaccard similarity after stop-word removal."""
+        tokens_a = self._refine_problem_tokens(text_a)
+        tokens_b = self._refine_problem_tokens(text_b)
+        if not tokens_a or not tokens_b:
+            return 0.0
+        intersection = len(tokens_a & tokens_b)
+        union = len(tokens_a | tokens_b)
+        return intersection / union if union else 0.0
+
+    def _hybrid_feature_similarity(self, text_a, text_b):
+        """Jaccard similarity over extracted math feature tags with type penalty."""
+        feats_a = self._extract_hybrid_features(text_a)
+        feats_b = self._extract_hybrid_features(text_b)
+        if not feats_a and not feats_b:
+            return -1.0
+        if not feats_a or not feats_b:
+            return 0.0
+        intersection = len(feats_a & feats_b)
+        union = len(feats_a | feats_b)
+        jaccard = intersection / union if union else 0.0
+        types_only_a = (feats_a & self._TYPE_FEATURES) - feats_b
+        types_only_b = (feats_b & self._TYPE_FEATURES) - feats_a
+        if types_only_a or types_only_b:
+            jaccard *= 0.3
+        return jaccard
+
+    def _has_type_mismatch(self, text_a, text_b):
+        """Return True when a type-defining feature exists in one text but not the other."""
+        feats_a = self._extract_hybrid_features(text_a)
+        feats_b = self._extract_hybrid_features(text_b)
+        if not feats_a or not feats_b:
+            return False
+        types_only_a = (feats_a & self._TYPE_FEATURES) - feats_b
+        types_only_b = (feats_b & self._TYPE_FEATURES) - feats_a
+        return bool(types_only_a or types_only_b)
+
+    def _hybrid_similarity(self, target_text, candidate_text):
+        """Hybrid 3-layer similarity between two math problems.
+
+        Layer 1 - Semantic Embedding (60%): cosine similarity via Ollama.
+        Layer 2 - Math Feature Detection (25%): regex-based structural tags.
+        Layer 3 - Lexical Jaccard (15%): exact word overlap.
+        + Global type-mismatch penalty (x0.45).
+        """
+        target_t = str(target_text or "").strip()
+        candidate_t = str(candidate_text or "").strip()
+        if not target_t or not candidate_t:
+            return 0.0
+
+        lexical_sim = self._hybrid_lexical_similarity(target_t, candidate_t)
+
+        feature_sim = self._hybrid_feature_similarity(target_t, candidate_t)
+        has_features = feature_sim >= 0
+
+        embed_sim = None
+        vec_a = self._get_embedding(target_t)
+        vec_b = self._get_embedding(candidate_t)
+        if vec_a is not None and vec_b is not None:
+            embed_sim = self._cosine_similarity(vec_a, vec_b)
+
+        if embed_sim is not None and has_features:
+            final = (
+                self._HYBRID_W_EMBED * embed_sim
+                + self._HYBRID_W_FEATURES * feature_sim
+                + self._HYBRID_W_LEXICAL * lexical_sim
+            )
+        elif embed_sim is not None:
+            final = 0.75 * embed_sim + 0.25 * lexical_sim
+        elif has_features:
+            final = 0.55 * feature_sim + 0.45 * lexical_sim
+        else:
+            final = lexical_sim
+
+        if self._has_type_mismatch(target_t, candidate_t):
+            final *= 0.45
+
+        return max(0.0, min(1.0, final))
 
     def _normalize_metadata_label(self, value: str) -> str:
         """Normalize metadata labels to stable snake_case tokens."""
@@ -1511,178 +1820,11 @@ class PromptGenerator:
         return filtered_examples
     
     def _score_example_relevance(self, example: dict, problem: str, problem_keywords: set) -> float:
-        """
-        Score how relevant an example is to the given problem.
-        
-        Args:
-            example: Example dict with 'problem' and 'solution'
-            problem: The user's problem
-            problem_keywords: Keywords extracted from user's problem
-            
-        Returns:
-            Relevance score (0.0 to 1.0)
-        """
-        score = 0.0
-        example_text = (example['problem'] + ' ' + example['solution']).lower()
-        problem_lower = problem.lower()
-        
-        # Check keyword overlap (weighted by relevance)
-        keyword_matches = sum(1 for kw in problem_keywords if kw in example_text)
-        if problem_keywords:
-            keyword_coverage = keyword_matches / len(problem_keywords)
-            score += keyword_coverage * 0.45
-        
-        # Bonus for similar operation words in problem statement
-        example_lower = example['problem'].lower()
-
-        problem_operations = self._extract_operation_markers(problem_lower)
-        example_operations = self._extract_operation_markers(example_lower)
-        if problem_operations:
-            operation_overlap = len(problem_operations.intersection(example_operations)) / len(problem_operations)
-            score += operation_overlap * 0.30
-        
-        # Extra bonus for matching specific objects (dice, coins, balls, etc.)
-        for obj in SPECIFIC_OBJECTS:
-            if obj in problem_lower and obj in example_lower:
-                score += 0.2
-                break
-
-        # Lexical similarity between target problem and example problem
-        lexical_similarity = self._lexical_jaccard(problem_lower, example_lower)
-        score += lexical_similarity * 0.20
-
-        problem_features = self._extract_math_features(problem_lower)
-        example_features = self._extract_math_features(example_text)
-        if problem_features:
-            feature_overlap = len(problem_features.intersection(example_features)) / len(problem_features)
-            score += feature_overlap * 0.40
-
-            if "value_comparison" in problem_features and "value_comparison" in example_features:
-                score += 0.26
-            elif "value_comparison" in problem_features and "value_comparison" not in example_features:
-                score -= 0.18
-
-            if "labeled_options" in problem_features and "labeled_options" in example_features:
-                score += 0.10
-            elif "labeled_options" in problem_features and "labeled_options" not in example_features:
-                score -= 0.06
-
-            if "assignment" in problem_features and "assignment" in example_features:
-                score += 0.22
-            elif "assignment" in problem_features and "assignment" not in example_features:
-                score -= 0.18
-
-            if "multi_assignment" in problem_features and "multi_assignment" in example_features:
-                score += 0.12
-
-            if "substitution" in problem_features and "substitution" in example_features:
-                score += 0.28
-            elif "substitution" in problem_features and "substitution" not in example_features:
-                score -= 0.22
-
-            missing_critical = (problem_features.intersection(CRITICAL_MATH_FEATURES)) - example_features
-            if missing_critical:
-                score -= 0.08 * len(missing_critical)
-
-            # Penalize examples that introduce complexity absent from the target.
-            # This keeps simple-problem few-shot examples structurally aligned.
-            extra_features = example_features - problem_features
-            extra_complex = extra_features.intersection({
-                "exponent", "root", "fraction", "logarithm", "trigonometric",
-                "system", "composition", "inequality", "decimal", "big_number",
-            })
-            if extra_complex:
-                score -= 0.25 * len(extra_complex)
-
-        problem_assigned_vars = self._extract_assigned_variables(problem_lower)
-        example_assigned_vars = self._extract_assigned_variables(example_lower)
-        if problem_assigned_vars:
-            assignment_var_overlap = len(problem_assigned_vars.intersection(example_assigned_vars)) / len(problem_assigned_vars)
-            score += assignment_var_overlap * 0.40
-
-            if len(example_assigned_vars) < len(problem_assigned_vars):
-                score -= 0.25
-
-            if len(problem_assigned_vars) >= 2 and len(example_assigned_vars) >= 2:
-                score += 0.10
-
-        problem_intent = self._detect_primary_intent(problem_lower)
-        example_intent = self._detect_primary_intent(example_lower)
-        intent_alignment = self._intent_similarity(problem_intent, example_intent)
-        if intent_alignment > 0:
-            score += intent_alignment * 0.45
-        elif problem_intent != "general" and example_intent != "general":
-            score -= 0.15
-
-        if problem_intent == "compare_values":
-            if example_intent in {"compare_values", "evaluate_substitution", "solve_equation"}:
-                score += 0.12
-            else:
-                score -= 0.12
-
-        # Equation-structure alignment (critical for solve-equation few-shot quality)
-        problem_sig = self._extract_equation_signature(problem_lower)
-        example_sig = self._extract_equation_signature(example_lower)
-
-        # Equation-family alignment: strongly prefer same degree/type
-        problem_family = self._detect_equation_family(problem_lower)
-        example_family = self._detect_equation_family(example_lower)
-        if problem_family and example_family:
-            if problem_family == example_family:
-                score += 0.35
-            else:
-                score -= 0.20
-
-        if problem_sig["has_equation"] and example_sig["has_equation"]:
-            score += 0.08
-
-            if problem_sig["has_x4"]:
-                if example_sig["has_x4"]:
-                    score += 0.35
-                else:
-                    score -= 0.25
-
-            if problem_sig["has_x3"] and example_sig["has_x3"]:
-                score += 0.2
-
-            if problem_sig["has_x2"] and example_sig["has_x2"]:
-                score += 0.12
-
-            if problem_sig["has_abs"] != example_sig["has_abs"]:
-                score -= 0.1
-
-            if problem_sig["has_system"] != example_sig["has_system"]:
-                score -= 0.08
-
-            if problem_sig["has_fractional"] and example_sig["has_fractional"]:
-                score += 0.08
-
-            if problem_sig["has_assignment"] and example_sig["has_assignment"]:
-                score += 0.18
-            elif problem_sig["has_assignment"] != example_sig["has_assignment"]:
-                score -= 0.16
-
-        solution_length = len(example.get("solution", "").split())
-        if solution_length >= 25:
-            score += 0.06
-        elif solution_length <= 4:
-            score -= 0.05
-
-        # Strategy-pattern matching (boost examples that use same solving style)
-        for problem_marker, example_marker in STRATEGY_PAIRS:
-            if problem_marker in problem_lower and example_marker in example_text:
-                score += 0.08
-
-        # Character-length proximity: penalize examples much longer than the target.
-        problem_chars = len(problem_lower)
-        example_chars = len(example_lower)
-        char_ratio = example_chars / max(problem_chars, 1)
-        if char_ratio > 1.8:
-            score -= 0.18 * min(char_ratio - 1.8, 4.0)
-
-        score += self._score_metadata_alignment(example, problem, problem_keywords, problem_features)
-        
-        return max(score, 0.0)
+        """Score relevance using hybrid 3-layer similarity (Tier-1 approach)."""
+        example_text = str(example.get("problem", ""))
+        if not example_text:
+            return 0.0
+        return self._hybrid_similarity(problem, example_text)
 
     def _rank_examples_by_relevance(
         self,
@@ -1883,7 +2025,7 @@ class PromptGenerator:
             return []
         
         # If we have highly relevant examples (score > 0.4), prioritize them
-        highly_relevant = [ex for score, ex in scored_examples if score > 0.4]
+        highly_relevant = [ex for score, ex in scored_examples if score > 0.3]
         
         if len(highly_relevant) >= num_examples:
             candidate_pool = highly_relevant[:min(len(highly_relevant), num_examples * 4)]

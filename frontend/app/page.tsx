@@ -423,13 +423,14 @@ interface HistoricalStats {
   avgScore: number | null
   samples: number
   lead: number | null
+  ranking: { technique: string; avgScore: number; winRate: number }[]
 }
 
 const getHistoricalStats = (
   source?: SelectionSource,
   details?: Record<string, any>,
 ): HistoricalStats => {
-  const empty: HistoricalStats = { winRate: null, avgScore: null, samples: 0, lead: null }
+  const empty: HistoricalStats = { winRate: null, avgScore: null, samples: 0, lead: null, ranking: [] }
   if (!details) return empty
 
   let ranking: Record<string, any>[] = []
@@ -457,7 +458,13 @@ const getHistoricalStats = (
     lead = topScore - secondScore
   }
 
-  return { winRate, avgScore, samples, lead }
+  const parsedRanking = ranking.map((r: Record<string, any>) => ({
+    technique: (r.technique || '').toUpperCase(),
+    avgScore: r.weighted_average ?? r.average_overall ?? 0,
+    winRate: r.win_rate ?? 0,
+  }))
+
+  return { winRate, avgScore, samples, lead, ranking: parsedRanking }
 }
 
 const buildTierSummary = (
@@ -1803,11 +1810,11 @@ export default function Home() {
                               </div>
                             ))}
                           </div>
-                          {coverageData && coverageData.total_with_winner > 0 && coverageData.win_counts && (
-                            <div className="mt-3 flex items-center gap-3 text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
-                              {Object.entries(coverageData.win_counts).map(([tech, w]) => (
-                                <span key={tech}>
-                                  {tech}: {Math.round((w / coverageData.total_with_winner) * 100)}% wins
+                          {histStats.ranking.length > 1 && (
+                            <div className="mt-3 flex items-center gap-4 text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
+                              {histStats.ranking.map((r, i) => (
+                                <span key={r.technique} style={{ color: i === 0 ? 'var(--green)' : 'var(--text-muted)' }}>
+                                  {i === 0 ? '\u2605 ' : ''}{r.technique}: {(r.avgScore * 100).toFixed(1)}% avg
                                 </span>
                               ))}
                             </div>
