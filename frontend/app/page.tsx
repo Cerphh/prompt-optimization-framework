@@ -2500,18 +2500,18 @@ export default function Home() {
       {/* ═══ Technique Details Modal ═══ */}
       {expandedTechnique && expandedResult && (
         <div
-          className="fixed inset-0 z-50 flex items-start justify-center pt-[8vh] overflow-y-auto"
+          className="fixed inset-0 z-50 flex items-center justify-center"
           style={{ background: 'rgba(0,0,0,0.25)' }}
           onClick={() => setExpandedTechnique(null)}
         >
           <div
-            className="relative w-full max-w-2xl rounded-lg shadow-xl mb-16"
-            style={{ background: 'var(--surface)' }}
+            className="relative w-full max-w-2xl mx-4 rounded-lg shadow-xl overflow-hidden flex flex-col"
+            style={{ background: 'var(--surface)', maxHeight: '85vh' }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal header */}
             <div
-              className="flex items-center justify-between px-6 py-4"
+              className="flex items-center justify-between px-6 py-4 shrink-0"
               style={{ borderBottom: '1px solid var(--border)' }}
             >
               <div className="flex items-center gap-3">
@@ -2532,7 +2532,7 @@ export default function Home() {
               </button>
             </div>
 
-            <div className="p-6 space-y-6">
+            <div className="p-6 space-y-6 overflow-y-auto">
               {(expandedWasExtended || expandedStillTruncated) && (
                 <div
                   className="px-3 py-2 rounded text-xs"
