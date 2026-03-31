@@ -112,6 +112,8 @@ interface BenchmarkResult {
     document_id?: string
     error?: string
   }
+  few_shot_unavailable?: boolean
+  few_shot_error?: string
 }
 
 interface TechniqueRow {
@@ -2032,7 +2034,7 @@ export default function Home() {
                       )
                     })()}
                   </div>
-                  {benchmarkRuns > 1 && (
+                  {benchmarkRuns > 1 && !result.few_shot_unavailable && (
                     <div className="flex items-center gap-2">
                       <button
                         onClick={handleSaveToDb}
@@ -2096,6 +2098,17 @@ export default function Home() {
                     </div>
                   )
                 })()}
+
+                {/* Few-shot unavailable warning */}
+                {result.few_shot_unavailable && (
+                  <div
+                    className="px-6 py-3 text-xs"
+                    style={{ background: '#fffbeb', borderBottom: '1px solid #fde68a', color: 'var(--amber)' }}
+                  >
+                    {'\u26a0'} Few-shot was skipped: {result.few_shot_error || 'No matching examples found in example_problems.json.'}
+                    {' '}Only zero-shot results are shown. Save and Export are disabled.
+                  </div>
+                )}
 
                 {/* ── Selection Strategy (one-line summary) ── */}
                 {result.selection_source && result.selection_source !== 'runtime_scores' && (() => {

@@ -137,25 +137,9 @@ CRITICAL_MATH_FEATURES = {
     "substitution",
 }
 
-TEMPLATE_FEWSHOT_EXAMPLES = {
-    "compare_values": [
-        {
-            "problem": "Which of the following has the least value? A = 3/2, B = 5/4, C = 7/8.",
-            "solution": "Convert to comparable values: A = 1.5, B = 1.25, C = 0.875. The least value is C.",
-            "type": "compare_values",
-        },
-        {
-            "problem": "Which option has the greatest value? A = 2^3, B = 3^2, C = 10 - 1.",
-            "solution": "Evaluate each option: A = 8, B = 9, C = 9. The greatest value is B and C (tie).",
-            "type": "compare_values",
-        },
-        {
-            "problem": "Among the choices, which has the smallest value? A = -2, B = -5/2, C = -2.1.",
-            "solution": "Compare negatives: A = -2, B = -2.5, C = -2.1. The smallest value is B.",
-            "type": "compare_values",
-        },
-    ]
-}
+class FewShotUnavailableError(Exception):
+    """Raised when no matching few-shot examples exist in example_problems.json."""
+    pass
 
 DIFFICULTY_ALIASES = {
     "beginner": "basic",
@@ -307,37 +291,17 @@ class PromptGenerator:
         current_dir = os.path.dirname(os.path.abspath(__file__))
         json_path = os.path.join(current_dir, "example_problems.json")
         
-        # Load examples from JSON file
+        # Load examples from JSON file (sole source of few-shot examples)
         try:
             with open(json_path, 'r', encoding='utf-8-sig') as f:
                 self.example_dataset = self._normalize_example_dataset(json.load(f))
             print(f"Loaded example dataset from {json_path}")
         except FileNotFoundError:
-            print(f"Warning: Could not find {json_path}, using minimal fallback examples")
-            # Fallback to minimal examples if JSON file not found
-            self.example_dataset = self._normalize_example_dataset({
-                "general": [
-                    {"problem": "What is 12 + 8?", "solution": "12 + 8 = 20"},
-                    {"problem": "Calculate 3 × 7", "solution": "3 × 7 = 21"}
-                ],
-                "algebra": [
-                    {"problem": "Solve for x: 3x + 7 = 22", "solution": "3x + 7 = 22\n3x = 22 - 7\n3x = 15\nx = 15/3\nx = 5"}
-                ],
-                "counting-probability": [
-                    {"problem": "Find the mean of: 4, 8, 12, 16, 20", "solution": "Mean = (4 + 8 + 12 + 16 + 20)/5\n= 60/5\n= 12"}
-                ],
-                "pre-calculus": [
-                    {"problem": "Find the derivative: f(x) = x³", "solution": "f(x) = x³\nf'(x) = 3x⁽³⁻¹⁾\nf'(x) = 3x²"}
-                ]
-            })
+            print(f"Warning: Could not find {json_path}, few-shot will be unavailable")
+            self.example_dataset = {}
         except json.JSONDecodeError as e:
-            print(f"Warning: Error parsing JSON file: {e}")
-            # Use minimal fallback if JSON is malformed
-            self.example_dataset = self._normalize_example_dataset({
-                "general": [
-                    {"problem": "What is 12 + 8?", "solution": "12 + 8 = 20"}
-                ]
-            })
+            print(f"Warning: Error parsing JSON file: {e}, few-shot will be unavailable")
+            self.example_dataset = {}
 
         # Pre-cache example bank embeddings for hybrid similarity
         self._warm_example_embeddings()
@@ -1982,14 +1946,7 @@ class PromptGenerator:
         problem_intent = self._detect_primary_intent(problem)
 
         if problem_intent == "compare_values":
-            compare_like_count = sum(
-                1
-                for ex in available_examples
-                if isinstance(ex, dict) and self._is_compare_values_problem(str(ex.get("problem", "")))
-            )
-            if compare_like_count < max(1, num_examples):
-                template_examples = [dict(example) for example in TEMPLATE_FEWSHOT_EXAMPLES.get("compare_values", [])]
-                available_examples = [*available_examples, *template_examples]
+            pass
 
         # Explicitly prioritize conditional probability examples when detected.
         # We still rank inside this filtered set so the best teaching example is selected.
@@ -2268,12 +2225,9 @@ class PromptGenerator:
         available_examples = self.example_dataset.get(subject, [])
         
         if not available_examples:
-            print(f"Warning: No examples found for subject '{subject}'")
-            # Try global pool before giving up on few-shot for this subject.
-            available_examples = self._gather_all_examples()
-
-        if not available_examples:
-            return self.generate_zero_shot(target_problem_text, subject=subject)
+            raise FewShotUnavailableError(
+                f"No few-shot examples available for subject '{subject}' in example_problems.json"
+            )
         
         # Select relevant examples (smart selection based on problem content)
         num_to_select = min(num_examples, len(available_examples))
@@ -2317,20 +2271,6 @@ class PromptGenerator:
                         selected_examples = detected_selected
                         best_relevance = detected_best
 
-        if not strict_matching and best_relevance < self.few_shot_min_relevance:
-            pooled_examples = self._gather_all_examples()
-            if pooled_examples:
-                pooled_selected = self._select_relevant_examples(
-                    pooled_examples,
-                    normalized_problem,
-                    min(num_examples, len(pooled_examples)),
-                    subject=subject,
-                )
-                pooled_best = self._top_relevance_score(pooled_selected, normalized_problem, problem_keywords)
-                if pooled_best > best_relevance + 0.05:
-                    selected_examples = pooled_selected
-                    best_relevance = pooled_best
-
         # If selected examples are not sufficiently related, fall back to bank-anchored zero-shot.
         # Keep few-shot stable for prompt auditing even when relevance is weak.
         _ = auto_mode
@@ -2352,7 +2292,9 @@ class PromptGenerator:
             )
 
         if not selected_examples:
-            return self.generate_zero_shot(target_problem_text, subject=subject)
+            raise FewShotUnavailableError(
+                f"No matching few-shot examples found for this problem in example_problems.json"
+            )
         
         # Format examples (concise format for speed)
         examples_text = "\n\n".join([
@@ -2385,10 +2327,16 @@ class PromptGenerator:
         Returns:
             Dictionary mapping technique name to prompt
         """
-        return {
+        techniques = {
             "zero_shot": self.generate_zero_shot(problem, subject=subject),
-            "few_shot": self.generate_few_shot(problem, subject=subject)
         }
+        try:
+            techniques["few_shot"] = self.generate_few_shot(problem, subject=subject)
+        except FewShotUnavailableError as e:
+            logger.warning("Few-shot unavailable: %s", e)
+            techniques["_few_shot_unavailable"] = True
+            techniques["_few_shot_error"] = str(e)
+        return techniques
     
     def get_technique_names(self) -> List[str]:
         """Get list of all available prompting techniques."""

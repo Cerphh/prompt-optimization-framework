@@ -230,7 +230,7 @@ def test_select_relevant_examples_prefers_compare_values_templates():
     assert "least value" in selected[0]["problem"].lower()
 
 
-def test_select_relevant_examples_compare_values_uses_template_fallback_when_sparse():
+def test_select_relevant_examples_compare_values_returns_available_when_no_match():
     generator = PromptGenerator()
 
     available_examples = [
@@ -247,7 +247,9 @@ def test_select_relevant_examples_compare_values_uses_template_fallback_when_spa
         num_examples=1,
     )
 
-    assert selected[0]["type"] == "compare_values"
+    # Without template fallback, only the available example is returned
+    assert len(selected) == 1
+    assert selected[0]["type"] == "solve_equation"
 
 
 def test_select_relevant_examples_enforces_linear_equation_family_match():

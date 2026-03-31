@@ -164,6 +164,11 @@ class BenchmarkPipeline:
 
         # Step 1: Generate prompts using all techniques
         prompts = self.prompt_generator.generate_all_techniques(problem, subject=subject)
+
+        # Extract few-shot unavailability metadata
+        few_shot_unavailable = bool(prompts.pop("_few_shot_unavailable", False))
+        few_shot_error = prompts.pop("_few_shot_error", None)
+
         if techniques_to_run:
             allowed = set(techniques_to_run)
             prompts = {
@@ -217,7 +222,9 @@ class BenchmarkPipeline:
             "best_technique": best_technique,
             "best_result": results[best_technique],
             "comparison": self._generate_comparison(results),
-            "weights": self.weights
+            "weights": self.weights,
+            "few_shot_unavailable": few_shot_unavailable,
+            "few_shot_error": few_shot_error,
         }
 
     def benchmark_stream_events(
@@ -242,6 +249,11 @@ class BenchmarkPipeline:
             resolved_runs = self._sanitize_runs_per_technique(runs_per_technique)
 
         prompts = self.prompt_generator.generate_all_techniques(problem, subject=subject)
+
+        # Extract few-shot unavailability metadata
+        few_shot_unavailable = bool(prompts.pop("_few_shot_unavailable", False))
+        few_shot_error = prompts.pop("_few_shot_error", None)
+
         if techniques_to_run:
             allowed = set(techniques_to_run)
             prompts = {
@@ -388,6 +400,8 @@ class BenchmarkPipeline:
             "best_result": results[best_technique],
             "comparison": self._generate_comparison(results),
             "weights": self.weights,
+            "few_shot_unavailable": few_shot_unavailable,
+            "few_shot_error": few_shot_error,
         }
         yield {"type": "complete", "result": final_result}
     

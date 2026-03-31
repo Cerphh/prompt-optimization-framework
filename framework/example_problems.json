@@ -2,8 +2,8 @@
   "algebra": {
     "basic": [
       {
-        "problem": "Solve for x: x + 13 = 31",
-        "solution": "Subtract 13 from both sides: x = 31 - 13 = \\boxed{18}.",
+        "problem": "Solve for x: x + 9 = 34",
+        "solution": "Subtract 9 from both sides: x = 34 - 9 = \\boxed{25}.",
         "type": "solve_equation",
         "constraints": [],
         "concept": "linear_equation_solving",
@@ -29,8 +29,8 @@
         "anchor_priority": 0.95
       },
       {
-        "problem": "Solve for x: x + 6 = 22",
-        "solution": "Subtract 6 from both sides: x = 22 - 6 = \\boxed{16}.",
+        "problem": "Solve for x: x + 17 = 45",
+        "solution": "Subtract 17 from both sides: x = 45 - 17 = \\boxed{28}.",
         "type": "solve_equation",
         "constraints": [],
         "concept": "linear_equation_solving",
@@ -54,12 +54,66 @@
           "linear"
         ],
         "anchor_priority": 0.95
+      },
+      {
+        "problem": "Evaluate 3m + 2n when m = 5, n = 4",
+        "solution": "Substitute the given values: 3(5) + 2(4) = 15 + 8 = \\boxed{23}.",
+        "type": "evaluate_substitution",
+        "constraints": [],
+        "concept": "algebraic_expression_evaluation",
+        "skills": [
+          "value_substitution",
+          "arithmetic"
+        ],
+        "format": {
+          "template": "single_expression",
+          "equation_count": 0,
+          "has_assignment": true,
+          "assigned_variable_count": 2,
+          "has_fraction": false,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "basic",
+        "tags": [
+          "algebra",
+          "evaluate_substitution",
+          "expression"
+        ],
+        "anchor_priority": 0.90
+      },
+      {
+        "problem": "Evaluate 7p - 4q when p = 6, q = 2",
+        "solution": "Substitute the given values: 7(6) - 4(2) = 42 - 8 = \\boxed{34}.",
+        "type": "evaluate_substitution",
+        "constraints": [],
+        "concept": "algebraic_expression_evaluation",
+        "skills": [
+          "value_substitution",
+          "arithmetic"
+        ],
+        "format": {
+          "template": "single_expression",
+          "equation_count": 0,
+          "has_assignment": true,
+          "assigned_variable_count": 2,
+          "has_fraction": false,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "basic",
+        "tags": [
+          "algebra",
+          "evaluate_substitution",
+          "expression"
+        ],
+        "anchor_priority": 0.90
       }
     ],
     "intermediate": [
       {
-        "problem": "Solve for all real solutions: x^4 - 10x^2 + 9 = 0",
-        "solution": "Let u = x^2. Then u^2 - 10u + 9 = 0, which factors as (u - 1)(u - 9) = 0. So u = 1 or u = 9. Since u = x^2, we get x^2 = 1 giving x = +/-1, and x^2 = 9 giving x = +/-3. The solutions are \\boxed{x = +/-1, +/-3}.",
+        "problem": "Solve for all real solutions: x^4 - 13x^2 + 36 = 0",
+        "solution": "Let u = x^2. Then u^2 - 13u + 36 = 0, which factors as (u - 4)(u - 9) = 0. So u = 4 or u = 9. Since u = x^2, we get x^2 = 4 giving x = +/-2, and x^2 = 9 giving x = +/-3. The solutions are \\boxed{x = +/-2, +/-3}.",
         "type": "solve_equation",
         "constraints": [
           "real_solutions"
@@ -89,8 +143,8 @@
         "anchor_priority": 0.85
       },
       {
-        "problem": "Solve for all real solutions: x^4 - 17x^2 + 16 = 0",
-        "solution": "Let u = x^2. Then u^2 - 17u + 16 = 0, which factors as (u - 1)(u - 16) = 0. So u = 1 or u = 16. Since u = x^2, we get x^2 = 1 giving x = +/-1, and x^2 = 16 giving x = +/-4. The solutions are \\boxed{x = +/-1, +/-4}.",
+        "problem": "Solve for all real solutions: x^4 - 20x^2 + 64 = 0",
+        "solution": "Let u = x^2. Then u^2 - 20u + 64 = 0, which factors as (u - 4)(u - 16) = 0. So u = 4 or u = 16. Since u = x^2, we get x^2 = 4 giving x = +/-2, and x^2 = 16 giving x = +/-4. The solutions are \\boxed{x = +/-2, +/-4}.",
         "type": "solve_equation",
         "constraints": [
           "real_solutions"
@@ -116,14 +170,194 @@
           "solve_equation",
           "quartic",
           "substitution"
+        ],
+        "anchor_priority": 0.85
+      },
+      {
+        "problem": "Find the vertical asymptotes of f(x) = (x + 3)/((x - 1)(x + 4))",
+        "solution": "Set the denominator equal to zero: (x - 1)(x + 4) = 0, so x = 1 or x = -4. The numerator is nonzero at both points, so the vertical asymptotes are \\boxed{x = 1 and x = -4}.",
+        "type": "find_asymptotes",
+        "constraints": [
+          "vertical_asymptotes"
+        ],
+        "concept": "rational_function_asymptotes",
+        "skills": [
+          "factoring",
+          "equation_solving",
+          "function_analysis"
+        ],
+        "format": {
+          "template": "single_expression",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": true,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "intermediate",
+        "tags": [
+          "algebra",
+          "rational_function",
+          "asymptotes"
+        ],
+        "anchor_priority": 0.85
+      },
+      {
+        "problem": "Find the vertical asymptotes of f(x) = (x - 2)/((x + 3)(x - 6))",
+        "solution": "Set the denominator equal to zero: (x + 3)(x - 6) = 0, so x = -3 or x = 6. The numerator is nonzero at both points, so the vertical asymptotes are \\boxed{x = -3 and x = 6}.",
+        "type": "find_asymptotes",
+        "constraints": [
+          "vertical_asymptotes"
+        ],
+        "concept": "rational_function_asymptotes",
+        "skills": [
+          "factoring",
+          "equation_solving",
+          "function_analysis"
+        ],
+        "format": {
+          "template": "single_expression",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": true,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "intermediate",
+        "tags": [
+          "algebra",
+          "rational_function",
+          "asymptotes"
+        ],
+        "anchor_priority": 0.85
+      },
+      {
+        "problem": "x^2 - 7x + 12 = 0 has roots p and q. Find (p - 1)(q - 1)",
+        "solution": "By Vieta's formulas, p + q = 7 and pq = 12. Expand (p - 1)(q - 1) = pq - (p + q) + 1 = 12 - 7 + 1 = \\boxed{6}.",
+        "type": "vietas_formulas",
+        "constraints": [],
+        "concept": "vietas_formulas",
+        "skills": [
+          "vietas_formulas",
+          "algebraic_manipulation",
+          "equation_solving"
+        ],
+        "format": {
+          "template": "single_equation",
+          "equation_count": 1,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": false,
+          "has_exponent": true,
+          "has_system": false
+        },
+        "difficulty": "intermediate",
+        "tags": [
+          "algebra",
+          "vietas_formulas",
+          "quadratic",
+          "roots"
+        ],
+        "anchor_priority": 0.85
+      },
+      {
+        "problem": "x^2 - 11x + 30 = 0 has roots p and q. Find (p - 1)(q - 1)",
+        "solution": "By Vieta's formulas, p + q = 11 and pq = 30. Expand (p - 1)(q - 1) = pq - (p + q) + 1 = 30 - 11 + 1 = \\boxed{20}.",
+        "type": "vietas_formulas",
+        "constraints": [],
+        "concept": "vietas_formulas",
+        "skills": [
+          "vietas_formulas",
+          "algebraic_manipulation",
+          "equation_solving"
+        ],
+        "format": {
+          "template": "single_equation",
+          "equation_count": 1,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": false,
+          "has_exponent": true,
+          "has_system": false
+        },
+        "difficulty": "intermediate",
+        "tags": [
+          "algebra",
+          "vietas_formulas",
+          "quadratic",
+          "roots"
+        ],
+        "anchor_priority": 0.85
+      },
+      {
+        "problem": "Find the maximum value of y = -x^2 + 8x - 7",
+        "solution": "Complete the square: y = -(x^2 - 8x) - 7 = -(x^2 - 8x + 16 - 16) - 7 = -(x - 4)^2 + 16 - 7 = -(x - 4)^2 + 9. The maximum value is \\boxed{9}.",
+        "type": "find_maximum",
+        "constraints": [
+          "maximum_value"
+        ],
+        "concept": "quadratic_vertex",
+        "skills": [
+          "completing_square",
+          "function_analysis",
+          "algebraic_manipulation"
+        ],
+        "format": {
+          "template": "single_expression",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": false,
+          "has_exponent": true,
+          "has_system": false
+        },
+        "difficulty": "intermediate",
+        "tags": [
+          "algebra",
+          "quadratic",
+          "vertex",
+          "maximum"
+        ],
+        "anchor_priority": 0.85
+      },
+      {
+        "problem": "Find the maximum value of y = -x^2 + 6x + 2",
+        "solution": "Complete the square: y = -(x^2 - 6x) + 2 = -(x^2 - 6x + 9 - 9) + 2 = -(x - 3)^2 + 9 + 2 = -(x - 3)^2 + 11. The maximum value is \\boxed{11}.",
+        "type": "find_maximum",
+        "constraints": [
+          "maximum_value"
+        ],
+        "concept": "quadratic_vertex",
+        "skills": [
+          "completing_square",
+          "function_analysis",
+          "algebraic_manipulation"
+        ],
+        "format": {
+          "template": "single_expression",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": false,
+          "has_exponent": true,
+          "has_system": false
+        },
+        "difficulty": "intermediate",
+        "tags": [
+          "algebra",
+          "quadratic",
+          "vertex",
+          "maximum"
         ],
         "anchor_priority": 0.85
       }
     ],
     "advanced": [
       {
-        "problem": "Rewrite 4x^2 - 24x + 5 in vertex form",
-        "solution": "Factor out 4 from the first two terms: 4(x^2 - 6x) + 5. Complete the square inside: x^2 - 6x = (x - 3)^2 - 9. Substitute back: 4((x - 3)^2 - 9) + 5 = 4(x - 3)^2 - 36 + 5 = \\boxed{4(x - 3)^2 - 31}.",
+        "problem": "Rewrite 9x^2 - 36x + 7 in vertex form",
+        "solution": "Factor out 9 from the first two terms: 9(x^2 - 4x) + 7. Complete the square inside: x^2 - 4x = (x - 2)^2 - 4. Substitute back: 9((x - 2)^2 - 4) + 7 = 9(x - 2)^2 - 36 + 7 = \\boxed{9(x - 2)^2 - 29}.",
         "type": "rewrite_expression",
         "constraints": [
           "vertex_form"
@@ -153,8 +387,8 @@
         "anchor_priority": 0.85
       },
       {
-        "problem": "Rewrite 25x^2 - 10x - 8 in vertex form",
-        "solution": "Factor out 25 from the first two terms: 25(x^2 - 2/5 x) - 8. Complete the square: x^2 - 2/5 x = (x - 1/5)^2 - 1/25. Substitute back: 25((x - 1/5)^2 - 1/25) - 8 = 25(x - 1/5)^2 - 1 - 8 = \\boxed{25(x - 1/5)^2 - 9}.",
+        "problem": "Rewrite 16x^2 - 8x - 3 in vertex form",
+        "solution": "Factor out 16 from the first two terms: 16(x^2 - 1/2 x) - 3. Complete the square: x^2 - 1/2 x = (x - 1/4)^2 - 1/16. Substitute back: 16((x - 1/4)^2 - 1/16) - 3 = 16(x - 1/4)^2 - 1 - 3 = \\boxed{16(x - 1/4)^2 - 4}.",
         "type": "rewrite_expression",
         "constraints": [
           "vertex_form"
@@ -181,6 +415,192 @@
           "vertex_form",
           "quadratic",
           "fraction"
+        ],
+        "anchor_priority": 0.85
+      },
+      {
+        "problem": "Two perfect squares differ by 32. Find all valid pairs (m^2, n^2) where m > n >= 0",
+        "solution": "We need m^2 - n^2 = 32, so (m - n)(m + n) = 32. Both factors must have the same parity. Factor pairs with same parity: (2, 16) gives m = 9, n = 7; (4, 8) gives m = 6, n = 2. The valid pairs are \\boxed{(81, 49) and (36, 4)}.",
+        "type": "difference_of_squares",
+        "constraints": [
+          "perfect_squares"
+        ],
+        "concept": "difference_of_squares",
+        "skills": [
+          "factoring",
+          "equation_solving",
+          "number_theory"
+        ],
+        "format": {
+          "template": "word_problem",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": false,
+          "has_exponent": true,
+          "has_system": false
+        },
+        "difficulty": "advanced",
+        "tags": [
+          "algebra",
+          "difference_of_squares",
+          "number_theory",
+          "factoring"
+        ],
+        "anchor_priority": 0.85
+      },
+      {
+        "problem": "Two perfect squares differ by 40. Find all valid pairs (m^2, n^2) where m > n >= 0",
+        "solution": "We need m^2 - n^2 = 40, so (m - n)(m + n) = 40. Both factors must have the same parity. Factor pairs with same parity: (2, 20) gives m = 11, n = 9; (4, 10) gives m = 7, n = 3. The valid pairs are \\boxed{(121, 81) and (49, 9)}.",
+        "type": "difference_of_squares",
+        "constraints": [
+          "perfect_squares"
+        ],
+        "concept": "difference_of_squares",
+        "skills": [
+          "factoring",
+          "equation_solving",
+          "number_theory"
+        ],
+        "format": {
+          "template": "word_problem",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": false,
+          "has_exponent": true,
+          "has_system": false
+        },
+        "difficulty": "advanced",
+        "tags": [
+          "algebra",
+          "difference_of_squares",
+          "number_theory",
+          "factoring"
+        ],
+        "anchor_priority": 0.85
+      },
+      {
+        "problem": "Expand (x^2 + 3x - 2)(x - 4) and find the constant term",
+        "solution": "Expand: x^2(x - 4) + 3x(x - 4) - 2(x - 4) = x^3 - 4x^2 + 3x^2 - 12x - 2x + 8 = x^3 - x^2 - 14x + 8. The constant term is \\boxed{8}.",
+        "type": "polynomial_expansion",
+        "constraints": [
+          "constant_term"
+        ],
+        "concept": "polynomial_multiplication",
+        "skills": [
+          "polynomial_expansion",
+          "algebraic_manipulation",
+          "arithmetic"
+        ],
+        "format": {
+          "template": "single_expression",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": false,
+          "has_exponent": true,
+          "has_system": false
+        },
+        "difficulty": "advanced",
+        "tags": [
+          "algebra",
+          "polynomial",
+          "expansion",
+          "constant_term"
+        ],
+        "anchor_priority": 0.85
+      },
+      {
+        "problem": "Expand (x^2 - x + 3)(x + 2) and find the constant term",
+        "solution": "Expand: x^2(x + 2) - x(x + 2) + 3(x + 2) = x^3 + 2x^2 - x^2 - 2x + 3x + 6 = x^3 + x^2 + x + 6. The constant term is \\boxed{6}.",
+        "type": "polynomial_expansion",
+        "constraints": [
+          "constant_term"
+        ],
+        "concept": "polynomial_multiplication",
+        "skills": [
+          "polynomial_expansion",
+          "algebraic_manipulation",
+          "arithmetic"
+        ],
+        "format": {
+          "template": "single_expression",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": false,
+          "has_exponent": true,
+          "has_system": false
+        },
+        "difficulty": "advanced",
+        "tags": [
+          "algebra",
+          "polynomial",
+          "expansion",
+          "constant_term"
+        ],
+        "anchor_priority": 0.85
+      },
+      {
+        "problem": "A circle has diameter endpoints P(1, 3) and Q(7, 11). Find the area",
+        "solution": "The diameter length is d = sqrt((7 - 1)^2 + (11 - 3)^2) = sqrt(36 + 64) = sqrt(100) = 10. The radius is r = 10/2 = 5. The area is pi * r^2 = pi * 25 = \\boxed{25\\pi}.",
+        "type": "analytic_geometry",
+        "constraints": [
+          "circle_area"
+        ],
+        "concept": "circle_from_diameter",
+        "skills": [
+          "distance_formula",
+          "circle_area",
+          "coordinate_geometry"
+        ],
+        "format": {
+          "template": "word_problem",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": false,
+          "has_exponent": true,
+          "has_system": false
+        },
+        "difficulty": "advanced",
+        "tags": [
+          "algebra",
+          "analytic_geometry",
+          "circle",
+          "distance_formula"
+        ],
+        "anchor_priority": 0.85
+      },
+      {
+        "problem": "A circle has diameter endpoints P(1, 2) and Q(5, 8). Find the area",
+        "solution": "The diameter length is d = sqrt((5 - 1)^2 + (8 - 2)^2) = sqrt(16 + 36) = sqrt(52) = 2*sqrt(13). The radius is r = sqrt(13). The area is pi * r^2 = pi * 13 = \\boxed{13\\pi}.",
+        "type": "analytic_geometry",
+        "constraints": [
+          "circle_area"
+        ],
+        "concept": "circle_from_diameter",
+        "skills": [
+          "distance_formula",
+          "circle_area",
+          "coordinate_geometry"
+        ],
+        "format": {
+          "template": "word_problem",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": false,
+          "has_exponent": true,
+          "has_system": false
+        },
+        "difficulty": "advanced",
+        "tags": [
+          "algebra",
+          "analytic_geometry",
+          "circle",
+          "distance_formula"
         ],
         "anchor_priority": 0.85
       }

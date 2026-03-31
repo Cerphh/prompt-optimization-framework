@@ -1,24 +1,20 @@
-from framework.prompt_generator import PromptGenerator
+from framework.prompt_generator import PromptGenerator, FewShotUnavailableError
+import pytest
 
 
-def test_few_shot_uses_global_examples_when_subject_examples_missing():
+def test_few_shot_raises_when_subject_examples_missing():
     generator = PromptGenerator()
     generator.example_dataset = {
         "algebra": [],
         "general": [{"problem": "What is 1 + 1?", "solution": "2"}],
     }
 
-    prompt = generator.generate_few_shot(
-        "Solve for x: 2x + 6 = 10",
-        subject="algebra",
-        num_examples=2,
-    )
-
-    assert prompt.startswith("Solve the following math problems and give the final answer.")
-    assert "Use the following examples only as style references." in prompt
-    assert "Q: What is 1 + 1?" in prompt
-    assert "Q: Solve for x: 2x + 6 = 10" in prompt
-    assert "A:" in prompt
+    with pytest.raises(FewShotUnavailableError):
+        generator.generate_few_shot(
+            "Solve for x: 2x + 6 = 10",
+            subject="algebra",
+            num_examples=2,
+        )
 
 
 def test_hard_problem_uses_more_examples_when_num_examples_not_provided():
