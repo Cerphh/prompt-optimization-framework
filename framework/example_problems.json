@@ -605,5 +605,601 @@
         "anchor_priority": 0.85
       }
     ]
+  },
+  "counting-probability": {
+    "basic": [
+      {
+        "problem": "A jar contains 5 white and 3 black marbles. What is the probability of drawing a black marble?",
+        "solution": "Total marbles = 5 + 3 = 8. Favorable outcomes = 3. P(black) = 3/8 = \\boxed{3/8}.",
+        "type": "basic_probability",
+        "constraints": [],
+        "concept": "basic_probability",
+        "skills": [
+          "probability_calculation",
+          "arithmetic"
+        ],
+        "format": {
+          "template": "word_problem",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": true,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "basic",
+        "tags": [
+          "counting-probability",
+          "basic_probability",
+          "simple_event"
+        ],
+        "anchor_priority": 0.95
+      },
+      {
+        "problem": "A box has 2 red, 5 green, and 3 blue balls. What is the probability of drawing a green ball?",
+        "solution": "Total balls = 2 + 5 + 3 = 10. Favorable outcomes = 5. P(green) = 5/10 = \\boxed{1/2}.",
+        "type": "basic_probability",
+        "constraints": [],
+        "concept": "basic_probability",
+        "skills": [
+          "probability_calculation",
+          "arithmetic",
+          "fraction_simplification"
+        ],
+        "format": {
+          "template": "word_problem",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": true,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "basic",
+        "tags": [
+          "counting-probability",
+          "basic_probability",
+          "simple_event"
+        ],
+        "anchor_priority": 0.95
+      },
+      {
+        "problem": "How many total outcomes are there when rolling 4 standard dice?",
+        "solution": "Each die has 6 faces. By the fundamental counting principle, total outcomes = 6^4 = \\boxed{1296}.",
+        "type": "counting_principle",
+        "constraints": [],
+        "concept": "fundamental_counting_principle",
+        "skills": [
+          "counting_principle",
+          "exponentiation"
+        ],
+        "format": {
+          "template": "word_problem",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": false,
+          "has_exponent": true,
+          "has_system": false
+        },
+        "difficulty": "basic",
+        "tags": [
+          "counting-probability",
+          "counting_principle",
+          "multiplication_rule"
+        ],
+        "anchor_priority": 0.90
+      },
+      {
+        "problem": "A restaurant offers 3 appetizers, 5 main courses, and 4 desserts. How many different meals can be ordered?",
+        "solution": "By the fundamental counting principle, total meals = 3 * 5 * 4 = \\boxed{60}.",
+        "type": "counting_principle",
+        "constraints": [],
+        "concept": "fundamental_counting_principle",
+        "skills": [
+          "counting_principle",
+          "arithmetic"
+        ],
+        "format": {
+          "template": "word_problem",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": false,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "basic",
+        "tags": [
+          "counting-probability",
+          "counting_principle",
+          "multiplication_rule"
+        ],
+        "anchor_priority": 0.90
+      },
+      {
+        "problem": "In how many ways can a committee of 3 be chosen from 8 people?",
+        "solution": "C(8,3) = 8! / (3! * 5!) = (8 * 7 * 6) / (3 * 2 * 1) = 336 / 6 = \\boxed{56}.",
+        "type": "combination",
+        "constraints": [],
+        "concept": "combination",
+        "skills": [
+          "combination_formula",
+          "factorial",
+          "arithmetic"
+        ],
+        "format": {
+          "template": "word_problem",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": false,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "basic",
+        "tags": [
+          "counting-probability",
+          "combination",
+          "selection"
+        ],
+        "anchor_priority": 0.90
+      },
+      {
+        "problem": "In how many ways can 5 books be chosen from a shelf of 12?",
+        "solution": "C(12,5) = 12! / (5! * 7!) = (12 * 11 * 10 * 9 * 8) / (5 * 4 * 3 * 2 * 1) = 95040 / 120 = \\boxed{792}.",
+        "type": "combination",
+        "constraints": [],
+        "concept": "combination",
+        "skills": [
+          "combination_formula",
+          "factorial",
+          "arithmetic"
+        ],
+        "format": {
+          "template": "word_problem",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": false,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "basic",
+        "tags": [
+          "counting-probability",
+          "combination",
+          "selection"
+        ],
+        "anchor_priority": 0.90
+      }
+    ],
+    "intermediate": [
+      {
+        "problem": "What is the tens digit of 7! + 8! + 9! + ... + 400!?",
+        "solution": "For n >= 10, n! ends in at least two zeros so the tens digit is 0. We only need 7! + 8! + 9!. 7! = 5040, 8! = 40320, 9! = 362880. Sum = 5040 + 40320 + 362880 = 408240. The tens digit is \\boxed{4}.",
+        "type": "factorial_number_theory",
+        "constraints": [
+          "tens_digit"
+        ],
+        "concept": "factorial_digit_analysis",
+        "skills": [
+          "factorial_computation",
+          "digit_extraction",
+          "number_theory"
+        ],
+        "format": {
+          "template": "word_problem",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": false,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "intermediate",
+        "tags": [
+          "counting-probability",
+          "factorial",
+          "number_theory",
+          "digit"
+        ],
+        "anchor_priority": 0.85
+      },
+      {
+        "problem": "What is the tens digit of 5! + 6! + 7! + ... + 250!?",
+        "solution": "For n >= 10, n! ends in at least two zeros so the tens digit is 0. We only need 5! + 6! + 7! + 8! + 9!. 5! = 120, 6! = 720, 7! = 5040, 8! = 40320, 9! = 362880. Sum = 120 + 720 + 5040 + 40320 + 362880 = 409080. The tens digit is \\boxed{8}.",
+        "type": "factorial_number_theory",
+        "constraints": [
+          "tens_digit"
+        ],
+        "concept": "factorial_digit_analysis",
+        "skills": [
+          "factorial_computation",
+          "digit_extraction",
+          "number_theory"
+        ],
+        "format": {
+          "template": "word_problem",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": false,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "intermediate",
+        "tags": [
+          "counting-probability",
+          "factorial",
+          "number_theory",
+          "digit"
+        ],
+        "anchor_priority": 0.85
+      },
+      {
+        "problem": "What is the smallest power of 8 that is NOT a palindrome?",
+        "solution": "Check powers of 8: 8^1 = 8 (palindrome), 8^2 = 64 (not palindrome since 64 reversed is 46). The smallest power of 8 that is not a palindrome is \\boxed{64}.",
+        "type": "palindrome_number_theory",
+        "constraints": [
+          "non_palindrome"
+        ],
+        "concept": "palindrome_detection",
+        "skills": [
+          "exponentiation",
+          "palindrome_check",
+          "number_theory"
+        ],
+        "format": {
+          "template": "word_problem",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": false,
+          "has_exponent": true,
+          "has_system": false
+        },
+        "difficulty": "intermediate",
+        "tags": [
+          "counting-probability",
+          "palindrome",
+          "number_theory",
+          "powers"
+        ],
+        "anchor_priority": 0.85
+      },
+      {
+        "problem": "What is the smallest power of 7 that is NOT a palindrome?",
+        "solution": "Check powers of 7: 7^1 = 7 (palindrome), 7^2 = 49 (not palindrome since 49 reversed is 94). The smallest power of 7 that is not a palindrome is \\boxed{49}.",
+        "type": "palindrome_number_theory",
+        "constraints": [
+          "non_palindrome"
+        ],
+        "concept": "palindrome_detection",
+        "skills": [
+          "exponentiation",
+          "palindrome_check",
+          "number_theory"
+        ],
+        "format": {
+          "template": "word_problem",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": false,
+          "has_exponent": true,
+          "has_system": false
+        },
+        "difficulty": "intermediate",
+        "tags": [
+          "counting-probability",
+          "palindrome",
+          "number_theory",
+          "powers"
+        ],
+        "anchor_priority": 0.85
+      },
+      {
+        "problem": "How many 3-digit numbers have no digit equal to 0 or 5?",
+        "solution": "Each digit can be chosen from {1, 2, 3, 4, 6, 7, 8, 9}, giving 8 choices per digit. Total = 8^3 = \\boxed{512}.",
+        "type": "counting_with_restrictions",
+        "constraints": [
+          "digit_restriction"
+        ],
+        "concept": "restricted_counting",
+        "skills": [
+          "counting_principle",
+          "exponentiation",
+          "digit_analysis"
+        ],
+        "format": {
+          "template": "word_problem",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": false,
+          "has_exponent": true,
+          "has_system": false
+        },
+        "difficulty": "intermediate",
+        "tags": [
+          "counting-probability",
+          "counting_principle",
+          "digit_restriction"
+        ],
+        "anchor_priority": 0.85
+      },
+      {
+        "problem": "How many 5-digit numbers have no digit equal to 0 or 9?",
+        "solution": "Each digit can be chosen from {1, 2, 3, 4, 5, 6, 7, 8}, giving 8 choices per digit. Total = 8^5 = \\boxed{32768}.",
+        "type": "counting_with_restrictions",
+        "constraints": [
+          "digit_restriction"
+        ],
+        "concept": "restricted_counting",
+        "skills": [
+          "counting_principle",
+          "exponentiation",
+          "digit_analysis"
+        ],
+        "format": {
+          "template": "word_problem",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": false,
+          "has_exponent": true,
+          "has_system": false
+        },
+        "difficulty": "intermediate",
+        "tags": [
+          "counting-probability",
+          "counting_principle",
+          "digit_restriction"
+        ],
+        "anchor_priority": 0.85
+      },
+      {
+        "problem": "Two integers are chosen at random from {1, 2, 3, 4, 5, 6, 7}. What is the probability that their product is even?",
+        "solution": "Total ways to choose 2 from 7: C(7,2) = 21. For the product to be odd both must be odd. Odd numbers: {1,3,5,7} so C(4,2) = 6 ways. P(product odd) = 6/21 = 2/7. P(product even) = 1 - 2/7 = \\boxed{5/7}.",
+        "type": "combinatorial_probability",
+        "constraints": [],
+        "concept": "combinatorial_probability",
+        "skills": [
+          "combination_formula",
+          "complementary_counting",
+          "probability_calculation"
+        ],
+        "format": {
+          "template": "word_problem",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": true,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "intermediate",
+        "tags": [
+          "counting-probability",
+          "combinatorial_probability",
+          "complementary_counting"
+        ],
+        "anchor_priority": 0.85
+      },
+      {
+        "problem": "Two cards are drawn from a standard 52-card deck without replacement. What is the probability both are hearts?",
+        "solution": "P(1st heart) = 13/52. P(2nd heart | 1st heart) = 12/51. P(both hearts) = (13/52)(12/51) = 156/2652 = \\boxed{1/17}.",
+        "type": "combinatorial_probability",
+        "constraints": [],
+        "concept": "combinatorial_probability",
+        "skills": [
+          "conditional_probability",
+          "fraction_multiplication",
+          "probability_calculation"
+        ],
+        "format": {
+          "template": "word_problem",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": true,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "intermediate",
+        "tags": [
+          "counting-probability",
+          "combinatorial_probability",
+          "without_replacement"
+        ],
+        "anchor_priority": 0.85
+      }
+    ],
+    "advanced": [
+      {
+        "problem": "12 distinct toys are split equally among 3 children (4 each). How many ways?",
+        "solution": "Choose 4 for child 1: C(12,4) = 495. Choose 4 for child 2 from remaining 8: C(8,4) = 70. Child 3 gets the rest: C(4,4) = 1. Total = 495 * 70 * 1 = \\boxed{34650}.",
+        "type": "division_into_groups",
+        "constraints": [
+          "equal_groups",
+          "distinct_items"
+        ],
+        "concept": "combinatorial_distribution",
+        "skills": [
+          "combination_formula",
+          "sequential_counting",
+          "arithmetic"
+        ],
+        "format": {
+          "template": "word_problem",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": false,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "advanced",
+        "tags": [
+          "counting-probability",
+          "combinatorics",
+          "distribution",
+          "groups"
+        ],
+        "anchor_priority": 0.85
+      },
+      {
+        "problem": "6 distinct medals are awarded to 3 winners (2 each). How many ways?",
+        "solution": "Choose 2 for winner 1: C(6,2) = 15. Choose 2 for winner 2 from remaining 4: C(4,2) = 6. Winner 3 gets the rest: C(2,2) = 1. Total = 15 * 6 * 1 = \\boxed{90}.",
+        "type": "division_into_groups",
+        "constraints": [
+          "equal_groups",
+          "distinct_items"
+        ],
+        "concept": "combinatorial_distribution",
+        "skills": [
+          "combination_formula",
+          "sequential_counting",
+          "arithmetic"
+        ],
+        "format": {
+          "template": "word_problem",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": false,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "advanced",
+        "tags": [
+          "counting-probability",
+          "combinatorics",
+          "distribution",
+          "groups"
+        ],
+        "anchor_priority": 0.85
+      },
+      {
+        "problem": "A coin is flipped 10 times. What is the probability of getting exactly 3 heads?",
+        "solution": "Using the binomial formula: P(X = 3) = C(10,3)(1/2)^3(1/2)^7 = C(10,3)(1/2)^10 = 120/1024 = \\boxed{15/128}.",
+        "type": "binomial_probability",
+        "constraints": [],
+        "concept": "binomial_probability",
+        "skills": [
+          "binomial_formula",
+          "combination_formula",
+          "exponentiation"
+        ],
+        "format": {
+          "template": "word_problem",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": true,
+          "has_exponent": true,
+          "has_system": false
+        },
+        "difficulty": "advanced",
+        "tags": [
+          "counting-probability",
+          "binomial_probability",
+          "coin_flip"
+        ],
+        "anchor_priority": 0.85
+      },
+      {
+        "problem": "A multiple-choice test has 6 questions with 4 choices each. What is the probability of guessing exactly 2 correctly?",
+        "solution": "Using the binomial formula: P(X = 2) = C(6,2)(1/4)^2(3/4)^4 = 15 * (1/16) * (81/256) = 15 * 81/4096 = 1215/4096 = \\boxed{1215/4096}.",
+        "type": "binomial_probability",
+        "constraints": [],
+        "concept": "binomial_probability",
+        "skills": [
+          "binomial_formula",
+          "combination_formula",
+          "exponentiation",
+          "fraction_arithmetic"
+        ],
+        "format": {
+          "template": "word_problem",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": true,
+          "has_exponent": true,
+          "has_system": false
+        },
+        "difficulty": "advanced",
+        "tags": [
+          "counting-probability",
+          "binomial_probability",
+          "multiple_choice"
+        ],
+        "anchor_priority": 0.85
+      },
+      {
+        "problem": "8 people sit in a row. What is the probability that Alice and Bob are NOT next to each other?",
+        "solution": "Total arrangements = 8!. Arrangements where Alice and Bob are adjacent: treat them as one block, giving 7! * 2 arrangements. P(adjacent) = (7! * 2)/8! = 2/8 = 1/4. P(not adjacent) = 1 - 1/4 = \\boxed{3/4}.",
+        "type": "permutation_complementary",
+        "constraints": [
+          "not_adjacent"
+        ],
+        "concept": "complementary_permutation_counting",
+        "skills": [
+          "permutation",
+          "complementary_counting",
+          "probability_calculation"
+        ],
+        "format": {
+          "template": "word_problem",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": true,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "advanced",
+        "tags": [
+          "counting-probability",
+          "permutation",
+          "complementary_counting",
+          "adjacent"
+        ],
+        "anchor_priority": 0.85
+      },
+      {
+        "problem": "6 students line up for a photo. What is the probability that the two tallest students are NOT standing next to each other?",
+        "solution": "Total arrangements = 6!. Arrangements where the two are adjacent: treat them as one block, giving 5! * 2 arrangements. P(adjacent) = (5! * 2)/6! = 2/6 = 1/3. P(not adjacent) = 1 - 1/3 = \\boxed{2/3}.",
+        "type": "permutation_complementary",
+        "constraints": [
+          "not_adjacent"
+        ],
+        "concept": "complementary_permutation_counting",
+        "skills": [
+          "permutation",
+          "complementary_counting",
+          "probability_calculation"
+        ],
+        "format": {
+          "template": "word_problem",
+          "equation_count": 0,
+          "has_assignment": false,
+          "assigned_variable_count": 0,
+          "has_fraction": true,
+          "has_exponent": false,
+          "has_system": false
+        },
+        "difficulty": "advanced",
+        "tags": [
+          "counting-probability",
+          "permutation",
+          "complementary_counting",
+          "adjacent"
+        ],
+        "anchor_priority": 0.85
+      }
+    ]
   }
 }

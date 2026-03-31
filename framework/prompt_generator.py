@@ -1342,7 +1342,59 @@ class PromptGenerator:
         if self._is_rate_proportion_problem(value):
             return "ratio_proportion"
 
-        if any(marker in value for marker in ["how many", "number of ways", "arrange", "arrangement", "permutation", "combination", "choose", "select"]):
+        # ── Counting & Probability specific detectors ──
+        # Palindrome detection (must come before generic counting)
+        if "palindrome" in value:
+            return "palindrome_number_theory"
+
+        # Factorial / digit analysis (e.g., "tens digit of 8! + 9! + ...")
+        if re.search(r'\d+\s*!', value) and any(m in value for m in ["digit", "tens", "units", "ones"]):
+            return "factorial_number_theory"
+
+        # Binomial probability: "exactly k" + probability context
+        has_probability = any(marker in value for marker in ["probability", "chance", "odds"])
+        if not has_probability and re.search(r'\bp\(\s*[a-z]', value):
+            has_probability = True
+
+        if has_probability and any(marker in value for marker in ["conditional", "given that", "|"]):
+            return "conditional_probability"
+
+        # Permutation + complementary counting: probability + "not adjacent/next to"
+        if has_probability and any(m in value for m in ["not adjacent", "not next to", "not beside", "not sitting next", "not standing next"]):
+            return "permutation_complementary"
+
+        # Binomial: probability + "exactly <number>" pattern
+        if has_probability and re.search(r'exactly\s+\d+', value):
+            return "binomial_probability"
+
+        # Combinatorial probability: probability + choosing/set context
+        if has_probability and any(m in value for m in ["chosen from", "selected from", "drawn from", "picked from", "sum divisible", "product is", "product even", "product odd", "sum is"]):
+            return "combinatorial_probability"
+
+        # Basic probability (simple event, no special qualifiers)
+        if has_probability:
+            return "basic_probability"
+
+        # Division into groups: "split equally", "distributed ... each"
+        if any(m in value for m in ["split equally", "divided equally", "distributed equally"]) or \
+           (re.search(r'\d+\s+each\b', value) and any(m in value for m in ["how many ways", "number of ways"])):
+            return "division_into_groups"
+
+        # Combination: explicit "choose/select k from n" or C(n,k)
+        if re.search(r'c\(\s*\d+\s*,\s*\d+\s*\)', value) or \
+           (any(m in value for m in ["choose", "select", "chosen", "selected"]) and any(m in value for m in ["how many ways", "in how many ways", "number of ways"])):
+            return "combination"
+
+        # Counting with digit restrictions
+        if any(m in value for m in ["digit", "digits"]) and any(m in value for m in ["how many", "number of"]) and any(m in value for m in ["no digit", "not equal", "without", "excluding"]):
+            return "counting_with_restrictions"
+
+        # Fundamental counting principle: "how many outcomes/total"
+        if any(m in value for m in ["how many outcomes", "how many total", "total outcomes", "total number of outcomes"]):
+            return "counting_principle"
+
+        # Generic counting fallback
+        if any(marker in value for marker in ["how many", "number of ways", "arrange", "arrangement", "permutation", "combination"]):
             return "counting_arrangements"
         if "expected value" in value or "expectation" in value:
             return "expected_value"
@@ -1356,14 +1408,6 @@ class PromptGenerator:
 
         if re.search(r"\b[a-z]\s*\(\s*[a-z]\s*\(", value):
             return "function_composition"
-
-        has_probability = any(marker in value for marker in ["probability", "chance", "odds"])
-        if not has_probability and re.search(r'\bp\(\s*[a-z]', value):
-            has_probability = True
-        if has_probability and any(marker in value for marker in ["conditional", "given that", "|"]):
-            return "conditional_probability"
-        if has_probability:
-            return "probability"
 
         trig_markers = ["sin", "cos", "tan", "sec", "csc", "cot", "arcsin", "arccos", "arctan", "radian", "degrees"]
         if any(re.search(rf"\b{re.escape(marker)}\b", value) for marker in trig_markers):
@@ -1545,12 +1589,24 @@ class PromptGenerator:
             return None
 
     _EQUATION_SOLVING_TYPES = frozenset({"solve_equation", "real_solutions"})
+    _PROBABILITY_TYPES = frozenset({
+        "probability", "basic_probability", "combinatorial_probability",
+        "binomial_probability", "conditional_probability", "permutation_complementary",
+    })
+    _COUNTING_TYPES = frozenset({
+        "counting_arrangements", "counting_principle", "combination",
+        "counting_with_restrictions", "division_into_groups",
+    })
 
     def _intents_compatible(self, intent_a: str, intent_b: str) -> bool:
         """Check whether two intents are compatible for strict matching."""
         if intent_a == intent_b:
             return True
         if intent_a in self._EQUATION_SOLVING_TYPES and intent_b in self._EQUATION_SOLVING_TYPES:
+            return True
+        if intent_a in self._PROBABILITY_TYPES and intent_b in self._PROBABILITY_TYPES:
+            return True
+        if intent_a in self._COUNTING_TYPES and intent_b in self._COUNTING_TYPES:
             return True
         return False
 
@@ -1568,6 +1624,12 @@ class PromptGenerator:
             # Equation-solving variants are compatible; the equation-family
             # filter will enforce structural alignment (quadratic vs quartic).
             if example_type in self._EQUATION_SOLVING_TYPES and problem_type in self._EQUATION_SOLVING_TYPES:
+                return True
+            # Probability family: basic, combinatorial, binomial, etc.
+            if example_type in self._PROBABILITY_TYPES and problem_type in self._PROBABILITY_TYPES:
+                return True
+            # Counting family: principle, combination, division, etc.
+            if example_type in self._COUNTING_TYPES and problem_type in self._COUNTING_TYPES:
                 return True
 
         # The migrated bank has many speed/rate algebra word problems typed as
