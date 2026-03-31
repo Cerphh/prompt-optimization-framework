@@ -353,7 +353,7 @@ const buildTier1Details = (prof: Record<string, any>, allDetails: Record<string,
 
   const top = ranking[0] as Record<string, any>
   const topSamples = top.samples || top.unweighted_samples || top.effective_samples || 0
-  const minSamples = rules.profile_min_samples_per_technique || 2
+  const minSamples = rules.profile_min_samples_per_technique || 3
 
   if (topSamples < minSamples) {
     return `❌ Top technique has ${topSamples} sample(s) — needs ≥${minSamples}`
@@ -1024,6 +1024,20 @@ export default function Home() {
 
       if (!finalResult) {
         throw new Error('Benchmark stream ended before returning final result')
+      }
+
+      // For normal mode, derive selection_source from the pre-execution
+      // policy (the single Tier 1/2 decision point).  The backend no
+      // longer runs a redundant post-execution Tier check.
+      if (finalResult.pre_execution_policy?.history_source) {
+        finalResult.selection_source = finalResult.pre_execution_policy.history_source
+        // Merge pre-execution details into selection_details so tier
+        // display helpers (buildDecisionTree, buildTierSummary, etc.)
+        // can read profile_selection / domain_selection.
+        finalResult.selection_details = {
+          ...finalResult.selection_details,
+          ...finalResult.pre_execution_policy,
+        }
       }
 
       setResult(finalResult)

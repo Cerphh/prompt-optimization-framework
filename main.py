@@ -427,6 +427,13 @@ def _resolve_pre_execution_techniques(
     details["min_average_gap"] = min_gap
     details["require_ground_truth_history"] = require_ground_truth_history
     details["profile_min_similarity"] = profile_min_similarity
+    details["db_confidence_rules"] = {
+        "profile_min_samples_per_technique": min_samples,
+        "profile_base_min_gap": min_gap + 0.01,
+        "min_samples_per_technique": min_samples,
+        "min_average_gap": min_gap,
+        "profile_min_similarity": profile_min_similarity,
+    }
 
     problem_profile = _build_problem_profile(problem=problem, domain=domain, difficulty=difficulty)
 
@@ -441,22 +448,27 @@ def _resolve_pre_execution_techniques(
     )
     details["profile_selection"] = profile_selection
 
-    # Adaptive profile min_samples: require more evidence when more similar
-    # problems are available in the DB.
+    # Adaptive profile thresholds: require more evidence and a wider gap
+    # when more similar problems are available in the DB.  This prevents
+    # Tier 1 from firing on every query once data accumulates.
     _matched = int(profile_selection.get("matched_documents", 0) or 0)
     if _matched >= 20:
         adaptive_profile_min = min_samples + 3
+        adaptive_profile_gap = min_gap + 0.04   # 0.07
     elif _matched >= 10:
         adaptive_profile_min = min_samples + 2
+        adaptive_profile_gap = min_gap + 0.03   # 0.06
     elif _matched >= 5:
         adaptive_profile_min = min_samples + 1
+        adaptive_profile_gap = min_gap + 0.02   # 0.05
     else:
         adaptive_profile_min = min_samples
+        adaptive_profile_gap = min_gap + 0.01   # 0.04  (still stricter than Tier 2's 0.03)
 
     profile_ok, profile_reason = _evaluate_selection_confidence(
         profile_selection,
         min_samples=adaptive_profile_min,
-        min_gap=min_gap,
+        min_gap=adaptive_profile_gap,
         top_only_samples=True,
     )
     if profile_ok:
@@ -545,15 +557,10 @@ def _apply_db_based_selection(
         if min_gap_override is None
         else max(0.0, float(min_gap_override))
     )
-    profile_min_samples = _get_env_int(
-        "DB_PROFILE_MIN_SAMPLES_PER_TECHNIQUE",
-        default=2,
-        min_value=1,
-    )
     profile_min_samples = (
         _get_env_int(
             "DB_PROFILE_MIN_SAMPLES_PER_TECHNIQUE",
-            default=2,
+            default=3,
             min_value=1,
         )
         if profile_min_samples_override is None
@@ -775,37 +782,20 @@ def _finalize_benchmark_result(
     """Apply selection strategy and validate winner without persisting."""
     result = _attach_problem_profile(result=result, domain=domain, difficulty=difficulty)
 
-    normal_min_samples = _get_env_int(
-        "NORMAL_MODE_MIN_SAMPLES_PER_TECHNIQUE",
-        default=3,
-        min_value=1,
-    )
-    normal_min_gap = _get_env_float(
-        "NORMAL_MODE_MIN_AVG_SCORE_GAP",
-        default=0.03,
-        min_value=0.0,
-    )
-    normal_profile_min_samples = _get_env_int(
-        "NORMAL_MODE_PROFILE_MIN_SAMPLES_PER_TECHNIQUE",
-        default=max(1, normal_min_samples // 3),
-        min_value=1,
-    )
-    normal_profile_min_gap = _get_env_float(
-        "NORMAL_MODE_PROFILE_MIN_AVG_SCORE_GAP",
-        default=max(0.005, normal_min_gap / 4),
-        min_value=0.0,
-    )
-
     if run_mode == RUN_MODE_NORMAL:
-        result = _apply_db_based_selection(
-            result=result,
-            domain=domain,
-            difficulty=difficulty,
-            min_samples_override=normal_min_samples,
-            min_gap_override=normal_min_gap,
-            profile_min_samples_override=normal_profile_min_samples,
-            profile_min_gap_override=normal_profile_min_gap,
-        )
+        # Normal mode: the real Tier 1/2 decision already happened in
+        # _resolve_pre_execution_techniques (pre-execution).  If a tier
+        # was confident, only one technique ran and its result is the
+        # winner.  If both tiers failed, both techniques ran — use
+        # runtime scores (Tier 3) to pick the best.  No redundant
+        # post-execution DB re-query needed.
+        result["selection_source"] = "runtime_scores"
+        result["selection_details"] = {
+            "profile_selection": None,
+            "domain_selection": None,
+            "profile_decision_reason": "normal_mode_decided_pre_execution",
+            "db_decision_reason": "normal_mode_decided_pre_execution",
+        }
     else:
         # Benchmark mode: pure runtime greedy (Tier 3 only).
         # No DB-based override — all techniques' comparison data is preserved
