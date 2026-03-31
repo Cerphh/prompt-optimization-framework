@@ -1,4 +1,5 @@
-from framework.prompt_generator import PromptGenerator
+from framework.prompt_generator import PromptGenerator, FewShotUnavailableError
+import pytest
 
 
 def test_generate_few_shot_auto_detects_subject_from_question():
@@ -203,8 +204,8 @@ def test_few_shot_target_problem_text_is_identical_to_input():
     generator.example_dataset = {
         "algebra": [
             {
-                "problem": "Solve for x: 2x + 9 = 21.",
-                "solution": "x = 6",
+                "problem": "Solve for x: x^2 + 2x - 8 = 0.",
+                "solution": "x = 2 or x = -4",
                 "type": "solve_equation",
             }
         ],
@@ -344,16 +345,13 @@ def test_few_shot_falls_back_when_no_same_structure_in_bank():
         "general": [],
     }
 
-    prompt = generator.generate_few_shot(
-        "Solve for x: x + 7 = 18",
-        subject="algebra",
-        num_examples=1,
-    )
-
-    # No same-structure example exists, but we still keep few-shot prompt format.
-    assert "Use the following examples only as style references." in prompt
-    assert "Q: Solve for y: 5^y + 4 = 125^y." in prompt
-    assert "Q: Solve for x: x + 7 = 18" in prompt
+    # No same-structure example exists; strict matching raises error.
+    with pytest.raises(FewShotUnavailableError):
+        generator.generate_few_shot(
+            "Solve for x: x + 7 = 18",
+            subject="algebra",
+            num_examples=1,
+        )
 
 
 def test_few_shot_excludes_spacing_variant_identical_example():

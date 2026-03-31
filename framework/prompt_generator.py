@@ -162,6 +162,7 @@ TYPE_ALIASES = {
     "counting": "counting_arrangements",
     "comparison": "compare_values",
     "value_comparison": "compare_values",
+    "expand": "polynomial_expansion",
 }
 
 CONSTRAINT_ALIASES = {
@@ -749,6 +750,18 @@ class PromptGenerator:
     def _normalize_problem_text(self, problem: str) -> str:
         """Normalize user input to avoid duplicated Q:/A: wrappers in prompts."""
         normalized = problem.strip()
+
+        # Normalize unicode math symbols early so downstream matching is consistent.
+        unicode_replacements = {
+            "\u2212": "-",  # minus sign
+            "\u2013": "-",  # en-dash
+            "\u2014": "-",  # em-dash
+            "\u00d7": "*",  # multiplication sign
+            "\u00f7": "/",  # division sign
+        }
+        for src, dst in unicode_replacements.items():
+            normalized = normalized.replace(src, dst)
+
         if normalized.lower().startswith("q:"):
             normalized = normalized[2:].lstrip()
 
@@ -1344,7 +1357,9 @@ class PromptGenerator:
         if re.search(r"\b[a-z]\s*\(\s*[a-z]\s*\(", value):
             return "function_composition"
 
-        has_probability = any(marker in value for marker in ["probability", " p(", "p(", "chance", "odds"])
+        has_probability = any(marker in value for marker in ["probability", "chance", "odds"])
+        if not has_probability and re.search(r'\bp\(\s*[a-z]', value):
+            has_probability = True
         if has_probability and any(marker in value for marker in ["conditional", "given that", "|"]):
             return "conditional_probability"
         if has_probability:
@@ -1362,6 +1377,10 @@ class PromptGenerator:
             return "limit"
         if any(marker in value for marker in ["sequence", "series", "nth term", "geometric sequence", "arithmetic sequence"]):
             return "sequence_series"
+        if "vertex form" in value or ("rewrite" in value and re.search(r'\bform\b', value)) or "completing the square" in value or "complete the square" in value:
+            return "rewrite_expression"
+        if "asymptote" in value and not any(m in value for m in ["domain", "range", "vertex", "turning point"]):
+            return "find_asymptotes"
         if any(marker in value for marker in ["domain", "range", "asymptote", "vertex", "turning point", "increasing", "decreasing"]):
             return "function_analysis"
         if any(marker in value for marker in ["polar", "rectangular", "cartesian", "complex plane"]):
@@ -1388,6 +1407,12 @@ class PromptGenerator:
             return "variation"
         if any(marker in value for marker in ["ratio", "proportion", "directly proportional", "inversely proportional"]):
             return "ratio_proportion"
+        if re.search(r'\b(maximum|minimum)\s+(value|of)\b', value) or "max value" in value or "min value" in value:
+            return "find_maximum"
+        if any(marker in value for marker in ["has roots", "has root", "with roots", "with root"]):
+            return "vietas_formulas"
+        if "circle" in value and any(m in value for m in ["diameter", "endpoint", "radius"]):
+            return "analytic_geometry"
         if has_equation and any(marker in value for marker in ["calculate", "find", "determine", "what is"]):
             return "solve_equation"
         if "solve" in value or "find x" in value or "solve for x" in value:
@@ -1519,6 +1544,16 @@ class PromptGenerator:
         except ValueError:
             return None
 
+    _EQUATION_SOLVING_TYPES = frozenset({"solve_equation", "real_solutions"})
+
+    def _intents_compatible(self, intent_a: str, intent_b: str) -> bool:
+        """Check whether two intents are compatible for strict matching."""
+        if intent_a == intent_b:
+            return True
+        if intent_a in self._EQUATION_SOLVING_TYPES and intent_b in self._EQUATION_SOLVING_TYPES:
+            return True
+        return False
+
     def _example_matches_problem_type(self, example: dict, problem_type: str) -> bool:
         """Check whether an example should be considered type-compatible for a problem."""
         if not isinstance(example, dict):
@@ -1529,6 +1564,10 @@ class PromptGenerator:
             example_type = self._normalize_type_label(type_values[0])
             # Keep type matching strict so few-shot examples mirror target intent.
             if example_type == problem_type:
+                return True
+            # Equation-solving variants are compatible; the equation-family
+            # filter will enforce structural alignment (quadratic vs quartic).
+            if example_type in self._EQUATION_SOLVING_TYPES and problem_type in self._EQUATION_SOLVING_TYPES:
                 return True
 
         # The migrated bank has many speed/rate algebra word problems typed as
@@ -1705,7 +1744,10 @@ class PromptGenerator:
             intent_matches = [
                 example for example in filtered_examples
                 if isinstance(example, dict)
-                and self._detect_primary_intent(str(example.get("problem", ""))) == problem_intent
+                and self._intents_compatible(
+                    self._detect_primary_intent(str(example.get("problem", ""))),
+                    problem_intent,
+                )
             ]
             if intent_matches:
                 filtered_examples = intent_matches
@@ -2239,17 +2281,6 @@ class PromptGenerator:
             subject=subject,
         )
         strict_matching = self._requires_strict_type_matching(normalized_problem, subject)
-        if strict_matching and not selected_examples:
-            # Keep few-shot consistent: if strict structural matching fails,
-            # fall back to best related examples rather than zero-shot.
-            relaxed_selected = self._select_relevant_examples(
-                available_examples,
-                normalized_problem,
-                num_to_select,
-                subject="general",
-            )
-            if relaxed_selected:
-                selected_examples = relaxed_selected
 
         best_relevance = self._top_relevance_score(selected_examples, normalized_problem, problem_keywords)
 
@@ -2282,14 +2313,6 @@ class PromptGenerator:
             ex for ex in selected_examples
             if self._canonical_problem_text(str(ex.get("problem", ""))) != target_canonical
         ]
-        if not selected_examples:
-            selected_examples = self._select_relevant_examples(
-                available_examples,
-                normalized_problem,
-                num_to_select,
-                subject="general",
-                exclude_identical_target=True,
-            )
 
         if not selected_examples:
             raise FewShotUnavailableError(

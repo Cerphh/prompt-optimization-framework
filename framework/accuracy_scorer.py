@@ -513,11 +513,17 @@ class AccuracyScorer:
         Returns None when fewer than 2 values are detected.
         """
         value = str(text or "").strip()
+        value = self._normalize_math_text(value)
         value = re.sub(
             r'(?i)^\s*(?:final\s+answer|answer|result|solution)\s*[:\-=]\s*',
             '',
             value,
         ).strip()
+
+        # Reject algebraic expressions: if the text contains variable-coefficient
+        # patterns like "4(x", "(x-3)^2", these are expressions, not value sets.
+        if re.search(r'\d\s*\(\s*[a-zA-Z]', value) or re.search(r'[a-zA-Z]\s*[\^²³⁴]', value):
+            return None
 
         # Remove variable assignments like "x = " so "x = 1, x = 2" -> "1, 2"
         value = re.sub(r'[a-zA-Z]\s*=\s*', '', value)

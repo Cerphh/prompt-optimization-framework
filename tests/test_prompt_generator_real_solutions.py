@@ -1,4 +1,6 @@
 from framework.prompt_generator import PromptGenerator
+import pytest
+from framework.prompt_generator import FewShotUnavailableError
 
 
 def test_detect_primary_intent_real_solutions_variants():
@@ -23,13 +25,12 @@ def test_few_shot_prioritizes_real_solution_examples_for_algebra():
 def test_few_shot_prioritizes_real_values_examples_for_statistics():
     generator = PromptGenerator()
 
-    prompt = generator.generate_few_shot(
-        "Find all real values of p if P(A)=p and P(B)=2p with disjoint events and P(A union B)=1",
-        subject="statistics",
-        num_examples=2,
-    )
-
-    assert "Q: Find all real values of p" in prompt
+    with pytest.raises(FewShotUnavailableError):
+        generator.generate_few_shot(
+            "Find all real values of p if P(A)=p and P(B)=2p with disjoint events and P(A union B)=1",
+            subject="statistics",
+            num_examples=2,
+        )
 
 
 def test_few_shot_prioritizes_real_values_examples_for_calculus():
@@ -54,10 +55,9 @@ def test_few_shot_prioritizes_real_values_examples_for_calculus():
 def test_few_shot_prioritizes_conditional_probability_real_values_example():
     generator = PromptGenerator()
 
-    prompt = generator.generate_few_shot(
-        "Find all real values of p given that P(A|B)=1/2 and P(A ∩ B)=1/6",
-        subject="statistics",
-        num_examples=1,
-    )
-
-    assert "Q: Find all real values of p given that P(A|B)=1/2" in prompt
+    with pytest.raises(FewShotUnavailableError):
+        generator.generate_few_shot(
+            "Find all real values of p given that P(A|B)=1/2 and P(A \u2229 B)=1/6",
+            subject="statistics",
+            num_examples=1,
+        )
