@@ -471,6 +471,34 @@ def _resolve_pre_execution_techniques(
         min_gap=adaptive_profile_gap,
         top_only_samples=True,
     )
+
+    # Relaxed retry for Tier 1: mirror the Tier 2 / post-execution fallback.
+    if not profile_ok and profile_reason == "low_confidence_gap":
+        relaxed_profile_gap = max(0.005, adaptive_profile_gap / 4)
+        profile_ok, profile_reason = _evaluate_selection_confidence(
+            profile_selection,
+            min_samples=adaptive_profile_min,
+            min_gap=relaxed_profile_gap,
+            top_only_samples=True,
+        )
+        if profile_ok:
+            profile_reason = "ok_relaxed_gap"
+
+    # Dead-zone fallback for Tier 1.
+    if not profile_ok and profile_reason == "low_confidence_gap":
+        p_ranking = profile_selection.get("ranking", [])
+        if isinstance(p_ranking, list) and len(p_ranking) >= 1:
+            p_top = p_ranking[0] if isinstance(p_ranking[0], dict) else {}
+            p_top_samples_raw = p_top.get("samples") or p_top.get("unweighted_samples") or 0
+            try:
+                p_top_samples_val = int(float(p_top_samples_raw))
+            except (TypeError, ValueError):
+                p_top_samples_val = 0
+            if p_top_samples_val >= adaptive_profile_min:
+                profile_ok = True
+                profile_reason = "ok_indistinguishable"
+
+    details["profile_reason"] = profile_reason
     if profile_ok:
         best_technique = str(profile_selection.get("best_technique") or "")
         if best_technique in technique_names:
@@ -500,6 +528,34 @@ def _resolve_pre_execution_techniques(
         min_samples=min_samples,
         min_gap=min_gap,
     )
+
+    # Relaxed retry: if strict gap check fails, try with a smaller gap.
+    # Pre-execution Tier 2 mirrors the post-execution fallback logic.
+    if not can_preselect and reason == "low_confidence_gap":
+        relaxed_gap = max(0.005, min_gap / 4)
+        can_preselect, reason = _evaluate_selection_confidence(
+            selection,
+            min_samples=min_samples,
+            min_gap=relaxed_gap,
+        )
+        if can_preselect:
+            reason = "ok_relaxed_gap"
+
+    # Dead-zone fallback: gap sits between indistinguishable threshold
+    # and relaxed_gap.  Accept top technique if it has enough samples.
+    if not can_preselect and reason == "low_confidence_gap":
+        ranking = selection.get("ranking", [])
+        if isinstance(ranking, list) and len(ranking) >= 1:
+            top_row = ranking[0] if isinstance(ranking[0], dict) else {}
+            top_samples_raw = top_row.get("samples") or top_row.get("unweighted_samples") or 0
+            try:
+                top_samples_val = int(float(top_samples_raw))
+            except (TypeError, ValueError):
+                top_samples_val = 0
+            if top_samples_val >= min_samples:
+                can_preselect = True
+                reason = "ok_indistinguishable"
+
     details["reason"] = reason
     if not can_preselect:
         return None, details
@@ -1264,6 +1320,163 @@ async def get_coverage(domain: str, difficulty: str):
     if not result.get("success"):
         raise HTTPException(status_code=500, detail=result.get("error", "Coverage query failed"))
     return result
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Example Bank Management
+# ═══════════════════════════════════════════════════════════════════════
+
+_EXAMPLE_JSON_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "framework", "example_problems.json")
+_VALID_SUBJECTS = {"algebra", "counting-probability", "pre-calculus"}
+_VALID_DIFFICULTIES = {"basic", "intermediate", "advanced"}
+
+
+class ExampleAnalyzeRequest(BaseModel):
+    problem: str
+    solution: str = ""
+
+
+class ExampleSaveRequest(BaseModel):
+    problem: str
+    solution: str
+    subject: str
+    difficulty: str
+    type: str
+    concept: str
+
+
+@app.post("/examples/analyze", tags=["Examples"])
+async def analyze_example(req: ExampleAnalyzeRequest):
+    """Auto-detect subject, type, and difficulty for a problem using Ollama LLM (with rule-based fallback)."""
+    pg = pipeline.prompt_generator
+
+    # Build existing types first (needed by both LLM and response)
+    try:
+        with open(_EXAMPLE_JSON_PATH, "r", encoding="utf-8-sig") as f:
+            source = json.load(f)
+    except Exception:
+        source = {}
+
+    existing_types: dict[str, list[str]] = {}
+    for subj, diffs in source.items():
+        types_set: set[str] = set()
+        if isinstance(diffs, dict):
+            for diff_examples in diffs.values():
+                if isinstance(diff_examples, list):
+                    for ex in diff_examples:
+                        types_set.add(ex.get("type", "general"))
+        existing_types[subj] = sorted(types_set)
+
+    # Try Ollama LLM classification first
+    llm_result = None
+    detection_method = "rule-based"
+    try:
+        llm_result = pipeline.model_runner.classify_problem(
+            problem=req.problem,
+            solution=req.solution,
+            existing_types=existing_types,
+        )
+    except Exception:
+        pass
+
+    if llm_result:
+        detection_method = "ollama-llm"
+        detected_subject = llm_result["subject"]
+        detected_type = llm_result["type"]
+        detected_difficulty = llm_result["difficulty"]
+        detected_concept = llm_result.get("concept", detected_type)
+    else:
+        # Fallback to rule-based detection
+        detected_subject = pg.classify_subject(req.problem)
+        detected_type = pg._detect_primary_intent(pg._normalize_detection_text(req.problem))
+        detected_concept = detected_type
+
+        word_count = len(req.problem.split())
+        if word_count <= 15:
+            detected_difficulty = "basic"
+        elif word_count <= 30:
+            detected_difficulty = "intermediate"
+        else:
+            detected_difficulty = "advanced"
+
+    return {
+        "detected_subject": detected_subject if detected_subject in _VALID_SUBJECTS else "algebra",
+        "detected_type": detected_type,
+        "detected_difficulty": detected_difficulty,
+        "detected_concept": detected_concept,
+        "detection_method": detection_method,
+        "existing_types": existing_types,
+    }
+
+
+@app.post("/examples", tags=["Examples"])
+async def save_example(req: ExampleSaveRequest):
+    """Save a new example to example_problems.json."""
+    if req.subject not in _VALID_SUBJECTS:
+        raise HTTPException(status_code=400, detail=f"Invalid subject: {req.subject}. Must be one of {_VALID_SUBJECTS}")
+    if req.difficulty not in _VALID_DIFFICULTIES:
+        raise HTTPException(status_code=400, detail=f"Invalid difficulty: {req.difficulty}. Must be one of {_VALID_DIFFICULTIES}")
+    if not req.problem.strip() or not req.solution.strip():
+        raise HTTPException(status_code=400, detail="Problem and solution are required")
+
+    # Load current JSON
+    try:
+        with open(_EXAMPLE_JSON_PATH, "r", encoding="utf-8-sig") as f:
+            source = json.load(f)
+    except Exception:
+        source = {}
+
+    # Ensure structure exists
+    if req.subject not in source:
+        source[req.subject] = {}
+    if req.difficulty not in source[req.subject]:
+        source[req.subject][req.difficulty] = []
+
+    # Build example entry
+    clean_type = req.type.strip().lower().replace(" ", "_")
+    clean_concept = req.concept.strip().lower().replace(" ", "_")
+
+    new_example = {
+        "problem": req.problem.strip(),
+        "solution": req.solution.strip(),
+        "type": clean_type,
+        "constraints": [],
+        "concept": clean_concept,
+        "skills": [clean_type],
+        "format": {
+            "template": "single_equation",
+            "equation_count": 1,
+            "has_assignment": False,
+            "assigned_variable_count": 0,
+            "has_fraction": False,
+            "has_exponent": False,
+            "has_system": False,
+        },
+        "difficulty": req.difficulty,
+        "tags": [req.subject, clean_type],
+        "anchor_priority": 0.8,
+    }
+
+    # Duplicate check
+    existing = source[req.subject][req.difficulty]
+    for ex in existing:
+        if ex.get("problem", "").strip().lower() == req.problem.strip().lower():
+            raise HTTPException(status_code=409, detail="This exact problem already exists in the example bank")
+
+    existing.append(new_example)
+
+    # Write back
+    with open(_EXAMPLE_JSON_PATH, "w", encoding="utf-8") as f:
+        json.dump(source, f, indent=2, ensure_ascii=False)
+
+    # Reload prompt_generator's example dataset
+    pg = pipeline.prompt_generator
+    json_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "framework", "example_problems.json")
+    with open(json_path, "r", encoding="utf-8-sig") as f:
+        pg.example_dataset = pg._normalize_example_dataset(json.load(f))
+    pg._type_to_subject = pg._build_type_to_subject_map()
+
+    return {"success": True, "message": f"Example added to {req.subject}/{req.difficulty} as type '{clean_type}'"}
 
 
 if __name__ == "__main__":

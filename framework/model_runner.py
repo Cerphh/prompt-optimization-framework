@@ -442,6 +442,86 @@ class ModelRunner:
         target["prompt_eval_time"] += float(source.get("prompt_eval_time", 0.0) or 0.0)
         target["eval_time"] += float(source.get("eval_time", 0.0) or 0.0)
 
+    def classify_problem(self, problem: str, solution: str = "",
+                         existing_types: Optional[Dict[str, list]] = None) -> Optional[Dict[str, str]]:
+        """Use Ollama to classify a math problem's subject, type, concept, and difficulty.
+
+        Returns a dict with keys: subject, type, concept, difficulty — or None on failure.
+        """
+        solution_ctx = f"\nSolution:\n{solution}" if solution.strip() else ""
+
+        classify_prompt = (
+            "You are an expert math educator. Carefully analyze the math problem (and solution if given) below.\n\n"
+            f"Problem:\n{problem}{solution_ctx}\n\n"
+            "Think step-by-step about:\n"
+            "1. What mathematical SUBJECT area does this fall under? (must be one of: algebra, counting-probability, pre-calculus)\n"
+            "2. What specific mathematical TECHNIQUE or METHOD is needed to solve this? "
+            "For example: polynomial_factoring, rational_root_theorem, quadratic_formula, "
+            "binomial_expansion, permutations, combinations, trigonometric_equations, "
+            "sequence_and_series, complex_numbers, etc. Think about what a student actually does to solve it.\n"
+            "3. What is the core mathematical CONCEPT being tested? "
+            "For example: factoring_cubic_polynomials, finding_roots, angle_sum_identities, "
+            "conditional_probability, arithmetic_sequences, etc. This should describe the underlying math knowledge.\n"
+            "4. How DIFFICULT is this? basic = straightforward application, intermediate = requires multiple steps or insight, "
+            "advanced = requires deep understanding or combining techniques.\n\n"
+            "Return ONLY a JSON object with these exact keys:\n"
+            '- "subject": one of "algebra", "counting-probability", "pre-calculus"\n'
+            '- "type": snake_case label describing the solving technique (be specific and descriptive)\n'
+            '- "concept": snake_case label describing the core concept tested (be specific and descriptive)\n'
+            '- "difficulty": one of "basic", "intermediate", "advanced"\n\n'
+            "Return ONLY valid JSON, no explanation or markdown."
+        )
+
+        payload = {
+            "model": self.model_name,
+            "prompt": classify_prompt,
+            "stream": False,
+            "keep_alive": os.getenv("OLLAMA_KEEP_ALIVE", "5m"),
+            "options": {
+                "temperature": 0.0,
+                "seed": 42,
+                "num_predict": 256,
+                "num_ctx": 2048,
+            },
+        }
+
+        try:
+            response = self.session.post(
+                f"{self.base_url}/api/generate",
+                json=payload,
+                timeout=(5, 30),
+            )
+            response.raise_for_status()
+            raw_text = response.json().get("response", "")
+
+            # Extract JSON from the response
+            json_match = re.search(r'\{[^}]+\}', raw_text, re.DOTALL)
+            if not json_match:
+                return None
+            result = json.loads(json_match.group())
+
+            valid_subjects = {"algebra", "counting-probability", "pre-calculus"}
+            valid_difficulties = {"basic", "intermediate", "advanced"}
+
+            subject = result.get("subject", "").strip().lower()
+            ptype = result.get("type", "").strip().lower().replace(" ", "_")
+            concept = result.get("concept", "").strip().lower().replace(" ", "_")
+            difficulty = result.get("difficulty", "").strip().lower()
+
+            if subject not in valid_subjects or difficulty not in valid_difficulties:
+                return None
+            if not ptype or not concept:
+                return None
+
+            return {
+                "subject": subject,
+                "type": ptype,
+                "concept": concept,
+                "difficulty": difficulty,
+            }
+        except Exception:
+            return None
+
     def _run_generation_once(self, prompt: str, timeout: Tuple[int, int] = (5, 600)) -> Dict[str, Any]:
         response = self.session.post(
             f"{self.base_url}/api/generate",

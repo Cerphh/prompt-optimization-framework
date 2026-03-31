@@ -529,6 +529,20 @@ export default function Home() {
   const [showExampleTypes, setShowExampleTypes] = useState(false)
   const [activeConceptTab, setActiveConceptTab] = useState<string>('')
 
+  // ── Add Example state ──
+  const [showAddExample, setShowAddExample] = useState(false)
+  const [addExProblem, setAddExProblem] = useState('')
+  const [addExSolution, setAddExSolution] = useState('')
+  const [addExSubject, setAddExSubject] = useState('')
+  const [addExDifficulty, setAddExDifficulty] = useState('')
+  const [addExType, setAddExType] = useState('')
+  const [addExConcept, setAddExConcept] = useState('')
+  const [addExAnalyzed, setAddExAnalyzed] = useState(false)
+  const [addExAnalyzing, setAddExAnalyzing] = useState(false)
+  const [addExSaving, setAddExSaving] = useState(false)
+  const [addExStatus, setAddExStatus] = useState('')
+  const [addExExistingTypes, setAddExExistingTypes] = useState<Record<string, string[]>>({})
+  const [addExDetectionMethod, setAddExDetectionMethod] = useState('')
   // Check API health
   useEffect(() => {
     const checkHealth = async () => {
@@ -588,6 +602,73 @@ export default function Home() {
   }, [runMode, validationError])
 
   const formatTypeName = (t: string) => t.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+
+  // ── Add Example helpers ──
+  const analyzeExample = async () => {
+    if (!addExProblem.trim()) return
+    setAddExAnalyzing(true)
+    setAddExStatus('')
+    try {
+      const res = await fetch(apiUrl('/examples/analyze'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ problem: addExProblem, solution: addExSolution }),
+      })
+      if (!res.ok) throw new Error('Analysis failed')
+      const data = await res.json()
+      setAddExSubject(data.detected_subject)
+      setAddExDifficulty(data.detected_difficulty)
+      setAddExType(data.detected_type)
+      setAddExConcept(data.detected_concept || data.detected_type)
+      setAddExExistingTypes(data.existing_types || {})
+      setAddExDetectionMethod(data.detection_method || 'rule-based')
+      setAddExAnalyzed(true)
+    } catch (e: unknown) {
+      setAddExStatus(`Analysis error: ${e instanceof Error ? e.message : 'Unknown error'}`)
+    } finally {
+      setAddExAnalyzing(false)
+    }
+  }
+
+  const saveExample = async () => {
+    if (!addExProblem.trim() || !addExSolution.trim()) {
+      setAddExStatus('Problem and solution are required')
+      return
+    }
+    setAddExSaving(true)
+    setAddExStatus('')
+    try {
+      const res = await fetch(apiUrl('/examples'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          problem: addExProblem,
+          solution: addExSolution,
+          subject: addExSubject,
+          difficulty: addExDifficulty,
+          type: addExType,
+          concept: addExConcept,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.detail || 'Save failed')
+      setAddExStatus(data.message || 'Saved!')
+      // Reset form after success
+      setTimeout(() => {
+        setAddExProblem('')
+        setAddExSolution('')
+        setAddExAnalyzed(false)
+        setAddExStatus('')
+        setShowAddExample(false)
+        // Refresh example types
+        fetch(apiUrl('/example-types')).then(r => r.json()).then(d => setExampleTypes(d)).catch(() => {})
+      }, 1500)
+    } catch (e: unknown) {
+      setAddExStatus(`Error: ${e instanceof Error ? e.message : 'Unknown error'}`)
+    } finally {
+      setAddExSaving(false)
+    }
+  }
 
   const normalizeDetectionText = (text: string): string => {
     const replacements: Record<string, string> = {
@@ -1365,7 +1446,7 @@ export default function Home() {
 
               {/* Available Few-Shot Concepts (opens modal) */}
               {Object.keys(exampleTypes).length > 0 && (
-                <div className="mb-4">
+                <div className="mb-4 flex gap-2">
                   <button
                     type="button"
                     onClick={() => setShowExampleTypes(true)}
@@ -1373,6 +1454,14 @@ export default function Home() {
                     style={{ color: 'var(--text-subtle)', background: 'var(--bg)', border: '1px solid var(--border)' }}
                   >
                     ▶ Available Few-Shot Concepts
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setShowAddExample(true); setAddExStatus(''); setAddExAnalyzed(false) }}
+                    className="flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded"
+                    style={{ color: '#fff', background: 'var(--accent)', border: 'none' }}
+                  >
+                    + Add Example
                   </button>
                 </div>
               )}
@@ -1571,7 +1660,7 @@ export default function Home() {
 
               {/* Available Few-Shot Concepts (opens modal) */}
               {Object.keys(exampleTypes).length > 0 && (
-                <div>
+                <div className="flex gap-2">
                   <button
                     type="button"
                     onClick={() => setShowExampleTypes(true)}
@@ -1579,6 +1668,14 @@ export default function Home() {
                     style={{ color: 'var(--text-subtle)', background: 'var(--bg)', border: '1px solid var(--border)' }}
                   >
                     ▶ Available Few-Shot Concepts
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setShowAddExample(true); setAddExStatus(''); setAddExAnalyzed(false) }}
+                    className="flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded"
+                    style={{ color: '#fff', background: 'var(--accent)', border: 'none' }}
+                  >
+                    + Add Example
                   </button>
                 </div>
               )}
@@ -2820,6 +2917,187 @@ export default function Home() {
                   </div>
                 ))
               })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ Add Example Modal ═══ */}
+      {showAddExample && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: 'rgba(0,0,0,0.4)' }}
+          onClick={() => setShowAddExample(false)}
+        >
+          <div
+            className="relative w-full max-w-2xl mx-4 rounded-xl shadow-2xl overflow-hidden flex flex-col"
+            style={{ background: 'var(--surface)', border: '1px solid var(--border)', maxHeight: '85vh' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 shrink-0" style={{ borderBottom: '1px solid var(--border)' }}>
+              <h3 className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Add Few-Shot Example</h3>
+              <button
+                type="button"
+                onClick={() => setShowAddExample(false)}
+                className="text-lg leading-none px-1 rounded hover:opacity-70 transition-opacity"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="px-5 py-4 overflow-y-auto space-y-4">
+              {/* Problem */}
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text)' }}>Problem</label>
+                <textarea
+                  value={addExProblem}
+                  onChange={(e) => { setAddExProblem(e.target.value); setAddExAnalyzed(false) }}
+                  rows={3}
+                  placeholder="e.g., Solve for x: 3x - 7 = 20"
+                  className="w-full px-3 py-2 rounded-md text-sm font-mono outline-none resize-y"
+                  style={{ border: '1px solid var(--border)', color: 'var(--text)', background: 'var(--bg)' }}
+                />
+              </div>
+
+              {/* Solution */}
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text)' }}>Solution</label>
+                <textarea
+                  value={addExSolution}
+                  onChange={(e) => setAddExSolution(e.target.value)}
+                  rows={3}
+                  placeholder="e.g., Add 7 to both sides: 3x = 27. Divide by 3: x = 9."
+                  className="w-full px-3 py-2 rounded-md text-sm font-mono outline-none resize-y"
+                  style={{ border: '1px solid var(--border)', color: 'var(--text)', background: 'var(--bg)' }}
+                />
+              </div>
+
+              {/* Analyze button */}
+              {!addExAnalyzed && (
+                <button
+                  type="button"
+                  onClick={analyzeExample}
+                  disabled={addExAnalyzing || !addExProblem.trim() || !addExSolution.trim()}
+                  className="w-full py-2 rounded-md text-sm font-medium transition-colors"
+                  style={{
+                    background: (!addExProblem.trim() || !addExSolution.trim()) ? 'var(--border)' : 'var(--accent)',
+                    color: (!addExProblem.trim() || !addExSolution.trim()) ? 'var(--text-muted)' : '#fff',
+                    cursor: (!addExProblem.trim() || !addExSolution.trim()) ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {addExAnalyzing ? 'Asking Ollama...' : '🤖 Auto-Detect Metadata'}
+                </button>
+              )}
+
+              {/* Detected / editable metadata */}
+              {addExAnalyzed && (
+                <div className="space-y-3 p-3 rounded-md" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                  <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-subtle)' }}>
+                    Detected Metadata <span className="font-normal normal-case">(override if incorrect)</span>
+                    {addExDetectionMethod && (
+                      <span
+                        className="ml-2 inline-block px-1.5 py-0.5 rounded text-[10px] font-medium normal-case"
+                        style={{
+                          background: addExDetectionMethod === 'ollama-llm' ? 'rgba(99,102,241,0.15)' : 'rgba(234,179,8,0.15)',
+                          color: addExDetectionMethod === 'ollama-llm' ? 'rgb(99,102,241)' : 'rgb(161,128,17)',
+                        }}
+                      >
+                        {addExDetectionMethod === 'ollama-llm' ? '🤖 LLM' : '📏 Rule-based'}
+                      </span>
+                    )}
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {/* Subject */}
+                    <div>
+                      <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Subject</label>
+                      <select
+                        value={addExSubject}
+                        onChange={(e) => setAddExSubject(e.target.value)}
+                        className="w-full px-2 py-1.5 rounded text-sm outline-none"
+                        style={{ border: '1px solid var(--border)', color: 'var(--text)', background: 'var(--surface)' }}
+                      >
+                        <option value="algebra">Algebra</option>
+                        <option value="counting-probability">Counting & Probability</option>
+                        <option value="pre-calculus">Pre-Calculus</option>
+                      </select>
+                    </div>
+                    {/* Difficulty */}
+                    <div>
+                      <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Difficulty</label>
+                      <select
+                        value={addExDifficulty}
+                        onChange={(e) => setAddExDifficulty(e.target.value)}
+                        className="w-full px-2 py-1.5 rounded text-sm outline-none"
+                        style={{ border: '1px solid var(--border)', color: 'var(--text)', background: 'var(--surface)' }}
+                      >
+                        <option value="basic">Basic</option>
+                        <option value="intermediate">Intermediate</option>
+                        <option value="advanced">Advanced</option>
+                      </select>
+                    </div>
+                    {/* Type */}
+                    <div>
+                      <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Type</label>
+                      <input
+                        value={addExType}
+                        onChange={(e) => setAddExType(e.target.value)}
+                        list="existing-types-list"
+                        className="w-full px-2 py-1.5 rounded text-sm font-mono outline-none"
+                        style={{ border: '1px solid var(--border)', color: 'var(--text)', background: 'var(--surface)' }}
+                        placeholder="e.g., solve_equation"
+                      />
+                      <datalist id="existing-types-list">
+                        {(addExExistingTypes[addExSubject] || []).map((t) => (
+                          <option key={t} value={t} />
+                        ))}
+                      </datalist>
+                    </div>
+                    {/* Concept */}
+                    <div>
+                      <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Concept</label>
+                      <input
+                        value={addExConcept}
+                        onChange={(e) => setAddExConcept(e.target.value)}
+                        className="w-full px-2 py-1.5 rounded text-sm font-mono outline-none"
+                        style={{ border: '1px solid var(--border)', color: 'var(--text)', background: 'var(--surface)' }}
+                        placeholder="e.g., linear_equation_solving"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Save button */}
+                  <button
+                    type="button"
+                    onClick={saveExample}
+                    disabled={addExSaving || !addExSolution.trim()}
+                    className="w-full py-2 rounded-md text-sm font-medium transition-colors mt-2"
+                    style={{
+                      background: !addExSolution.trim() ? 'var(--border)' : '#16a34a',
+                      color: !addExSolution.trim() ? 'var(--text-muted)' : '#fff',
+                      cursor: !addExSolution.trim() ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    {addExSaving ? 'Saving...' : 'Save to Example Bank'}
+                  </button>
+                </div>
+              )}
+
+              {/* Status message */}
+              {addExStatus && (
+                <div
+                  className="px-3 py-2 rounded text-xs"
+                  style={{
+                    background: addExStatus.startsWith('Error') ? '#fef2f2' : '#f0fdf4',
+                    border: `1px solid ${addExStatus.startsWith('Error') ? '#fecaca' : '#bbf7d0'}`,
+                    color: addExStatus.startsWith('Error') ? '#dc2626' : '#16a34a',
+                  }}
+                >
+                  {addExStatus}
+                </div>
+              )}
             </div>
           </div>
         </div>

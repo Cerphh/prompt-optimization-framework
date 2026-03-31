@@ -1724,6 +1724,21 @@ class PromptGenerator:
             if example_type in self._COUNTING_TYPES and problem_type in self._COUNTING_TYPES:
                 return True
 
+            # For LLM-generated types not in the hardcoded families, fall back
+            # to checking the example's actual problem text intent.  This lets
+            # descriptive types like "rational_root_theorem_and_polynomial_factoring"
+            # match when the underlying problem is still a solve_equation.
+            if example_type not in self._EQUATION_SOLVING_TYPES | self._PROBABILITY_TYPES | self._COUNTING_TYPES:
+                example_problem_text = str(example.get("problem", ""))
+                if example_problem_text:
+                    example_intent = self._detect_primary_intent(
+                        self._normalize_detection_text(example_problem_text)
+                    )
+                    if example_intent == problem_type:
+                        return True
+                    if example_intent in self._EQUATION_SOLVING_TYPES and problem_type in self._EQUATION_SOLVING_TYPES:
+                        return True
+
         # The migrated bank has many speed/rate algebra word problems typed as
         # counting_arrangements/general. Keep these eligible for proportion queries.
         if problem_type == "ratio_proportion":
