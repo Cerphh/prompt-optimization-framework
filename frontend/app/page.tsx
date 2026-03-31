@@ -527,6 +527,7 @@ export default function Home() {
   const [coverageData, setCoverageData] = useState<{ problem_count: number; ground_truth_count: number; techniques_tested: string[]; win_counts: Record<string, number>; total_with_winner: number } | null>(null)
   const [exampleTypes, setExampleTypes] = useState<Record<string, Record<string, { concept: string; count: number; sample: string }[]>>>({})
   const [showExampleTypes, setShowExampleTypes] = useState(false)
+  const [activeConceptTab, setActiveConceptTab] = useState<string>('')
 
   // Check API health
   useEffect(() => {
@@ -1362,39 +1363,17 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Available Few-Shot Concepts */}
+              {/* Available Few-Shot Concepts (opens modal) */}
               {Object.keys(exampleTypes).length > 0 && (
                 <div className="mb-4">
                   <button
                     type="button"
-                    onClick={() => setShowExampleTypes(!showExampleTypes)}
+                    onClick={() => setShowExampleTypes(true)}
                     className="flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded"
                     style={{ color: 'var(--text-subtle)', background: 'var(--bg)', border: '1px solid var(--border)' }}
                   >
-                    <span style={{ display: 'inline-block', transform: showExampleTypes ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}>▶</span>
-                    Available Few-Shot Concepts
+                    ▶ Available Few-Shot Concepts
                   </button>
-                  {showExampleTypes && (
-                    <div className="mt-2 p-3 rounded-md text-xs space-y-3" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
-                      {Object.entries(exampleTypes).map(([subj, diffs]) => (
-                        <div key={subj}>
-                          <p className="font-semibold mb-1 capitalize" style={{ color: 'var(--text)' }}>{subj.replace(/-/g, ' & ').replace(/\b\w/g, c => c.toUpperCase())}</p>
-                          {Object.entries(diffs).map(([diff, types]) => (
-                            <div key={diff} className="ml-3 mb-1.5">
-                              <p className="font-medium capitalize" style={{ color: 'var(--text-subtle)' }}>{diff}</p>
-                              <ul className="ml-3 mt-0.5 space-y-0.5">
-                                {types.map((t) => (
-                                  <li key={t.concept} style={{ color: 'var(--text-muted)' }}>
-                                    {formatTypeName(t.concept)} <span className="opacity-60">({t.count} example{t.count !== 1 ? 's' : ''})</span>
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
               )}
 
@@ -1590,39 +1569,17 @@ export default function Home() {
                 </select>
               </div>
 
-              {/* Available Few-Shot Concepts (sidebar) */}
+              {/* Available Few-Shot Concepts (opens modal) */}
               {Object.keys(exampleTypes).length > 0 && (
                 <div>
                   <button
                     type="button"
-                    onClick={() => setShowExampleTypes(!showExampleTypes)}
+                    onClick={() => setShowExampleTypes(true)}
                     className="flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded"
                     style={{ color: 'var(--text-subtle)', background: 'var(--bg)', border: '1px solid var(--border)' }}
                   >
-                    <span style={{ display: 'inline-block', transform: showExampleTypes ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}>▶</span>
-                    Available Few-Shot Concepts
+                    ▶ Available Few-Shot Concepts
                   </button>
-                  {showExampleTypes && (
-                    <div className="mt-2 p-3 rounded-md text-xs space-y-3" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
-                      {Object.entries(exampleTypes).map(([subj, diffs]) => (
-                        <div key={subj}>
-                          <p className="font-semibold mb-1 capitalize" style={{ color: 'var(--text)' }}>{subj.replace(/-/g, ' & ').replace(/\b\w/g, c => c.toUpperCase())}</p>
-                          {Object.entries(diffs).map(([diff, types]) => (
-                            <div key={diff} className="ml-3 mb-1.5">
-                              <p className="font-medium capitalize" style={{ color: 'var(--text-subtle)' }}>{diff}</p>
-                              <ul className="ml-3 mt-0.5 space-y-0.5">
-                                {types.map((t) => (
-                                  <li key={t.concept} style={{ color: 'var(--text-muted)' }}>
-                                    {formatTypeName(t.concept)} <span className="opacity-60">({t.count} example{t.count !== 1 ? 's' : ''})</span>
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
               )}
 
@@ -2275,33 +2232,6 @@ export default function Home() {
 
                 {/* Body */}
                 <div className="p-6 space-y-6">
-                  {/* Available Few-Shot Concepts (always visible reference) */}
-                  {Object.keys(exampleTypes).length > 0 && (
-                    <details className="text-xs">
-                      <summary
-                        className="text-[11px] font-mono uppercase tracking-wider cursor-pointer select-none hover:underline"
-                        style={{ color: 'var(--text-subtle)' }}
-                      >
-                        Available Few-Shot Concepts
-                      </summary>
-                      <div className="mt-2 p-4 rounded-md space-y-3" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
-                        {Object.entries(exampleTypes).map(([subj, diffs]) => (
-                          <div key={subj}>
-                            <p className="font-semibold mb-1" style={{ color: 'var(--text)' }}>{subj.replace(/-/g, ' & ').replace(/\b\w/g, c => c.toUpperCase())}</p>
-                            {Object.entries(diffs).map(([diff, types]) => (
-                              <div key={diff} className="ml-3 mb-1">
-                                <span className="font-medium capitalize" style={{ color: 'var(--text-subtle)' }}>{diff}:</span>{' '}
-                                <span style={{ color: 'var(--text-muted)' }}>
-                                  {types.map(t => `${formatTypeName(t.concept)} (${t.count})`).join(', ')}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        ))}
-                      </div>
-                    </details>
-                  )}
-
                   {/* Prompt Used (collapsible) */}
                   <details>
                     <summary
@@ -2821,6 +2751,75 @@ export default function Home() {
                   )}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Few-Shot Concepts Modal */}
+      {showExampleTypes && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: 'rgba(0,0,0,0.4)' }}
+          onClick={() => setShowExampleTypes(false)}
+        >
+          <div
+            className="relative w-full max-w-2xl mx-4 rounded-xl shadow-2xl overflow-hidden"
+            style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid var(--border)' }}>
+              <h3 className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Available Few-Shot Concepts</h3>
+              <button
+                type="button"
+                onClick={() => setShowExampleTypes(false)}
+                className="text-lg leading-none px-1 rounded hover:opacity-70 transition-opacity"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                ✕
+              </button>
+            </div>
+            {/* Subject tabs */}
+            <div className="flex gap-1 px-5 pt-3 pb-2" style={{ borderBottom: '1px solid var(--border)' }}>
+              {Object.keys(exampleTypes).map((subj) => {
+                const label = subj.replace(/-/g, ' & ').replace(/\b\w/g, c => c.toUpperCase())
+                const isActive = (activeConceptTab || Object.keys(exampleTypes)[0]) === subj
+                return (
+                  <button
+                    key={subj}
+                    type="button"
+                    onClick={() => setActiveConceptTab(subj)}
+                    className="px-3 py-1.5 text-xs font-medium rounded-md transition-colors"
+                    style={{
+                      background: isActive ? 'var(--accent)' : 'var(--bg)',
+                      color: isActive ? '#fff' : 'var(--text-muted)',
+                      border: isActive ? 'none' : '1px solid var(--border)',
+                    }}
+                  >
+                    {label}
+                  </button>
+                )
+              })}
+            </div>
+            {/* Tab content */}
+            <div className="px-5 py-4 overflow-y-auto text-xs space-y-3" style={{ maxHeight: '55vh' }}>
+              {(() => {
+                const currentTab = activeConceptTab || Object.keys(exampleTypes)[0]
+                const diffs = exampleTypes[currentTab]
+                if (!diffs) return null
+                return Object.entries(diffs).map(([diff, types]) => (
+                  <div key={diff} className="mb-2">
+                    <p className="font-medium capitalize mb-1" style={{ color: 'var(--text-subtle)' }}>{diff}</p>
+                    <ul className="ml-3 space-y-0.5">
+                      {types.map((t) => (
+                        <li key={t.concept} style={{ color: 'var(--text-muted)' }}>
+                          {formatTypeName(t.concept)} <span className="opacity-60">({t.count} example{t.count !== 1 ? 's' : ''})</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))
+              })()}
             </div>
           </div>
         </div>
