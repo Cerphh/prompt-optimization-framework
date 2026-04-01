@@ -42,3 +42,6 @@ results/
 *.log
 .env
 *-firebase-adminsdk-*.json
+framework/user_examples.json
+framework/user_examples.json.bak
+framework/example_problems.json.bak

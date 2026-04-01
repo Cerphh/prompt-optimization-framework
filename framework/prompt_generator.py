@@ -1992,6 +1992,12 @@ class PromptGenerator:
             if constraint_matches:
                 filtered_examples = constraint_matches
 
+        # Final safety net: if all strict filters eliminated every example,
+        # fall back to the full set so the relevance ranker can still pick
+        # the best available examples instead of raising FewShotUnavailableError.
+        if not filtered_examples and available_examples:
+            filtered_examples = available_examples
+
         return filtered_examples
     
     def _score_example_relevance(self, example: dict, problem: str, problem_keywords: set) -> float:

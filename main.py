@@ -5,7 +5,11 @@ Research Benchmarking API for comparative prompt evaluation.
 
 import os
 import json
+import asyncio
+import shutil
+import tempfile
 import hashlib
+import jsonschema
 from datetime import datetime, timezone
 from pathlib import Path
 from fastapi import FastAPI, HTTPException
@@ -951,6 +955,19 @@ async def example_types():
     except Exception:
         source = {}
 
+    # Merge user examples (non-expired) into the source for concept listing
+    user_data = _load_user_examples()
+    user_data, _ = _purge_expired_entries(user_data)
+    for subj, diffs in user_data.items():
+        if subj not in source:
+            source[subj] = {}
+        if isinstance(diffs, dict):
+            for diff, examples in diffs.items():
+                if diff not in source[subj]:
+                    source[subj][diff] = []
+                if isinstance(examples, list):
+                    source[subj][diff].extend(examples)
+
     result = {}
     for subject, subject_val in source.items():
         subject_out: dict = {}
@@ -1152,7 +1169,7 @@ async def get_subjects():
 
 @app.get("/example-difficulties", tags=["Info"])
 async def example_difficulties():
-    """Return available difficulty levels per subject from example_problems.json."""
+    """Return available difficulty levels per subject from example_problems.json + user_examples.json."""
     import json as _json, os as _os
     json_path = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "framework", "example_problems.json")
     try:
@@ -1160,6 +1177,18 @@ async def example_difficulties():
             source = _json.load(f)
     except Exception:
         source = {}
+
+    # Include user examples
+    user_data = _load_user_examples()
+    user_data, _ = _purge_expired_entries(user_data)
+    for subj, diffs in user_data.items():
+        if subj not in source:
+            source[subj] = {}
+        if isinstance(diffs, dict):
+            for diff in diffs.keys():
+                if diff not in source[subj]:
+                    source[subj][diff] = []
+
     result: dict[str, list[str]] = {}
     for subject, subject_val in source.items():
         if isinstance(subject_val, dict):
@@ -1347,8 +1376,102 @@ async def get_coverage(domain: str, difficulty: str):
 # ═══════════════════════════════════════════════════════════════════════
 
 _EXAMPLE_JSON_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "framework", "example_problems.json")
+_USER_EXAMPLES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "framework", "user_examples.json")
 _VALID_SUBJECTS = {"algebra", "counting-probability", "pre-calculus"}
 _VALID_DIFFICULTIES = {"basic", "intermediate", "advanced"}
+_example_lock = asyncio.Lock()
+
+# Default TTL for user-submitted examples: 3 days (in seconds)
+_USER_EXAMPLE_TTL_SECONDS = int(os.getenv("USER_EXAMPLE_TTL_SECONDS", str(3 * 24 * 60 * 60)))
+
+_SCHEMA_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "framework", "example_bank.schema.json")
+with open(_SCHEMA_PATH, "r", encoding="utf-8") as _sf:
+    _EXAMPLE_SCHEMA = json.load(_sf)
+# Build a standalone entry schema that carries the shared $defs for $ref resolution
+_ENTRY_SCHEMA = {**_EXAMPLE_SCHEMA["$defs"]["exampleEntry"], "$defs": _EXAMPLE_SCHEMA["$defs"]}
+
+
+def _load_user_examples() -> dict:
+    """Load user_examples.json safely."""
+    try:
+        with open(_USER_EXAMPLES_PATH, "r", encoding="utf-8-sig") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
+    except (json.JSONDecodeError, ValueError):
+        return {}
+
+
+def _purge_expired_entries(source: dict) -> tuple:
+    """Remove expired entries from user examples. Returns (cleaned_source, removed_count)."""
+    now = datetime.now(timezone.utc).timestamp()
+    removed = 0
+    for subject in list(source.keys()):
+        if not isinstance(source[subject], dict):
+            continue
+        for difficulty in list(source[subject].keys()):
+            if not isinstance(source[subject][difficulty], list):
+                continue
+            before = len(source[subject][difficulty])
+            source[subject][difficulty] = [
+                ex for ex in source[subject][difficulty]
+                if ex.get("expires_at", float("inf")) > now
+            ]
+            removed += before - len(source[subject][difficulty])
+            # Clean up empty lists
+            if not source[subject][difficulty]:
+                del source[subject][difficulty]
+        # Clean up empty subjects
+        if not source[subject]:
+            del source[subject]
+    return source, removed
+
+
+def _atomic_write_json(path: str, data: dict):
+    """Write JSON atomically via temp file + os.replace."""
+    dir_name = os.path.dirname(path)
+    tmp_fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix=".tmp")
+    try:
+        with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        os.replace(tmp_path, path)
+    except Exception:
+        os.unlink(tmp_path)
+        raise
+
+
+def _reload_prompt_generator_examples():
+    """Reload prompt_generator's example_dataset by merging dev + valid user examples."""
+    pg = pipeline.prompt_generator
+
+    # Load dev bank
+    try:
+        with open(_EXAMPLE_JSON_PATH, "r", encoding="utf-8-sig") as f:
+            dev_data = json.load(f)
+    except Exception:
+        dev_data = {}
+
+    # Load user bank and purge expired
+    user_data = _load_user_examples()
+    user_data, _ = _purge_expired_entries(user_data)
+
+    # Merge: user examples are appended after dev examples per subject/difficulty
+    merged = json.loads(json.dumps(dev_data))  # deep copy
+    for subject, diffs in user_data.items():
+        if subject not in merged:
+            merged[subject] = {}
+        if isinstance(diffs, dict):
+            for difficulty, examples in diffs.items():
+                if difficulty not in merged[subject]:
+                    merged[subject][difficulty] = []
+                if isinstance(examples, list):
+                    # Strip TTL metadata before passing to prompt_generator
+                    for ex in examples:
+                        clean_ex = {k: v for k, v in ex.items() if k not in ("created_at", "expires_at")}
+                        merged[subject][difficulty].append(clean_ex)
+
+    pg.example_dataset = pg._normalize_example_dataset(merged)
+    pg._type_to_subject = pg._build_type_to_subject_map()
 
 
 class ExampleAnalyzeRequest(BaseModel):
@@ -1357,12 +1480,12 @@ class ExampleAnalyzeRequest(BaseModel):
 
 
 class ExampleSaveRequest(BaseModel):
-    problem: str
-    solution: str
-    subject: str
-    difficulty: str
-    type: str
-    concept: str
+    problem: str = Field(..., min_length=1, max_length=5000)
+    solution: str = Field(..., min_length=1, max_length=10000)
+    subject: str = Field(..., min_length=1, max_length=50)
+    difficulty: str = Field(..., min_length=1, max_length=20)
+    type: str = Field(..., min_length=1, max_length=100)
+    concept: str = Field(..., min_length=1, max_length=100)
 
 
 @app.post("/examples/analyze", tags=["Examples"])
@@ -1370,12 +1493,25 @@ async def analyze_example(req: ExampleAnalyzeRequest):
     """Auto-detect subject, type, and difficulty for a problem using Ollama LLM (with rule-based fallback)."""
     pg = pipeline.prompt_generator
 
-    # Build existing types first (needed by both LLM and response)
+    # Build existing types from dev bank + user bank
     try:
         with open(_EXAMPLE_JSON_PATH, "r", encoding="utf-8-sig") as f:
             source = json.load(f)
     except Exception:
         source = {}
+
+    # Also include user types
+    user_data = _load_user_examples()
+    user_data, _ = _purge_expired_entries(user_data)
+    for subj, diffs in user_data.items():
+        if subj not in source:
+            source[subj] = {}
+        if isinstance(diffs, dict):
+            for diff, examples in diffs.items():
+                if diff not in source[subj]:
+                    source[subj][diff] = []
+                if isinstance(examples, list):
+                    source[subj][diff].extend(examples)
 
     existing_types: dict[str, list[str]] = {}
     for subj, diffs in source.items():
@@ -1431,7 +1567,7 @@ async def analyze_example(req: ExampleAnalyzeRequest):
 
 @app.post("/examples", tags=["Examples"])
 async def save_example(req: ExampleSaveRequest):
-    """Save a new example to example_problems.json."""
+    """Save a new user-submitted example to user_examples.json (with TTL expiry)."""
     if req.subject not in _VALID_SUBJECTS:
         raise HTTPException(status_code=400, detail=f"Invalid subject: {req.subject}. Must be one of {_VALID_SUBJECTS}")
     if req.difficulty not in _VALID_DIFFICULTIES:
@@ -1439,23 +1575,11 @@ async def save_example(req: ExampleSaveRequest):
     if not req.problem.strip() or not req.solution.strip():
         raise HTTPException(status_code=400, detail="Problem and solution are required")
 
-    # Load current JSON
-    try:
-        with open(_EXAMPLE_JSON_PATH, "r", encoding="utf-8-sig") as f:
-            source = json.load(f)
-    except Exception:
-        source = {}
-
-    # Ensure structure exists
-    if req.subject not in source:
-        source[req.subject] = {}
-    if req.difficulty not in source[req.subject]:
-        source[req.subject][req.difficulty] = []
-
     # Build example entry
     clean_type = req.type.strip().lower().replace(" ", "_")
     clean_concept = req.concept.strip().lower().replace(" ", "_")
 
+    now = datetime.now(timezone.utc)
     new_example = {
         "problem": req.problem.strip(),
         "solution": req.solution.strip(),
@@ -1475,28 +1599,126 @@ async def save_example(req: ExampleSaveRequest):
         "difficulty": req.difficulty,
         "tags": [req.subject, clean_type],
         "anchor_priority": 0.8,
+        "created_at": now.isoformat(),
+        "expires_at": now.timestamp() + _USER_EXAMPLE_TTL_SECONDS,
     }
 
-    # Duplicate check
-    existing = source[req.subject][req.difficulty]
-    for ex in existing:
-        if ex.get("problem", "").strip().lower() == req.problem.strip().lower():
-            raise HTTPException(status_code=409, detail="This exact problem already exists in the example bank")
+    # Validate entry against JSON schema (strip TTL fields for validation)
+    entry_for_validation = {k: v for k, v in new_example.items() if k not in ("created_at", "expires_at")}
+    try:
+        jsonschema.validate(instance=entry_for_validation, schema=_ENTRY_SCHEMA)
+    except jsonschema.ValidationError as e:
+        raise HTTPException(status_code=422, detail=f"Entry failed schema validation: {e.message}")
 
-    existing.append(new_example)
+    async with _example_lock:
+        # Load user examples
+        source = _load_user_examples()
 
-    # Write back
-    with open(_EXAMPLE_JSON_PATH, "w", encoding="utf-8") as f:
-        json.dump(source, f, indent=2, ensure_ascii=False)
+        # Purge expired entries first
+        source, purged_count = _purge_expired_entries(source)
 
-    # Reload prompt_generator's example dataset
-    pg = pipeline.prompt_generator
-    json_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "framework", "example_problems.json")
-    with open(json_path, "r", encoding="utf-8-sig") as f:
-        pg.example_dataset = pg._normalize_example_dataset(json.load(f))
-    pg._type_to_subject = pg._build_type_to_subject_map()
+        # Ensure structure exists
+        if req.subject not in source:
+            source[req.subject] = {}
+        if req.difficulty not in source[req.subject]:
+            source[req.subject][req.difficulty] = []
 
-    return {"success": True, "message": f"Example added to {req.subject}/{req.difficulty} as type '{clean_type}'"}
+        # Duplicate check against user bank
+        existing = source[req.subject][req.difficulty]
+        for ex in existing:
+            if ex.get("problem", "").strip().lower() == req.problem.strip().lower():
+                raise HTTPException(status_code=409, detail="This exact problem already exists in the user example bank")
+
+        # Also check against dev bank (don't allow users to duplicate dev examples)
+        try:
+            with open(_EXAMPLE_JSON_PATH, "r", encoding="utf-8-sig") as f:
+                dev_source = json.load(f)
+            dev_examples = dev_source.get(req.subject, {}).get(req.difficulty, [])
+            for ex in dev_examples:
+                if ex.get("problem", "").strip().lower() == req.problem.strip().lower():
+                    raise HTTPException(status_code=409, detail="This problem already exists in the curated example bank")
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+
+        existing.append(new_example)
+
+        # Backup before write
+        if os.path.exists(_USER_EXAMPLES_PATH):
+            shutil.copy2(_USER_EXAMPLES_PATH, _USER_EXAMPLES_PATH + ".bak")
+
+        # Atomic write
+        _atomic_write_json(_USER_EXAMPLES_PATH, source)
+
+        # Reload prompt_generator with merged examples
+        _reload_prompt_generator_examples()
+
+    expires_at_str = datetime.fromtimestamp(new_example["expires_at"], tz=timezone.utc).isoformat()
+    return {
+        "success": True,
+        "message": f"Example added to {req.subject}/{req.difficulty} as type '{clean_type}'",
+        "bank": "user",
+        "expires_at": expires_at_str,
+        "ttl_seconds": _USER_EXAMPLE_TTL_SECONDS,
+        "purged_expired": purged_count,
+    }
+
+
+@app.get("/examples/user", tags=["Examples"])
+async def list_user_examples():
+    """List all user-submitted examples with their expiry status."""
+    async with _example_lock:
+        source = _load_user_examples()
+        source, purged_count = _purge_expired_entries(source)
+        if purged_count > 0:
+            _atomic_write_json(_USER_EXAMPLES_PATH, source)
+
+    now = datetime.now(timezone.utc).timestamp()
+    result = {}
+    total = 0
+    for subject, diffs in source.items():
+        if not isinstance(diffs, dict):
+            continue
+        result[subject] = {}
+        for difficulty, examples in diffs.items():
+            if not isinstance(examples, list):
+                continue
+            result[subject][difficulty] = []
+            for ex in examples:
+                remaining = ex.get("expires_at", float("inf")) - now
+                result[subject][difficulty].append({
+                    "problem": ex.get("problem", ""),
+                    "type": ex.get("type", ""),
+                    "difficulty": ex.get("difficulty", difficulty),
+                    "created_at": ex.get("created_at", ""),
+                    "expires_at": datetime.fromtimestamp(ex.get("expires_at", 0), tz=timezone.utc).isoformat() if ex.get("expires_at") else None,
+                    "ttl_remaining_hours": round(remaining / 3600, 1) if remaining != float("inf") else None,
+                })
+                total += 1
+
+    return {
+        "total": total,
+        "ttl_seconds": _USER_EXAMPLE_TTL_SECONDS,
+        "ttl_human": f"{_USER_EXAMPLE_TTL_SECONDS // 86400} days",
+        "purged_expired": purged_count,
+        "examples": result,
+    }
+
+
+@app.delete("/examples/user/expired", tags=["Examples"])
+async def purge_expired_user_examples():
+    """Manually purge all expired user examples."""
+    async with _example_lock:
+        source = _load_user_examples()
+        source, purged_count = _purge_expired_entries(source)
+        if purged_count > 0:
+            if os.path.exists(_USER_EXAMPLES_PATH):
+                shutil.copy2(_USER_EXAMPLES_PATH, _USER_EXAMPLES_PATH + ".bak")
+            _atomic_write_json(_USER_EXAMPLES_PATH, source)
+            _reload_prompt_generator_examples()
+
+    return {"purged": purged_count, "message": f"Removed {purged_count} expired example(s)"}
 
 
 if __name__ == "__main__":
