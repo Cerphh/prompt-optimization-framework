@@ -528,6 +528,7 @@ export default function Home() {
   const [exampleTypes, setExampleTypes] = useState<Record<string, Record<string, { concept: string; count: number; sample: string }[]>>>({})
   const [showExampleTypes, setShowExampleTypes] = useState(false)
   const [activeConceptTab, setActiveConceptTab] = useState<string>('')
+  const [availableDifficulties, setAvailableDifficulties] = useState<Record<string, string[]>>({})
 
   // ── Add Example state ──
   const [showAddExample, setShowAddExample] = useState(false)
@@ -552,6 +553,28 @@ export default function Home() {
   const [addExConcept2, setAddExConcept2] = useState('')
   const [addExAnalyzed2, setAddExAnalyzed2] = useState(false)
   const [addExDetectionMethod2, setAddExDetectionMethod2] = useState('')
+  // Fetch available difficulties per subject from example_problems.json
+  useEffect(() => {
+    const fetchDifficulties = async () => {
+      try {
+        const res = await fetch(apiUrl('/example-difficulties'))
+        if (res.ok) {
+          const data = await res.json()
+          setAvailableDifficulties(data)
+        }
+      } catch { /* ignore */ }
+    }
+    fetchDifficulties()
+  }, [])
+
+  // When subject changes, default to basic if the current difficulty isn't in the JSON (but still allow override)
+  useEffect(() => {
+    const diffs = availableDifficulties[subject]
+    if (!difficultyManualOverride && diffs && diffs.length > 0 && !diffs.includes(difficulty)) {
+      setDifficulty('basic')
+    }
+  }, [subject, availableDifficulties])
+
   // Check API health
   useEffect(() => {
     const checkHealth = async () => {
@@ -1017,7 +1040,12 @@ export default function Home() {
 
       if (!difficultyManualOverride) {
         const detectedDifficulty = detectDifficulty(text, detectedSubject)
-        setDifficulty(detectedDifficulty)
+        const diffs = availableDifficulties[detectedSubject]
+        if (diffs && diffs.length > 0 && !diffs.includes(detectedDifficulty)) {
+          setDifficulty('basic')  // default to basic if not in JSON
+        } else {
+          setDifficulty(detectedDifficulty)
+        }
       }
     }
   }
@@ -1488,9 +1516,9 @@ export default function Home() {
                     className="w-full px-3 py-2 rounded-md text-sm outline-none"
                     style={{ border: '1px solid var(--border)', color: 'var(--text)', background: 'var(--surface)' }}
                   >
-                    <option value="basic">Basic</option>
-                    <option value="intermediate">Intermediate</option>
-                    <option value="advanced">Advanced</option>
+                    {['basic', 'intermediate', 'advanced'].map((d) => (
+                      <option key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -1703,9 +1731,9 @@ export default function Home() {
                     background: loading ? 'var(--bg)' : 'var(--surface)',
                   }}
                 >
-                  <option value="basic">Basic</option>
-                  <option value="intermediate">Intermediate</option>
-                  <option value="advanced">Advanced</option>
+                  {['basic', 'intermediate', 'advanced'].map((d) => (
+                    <option key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>
+                  ))}
                 </select>
               </div>
 

@@ -1150,6 +1150,23 @@ async def get_subjects():
     }
 
 
+@app.get("/example-difficulties", tags=["Info"])
+async def example_difficulties():
+    """Return available difficulty levels per subject from example_problems.json."""
+    import json as _json, os as _os
+    json_path = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "framework", "example_problems.json")
+    try:
+        with open(json_path, "r", encoding="utf-8-sig") as f:
+            source = _json.load(f)
+    except Exception:
+        source = {}
+    result: dict[str, list[str]] = {}
+    for subject, subject_val in source.items():
+        if isinstance(subject_val, dict):
+            result[subject] = sorted(subject_val.keys())
+    return result
+
+
 @app.get("/weights", tags=["Configuration"])
 async def get_weights():
     """Get current metric weights."""
