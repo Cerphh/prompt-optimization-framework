@@ -9,6 +9,7 @@ import asyncio
 import shutil
 import tempfile
 import hashlib
+import re
 import jsonschema
 from datetime import datetime, timezone
 from pathlib import Path
@@ -37,6 +38,160 @@ app = FastAPI(
 RUN_MODE_NORMAL = "normal"
 RUN_MODE_BENCHMARK = "benchmark"
 SUPPORTED_RUN_MODES = {RUN_MODE_NORMAL, RUN_MODE_BENCHMARK}
+
+SUPPORTED_NORMAL_MODE_DOMAINS = {
+    "algebra",
+    "pre-calculus",
+    "counting-probability",
+}
+
+_NORMAL_MODE_DOMAIN_ALIASES = {
+    "algebra": "algebra",
+    "pre-calculus": "pre-calculus",
+    "precalculus": "pre-calculus",
+    "precal": "pre-calculus",
+    "calculus": "pre-calculus",
+    "counting-probability": "counting-probability",
+    "counting_probability": "counting-probability",
+    "counting-and-probability": "counting-probability",
+    "counting_and_probability": "counting-probability",
+    "counting&probability": "counting-probability",
+    "counting_and_prob": "counting-probability",
+    "statistics": "counting-probability",
+    "stat": "counting-probability",
+}
+
+_MATH_SCOPE_KEYWORDS = {
+    "solve",
+    "equation",
+    "factor",
+    "polynomial",
+    "simplify",
+    "expand",
+    "evaluate",
+    "derivative",
+    "integral",
+    "limit",
+    "function",
+    "sequence",
+    "series",
+    "probability",
+    "permutation",
+    "combination",
+    "ratio",
+    "proportion",
+    "mean",
+    "median",
+    "variance",
+    "percent",
+    "matrix",
+    "vector",
+    "trigonometric",
+    "log",
+}
+
+
+def _normalize_domain_label(raw_value: Optional[str]) -> str:
+    """Normalize domain labels and map common aliases to canonical domain keys."""
+    value = (raw_value or "").strip().lower()
+    if not value:
+        return ""
+
+    collapsed = value.replace(" ", "-")
+    compact = value.replace(" ", "").replace("_", "").replace("-", "")
+    compact = compact.replace("&", "and")
+
+    if collapsed in _NORMAL_MODE_DOMAIN_ALIASES:
+        return _NORMAL_MODE_DOMAIN_ALIASES[collapsed]
+    if value in _NORMAL_MODE_DOMAIN_ALIASES:
+        return _NORMAL_MODE_DOMAIN_ALIASES[value]
+    if compact in _NORMAL_MODE_DOMAIN_ALIASES:
+        return _NORMAL_MODE_DOMAIN_ALIASES[compact]
+    return value
+
+
+def _has_math_scope_signal(problem: str) -> bool:
+    """Return True when prompt text shows clear math-task surface signals."""
+    value = str(problem or "").strip().lower()
+    if not value:
+        return False
+
+    # Numeric/operator cues cover direct arithmetic prompts such as "2 + 2".
+    if re.search(r"\d", value) and re.search(r"[=+\-*/^%]|\bwhat\s+is\b|\bfind\b|\bcompute\b", value):
+        return True
+
+    token_set = set(re.findall(r"[a-zA-Z]+", value))
+    return any(keyword in token_set for keyword in _MATH_SCOPE_KEYWORDS)
+
+
+def _is_problem_in_framework_scope(problem: str) -> bool:
+    """Return True only when problem text shows clear in-scope math intent."""
+    value = str(problem or "").strip()
+    if not value:
+        return False
+
+    if _has_math_scope_signal(value):
+        return True
+
+    try:
+        prompt_generator = pipeline.prompt_generator
+        normalized = prompt_generator._normalize_detection_text(value)
+        intent = prompt_generator._detect_primary_intent(normalized)
+        if intent and intent != "general":
+            return True
+
+        features = prompt_generator._extract_math_features(normalized)
+        if features:
+            return True
+    except Exception:
+        return False
+
+    return False
+
+
+def _resolve_domain_for_normal_mode(problem: str, requested_subject: Optional[str]) -> Tuple[Optional[str], Dict[str, Any]]:
+    """Resolve effective domain for normal mode and detect unsupported-domain requests."""
+    requested_raw = (requested_subject or "").strip()
+    normalized_requested = _normalize_domain_label(requested_raw)
+
+    details: Dict[str, Any] = {
+        "requested_subject": requested_raw or None,
+        "resolved_domain": None,
+        "detection_source": None,
+        "detected_subject": None,
+        "math_scope_signal": False,
+    }
+
+    # If the caller explicitly requested a non-general unsupported subject,
+    # fail fast with a clear scope message.
+    if requested_raw and normalized_requested not in SUPPORTED_NORMAL_MODE_DOMAINS and normalized_requested != "general":
+        details["detection_source"] = "explicit_subject_unsupported"
+        return None, details
+
+    in_scope = _is_problem_in_framework_scope(problem)
+    has_math_signal = _has_math_scope_signal(problem)
+    details["math_scope_signal"] = has_math_signal
+    details["in_framework_scope"] = in_scope
+
+    if not in_scope:
+        details["detection_source"] = "out_of_scope_problem"
+        return None, details
+
+    detected_subject = _normalize_domain_label(pipeline.prompt_generator.classify_subject(problem))
+    details["detected_subject"] = detected_subject or None
+
+    if normalized_requested in SUPPORTED_NORMAL_MODE_DOMAINS:
+        details["resolved_domain"] = normalized_requested
+        details["detection_source"] = "request_subject"
+        return normalized_requested, details
+
+    if detected_subject in SUPPORTED_NORMAL_MODE_DOMAINS:
+        details["resolved_domain"] = detected_subject
+        details["detection_source"] = "auto_detected"
+        return detected_subject, details
+
+    details["detection_source"] = "unsupported_detected"
+    return None, details
 
 
 def _get_cors_origins() -> List[str]:
@@ -1020,6 +1175,20 @@ async def run_benchmark(request: BenchmarkRequest):
     try:
         run_mode = _resolve_run_mode(request.run_mode)
         ground_truth = _normalize_ground_truth(request.ground_truth)
+        resolved, domain_guard = _resolve_domain_for_normal_mode(
+            problem=request.problem,
+            requested_subject=request.subject,
+        )
+        if not resolved:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "This framework currently only supports the following 3 domains "
+                    "(algebra, pre-calculus, and counting-probability)."
+                ),
+            )
+        resolved_domain = resolved
+
         if run_mode == RUN_MODE_BENCHMARK and not ground_truth:
             raise HTTPException(
                 status_code=400,
@@ -1038,14 +1207,15 @@ async def run_benchmark(request: BenchmarkRequest):
             request_pipeline=request_pipeline,
             run_mode=run_mode,
             problem=request.problem,
-            domain=request.subject or "general",
+            domain=resolved_domain,
             difficulty=request.difficulty or "basic",
         )
+        pre_execution_policy["domain_guard"] = domain_guard
 
         benchmark_kwargs: Dict[str, Any] = {
             "problem": request.problem,
             "ground_truth": ground_truth,
-            "subject": request.subject,
+            "subject": resolved_domain,
         }
         if techniques_to_run:
             benchmark_kwargs["techniques_to_run"] = techniques_to_run
@@ -1056,7 +1226,7 @@ async def run_benchmark(request: BenchmarkRequest):
 
         result = _finalize_benchmark_result(
             result=result,
-            domain=request.subject or "general",
+            domain=resolved_domain,
             difficulty=request.difficulty or "basic",
             run_mode=run_mode,
         )
@@ -1083,6 +1253,20 @@ async def run_benchmark_stream(request: BenchmarkRequest):
     """
     run_mode = _resolve_run_mode(request.run_mode)
     ground_truth = _normalize_ground_truth(request.ground_truth)
+    resolved, domain_guard = _resolve_domain_for_normal_mode(
+        problem=request.problem,
+        requested_subject=request.subject,
+    )
+    if not resolved:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "This framework currently only supports the following 3 domains "
+                "(algebra, pre-calculus, and counting-probability)."
+            ),
+        )
+    resolved_domain = resolved
+
     if run_mode == RUN_MODE_BENCHMARK and not ground_truth:
         raise HTTPException(
             status_code=400,
@@ -1099,16 +1283,17 @@ async def run_benchmark_stream(request: BenchmarkRequest):
         request_pipeline=request_pipeline,
         run_mode=run_mode,
         problem=request.problem,
-        domain=request.subject or "general",
+        domain=resolved_domain,
         difficulty=request.difficulty or "basic",
     )
+    pre_execution_policy["domain_guard"] = domain_guard
 
     def event_stream():
         try:
             stream_kwargs: Dict[str, Any] = {
                 "problem": request.problem,
                 "ground_truth": ground_truth,
-                "subject": request.subject,
+                "subject": resolved_domain,
             }
             if techniques_to_run:
                 stream_kwargs["techniques_to_run"] = techniques_to_run
@@ -1120,7 +1305,7 @@ async def run_benchmark_stream(request: BenchmarkRequest):
                     result = event.get("result", {})
                     result = _finalize_benchmark_result(
                         result=result,
-                        domain=request.subject or "general",
+                        domain=resolved_domain,
                         difficulty=request.difficulty or "basic",
                         run_mode=run_mode,
                     )
@@ -1271,13 +1456,26 @@ async def benchmark_dataset_problem(problem_id: int):
     problem_data = dataset.get_problem(problem_id)
     if problem_data is None:
         raise HTTPException(status_code=404, detail="Problem not found")
+
+    resolved_domain, _ = _resolve_domain_for_normal_mode(
+        problem=str(problem_data.get("problem", "") or ""),
+        requested_subject=str(problem_data.get("category", "") or ""),
+    )
+    if not resolved_domain:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "This framework currently only supports the following 3 domains "
+                "(algebra, pre-calculus, and counting-probability)."
+            ),
+        )
     
     try:
         techniques_to_run, pre_execution_policy = _resolve_pre_execution_techniques(
             request_pipeline=pipeline,
             run_mode=RUN_MODE_BENCHMARK,
             problem=problem_data["problem"],
-            domain=problem_data.get("category", "general"),
+            domain=resolved_domain,
             difficulty="basic",
         )
 
@@ -1292,7 +1490,7 @@ async def benchmark_dataset_problem(problem_id: int):
 
         result = _finalize_benchmark_result(
             result=result,
-            domain=problem_data.get("category", "general"),
+            domain=resolved_domain,
             difficulty="basic",
             run_mode=RUN_MODE_BENCHMARK,
         )

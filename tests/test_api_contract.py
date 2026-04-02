@@ -338,6 +338,154 @@ def test_benchmark_mode_runs_all_techniques_ignoring_history(monkeypatch):
     assert payload["pre_execution_policy"]["reason"] == "benchmark_mode_runs_all"
 
 
+def test_normal_mode_rejects_explicit_unsupported_subject():
+    client = TestClient(main.app)
+    response = client.post(
+        "/benchmark",
+        json={
+            "problem": "Who wrote Hamlet?",
+            "subject": "history",
+            "difficulty": "basic",
+            "run_mode": "normal",
+        },
+    )
+
+    assert response.status_code == 422
+    payload = response.json()
+    assert "only supports the following 3 domains" in payload["detail"]
+
+
+def test_normal_mode_rejects_non_math_prompt_even_with_supported_subject(monkeypatch):
+    monkeypatch.setattr(main.pipeline.prompt_generator, "classify_subject", lambda _: "general")
+
+    client = TestClient(main.app)
+    response = client.post(
+        "/benchmark",
+        json={
+            "problem": "What is life",
+            "subject": "algebra",
+            "difficulty": "basic",
+            "run_mode": "normal",
+        },
+    )
+
+    assert response.status_code == 422
+    payload = response.json()
+    assert "only supports the following 3 domains" in payload["detail"]
+
+
+def test_normal_mode_rejects_non_math_prompt_even_with_supported_subject_without_mocking_classifier():
+    client = TestClient(main.app)
+    response = client.post(
+        "/benchmark",
+        json={
+            "problem": "What is life",
+            "subject": "algebra",
+            "difficulty": "basic",
+            "run_mode": "normal",
+        },
+    )
+
+    assert response.status_code == 422
+    payload = response.json()
+    assert "only supports the following 3 domains" in payload["detail"]
+
+
+def test_normal_mode_rejects_out_of_scope_problem_when_subject_is_general(monkeypatch):
+    monkeypatch.setattr(main.pipeline.prompt_generator, "classify_subject", lambda _: "general")
+
+    client = TestClient(main.app)
+    response = client.post(
+        "/benchmark",
+        json={
+            "problem": "Who wrote Hamlet?",
+            "subject": "general",
+            "difficulty": "basic",
+            "run_mode": "normal",
+        },
+    )
+
+    assert response.status_code == 422
+    payload = response.json()
+    assert "only supports the following 3 domains" in payload["detail"]
+
+
+def test_benchmark_mode_rejects_explicit_unsupported_subject_even_with_ground_truth():
+    client = TestClient(main.app)
+    response = client.post(
+        "/benchmark",
+        json={
+            "problem": "Who wrote Hamlet?",
+            "subject": "history",
+            "difficulty": "basic",
+            "run_mode": "benchmark",
+            "ground_truth": "Shakespeare",
+        },
+    )
+
+    assert response.status_code == 422
+    payload = response.json()
+    assert "only supports the following 3 domains" in payload["detail"]
+
+
+def test_benchmark_mode_rejects_non_math_prompt_even_with_supported_subject(monkeypatch):
+    monkeypatch.setattr(main.pipeline.prompt_generator, "classify_subject", lambda _: "general")
+
+    client = TestClient(main.app)
+    response = client.post(
+        "/benchmark",
+        json={
+            "problem": "What is life",
+            "subject": "algebra",
+            "difficulty": "basic",
+            "run_mode": "benchmark",
+            "ground_truth": "life",
+        },
+    )
+
+    assert response.status_code == 422
+    payload = response.json()
+    assert "only supports the following 3 domains" in payload["detail"]
+
+
+def test_benchmark_mode_rejects_non_math_prompt_even_with_supported_subject_without_mocking_classifier():
+    client = TestClient(main.app)
+    response = client.post(
+        "/benchmark",
+        json={
+            "problem": "What is life",
+            "subject": "algebra",
+            "difficulty": "basic",
+            "run_mode": "benchmark",
+            "ground_truth": "life",
+        },
+    )
+
+    assert response.status_code == 422
+    payload = response.json()
+    assert "only supports the following 3 domains" in payload["detail"]
+
+
+def test_benchmark_stream_rejects_out_of_scope_problem_when_subject_is_general(monkeypatch):
+    monkeypatch.setattr(main.pipeline.prompt_generator, "classify_subject", lambda _: "general")
+
+    client = TestClient(main.app)
+    response = client.post(
+        "/benchmark/stream",
+        json={
+            "problem": "Who wrote Hamlet?",
+            "subject": "general",
+            "difficulty": "basic",
+            "run_mode": "benchmark",
+            "ground_truth": "Shakespeare",
+        },
+    )
+
+    assert response.status_code == 422
+    payload = response.json()
+    assert "only supports the following 3 domains" in payload["detail"]
+
+
 def test_benchmark_mode_accepts_single_technique_when_preselected(monkeypatch):
     def fake_benchmark(problem: str, ground_truth=None, subject: str = "general", techniques_to_run=None):
         result = _mock_benchmark_result(problem=problem, ground_truth=ground_truth)

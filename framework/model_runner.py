@@ -67,7 +67,7 @@ class ModelRunner:
         self.max_continue_rounds = _env_int("MODEL_MAX_CONTINUE_ROUNDS", 4, min_value=0)
         self.continuation_tail_chars = _env_int("MODEL_CONTINUATION_TAIL_CHARS", 1200, min_value=200)
 
-        self.verifier_retry_enabled = _env_bool("MODEL_VERIFIER_RETRY_ENABLED", True)
+        self.verifier_retry_enabled = _env_bool("MODEL_VERIFIER_RETRY_ENABLED", False)
         self.verifier_retry_attempts = _env_int("MODEL_VERIFIER_RETRY_ATTEMPTS", 1, min_value=0)
         self.verifier_num_predict = _env_int("MODEL_VERIFIER_NUM_PREDICT", 256, min_value=64)
         self.verifier_min_chars = _env_int("MODEL_VERIFIER_MIN_CHARS", 48, min_value=10)

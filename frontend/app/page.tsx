@@ -510,6 +510,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<BenchmarkResult | null>(null)
   const [error, setError] = useState('')
+  const [isScopeError, setIsScopeError] = useState(false)
   const [expandedTechnique, setExpandedTechnique] = useState<string | null>(null)
   const [showIndividualRuns, setShowIndividualRuns] = useState(false)
   const [healthStatus, setHealthStatus] = useState<'checking' | 'healthy' | 'unhealthy'>('checking')
@@ -634,6 +635,34 @@ export default function Home() {
   }, [runMode, validationError])
 
   const formatTypeName = (t: string) => t.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+
+  const renderErrorPanel = () => {
+    if (!error) return null
+
+    if (isScopeError) {
+      return (
+        <div
+          className="mt-5 p-4 rounded-md text-sm leading-relaxed"
+          style={{ background: '#fff7ed', border: '1px solid #fed7aa', color: '#9a3412' }}
+        >
+          <p className="font-semibold mb-1">Outside Framework Scope</p>
+          <p>{error}</p>
+          <p className="mt-2 text-xs" style={{ color: '#c2410c' }}>
+            Supported domains: Algebra, Pre-Calculus, Counting &amp; Probability.
+          </p>
+        </div>
+      )
+    }
+
+    return (
+      <div
+        className="mt-5 p-3 rounded-md text-xs leading-relaxed whitespace-pre-wrap"
+        style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b' }}
+      >
+        {error}
+      </div>
+    )
+  }
 
   // ── Add Example helpers ──
   const analyzeExample = async () => {
@@ -1086,6 +1115,7 @@ export default function Home() {
 
     setLoading(true)
     setError('')
+    setIsScopeError(false)
     setSaveStatus('')
     setDidSaveToDb(false)
     setDidExportJson(false)
@@ -1129,7 +1159,17 @@ export default function Home() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        const detail = errorData.detail || 'Unknown error'
+        const detail =
+          typeof errorData.detail === 'string'
+            ? errorData.detail
+            : JSON.stringify(errorData.detail || 'Unknown error')
+
+        if (
+          response.status === 422
+          && detail.toLowerCase().includes('only supports the following 3 domains')
+        ) {
+          throw new Error(`SCOPE_ERROR:${detail}`)
+        }
 
         if (response.status === 500) {
           throw new Error(`🔴 Server Error: ${detail}`)
@@ -1224,8 +1264,13 @@ export default function Home() {
       }
     } catch (err) {
       if (err instanceof TypeError && err.message.includes('fetch')) {
+        setIsScopeError(false)
         setError('🔴 Cannot connect to API. Make sure backend is running on port 8000')
+      } else if (err instanceof Error && err.message.startsWith('SCOPE_ERROR:')) {
+        setIsScopeError(true)
+        setError(err.message.replace('SCOPE_ERROR:', '').trim())
       } else {
+        setIsScopeError(false)
         setError(err instanceof Error ? err.message : 'An error occurred')
       }
     } finally {
@@ -1634,14 +1679,7 @@ export default function Home() {
             </form>
           </div>
 
-          {error && (
-            <div
-              className="mt-5 w-full max-w-[920px] p-3 rounded-md text-xs leading-relaxed whitespace-pre-wrap"
-              style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b' }}
-            >
-              {error}
-            </div>
-          )}
+          {renderErrorPanel()}
         </div>
       )}
 
@@ -1851,14 +1889,7 @@ export default function Home() {
               )}
             </form>
 
-            {error && (
-              <div
-                className="mt-5 p-3 rounded-md text-xs leading-relaxed whitespace-pre-wrap"
-                style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b' }}
-              >
-                {error}
-              </div>
-            )}
+            {renderErrorPanel()}
           </aside>
 
           {/* ─── Main content ─── */}
