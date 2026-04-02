@@ -90,6 +90,173 @@ _MATH_SCOPE_KEYWORDS = {
     "log",
 }
 
+_OUT_OF_DOMAIN_MATH_KEYWORDS = {
+    "geometry",
+    "triangle",
+    "triangles",
+    "rectangle",
+    "rectangles",
+    "square",
+    "squares",
+    "circle",
+    "circles",
+    "polygon",
+    "polygons",
+    "perimeter",
+    "area",
+    "volume",
+    "surface",
+    "hypotenuse",
+    "radius",
+    "diameter",
+    "circumference",
+    "chord",
+    "tangent",
+    "secant",
+    "parallel",
+    "perpendicular",
+    "angles",
+    "angle",
+}
+
+_DOMAIN_SIGNAL_KEYWORDS = {
+    "algebra": {
+        "equation",
+        "solve",
+        "factor",
+        "simplify",
+        "expand",
+        "polynomial",
+        "quadratic",
+        "linear",
+        "system",
+        "inequality",
+        "substitute",
+        "evaluate",
+        "expression",
+        "variable",
+        "root",
+        "roots",
+        "real",
+    },
+    "pre-calculus": {
+        "trigonometric",
+        "sin",
+        "cos",
+        "tan",
+        "sec",
+        "csc",
+        "cot",
+        "arcsin",
+        "arccos",
+        "arctan",
+        "function",
+        "domain",
+        "range",
+        "limit",
+        "derivative",
+        "integral",
+        "sequence",
+        "series",
+        "log",
+        "logarithm",
+        "exponential",
+        "matrix",
+        "vector",
+    },
+    "counting-probability": {
+        "probability",
+        "permutation",
+        "combination",
+        "arrangement",
+        "arrangements",
+        "choose",
+        "select",
+        "random",
+        "event",
+        "outcome",
+        "outcomes",
+        "odds",
+        "chance",
+        "expected",
+        "variance",
+        "mean",
+        "median",
+        "mode",
+        "coin",
+        "dice",
+        "die",
+        "card",
+        "bag",
+    },
+}
+
+# Topics intentionally shared between algebra and pre-calculus.
+_ALGEBRA_PRECALC_OVERLAP_KEYWORDS = {
+    "function",
+    "functions",
+    "graph",
+    "graphs",
+    "sequence",
+    "sequences",
+    "series",
+    "exponent",
+    "exponents",
+    "log",
+    "logarithm",
+    "coordinate",
+    "slope",
+    "line",
+    "parabola",
+    "trigonometric",
+    "sin",
+    "cos",
+    "tan",
+}
+
+_PURE_GEOMETRY_SHAPE_KEYWORDS = {
+    "triangle",
+    "triangles",
+    "rectangle",
+    "rectangles",
+    "square",
+    "squares",
+    "circle",
+    "circles",
+    "polygon",
+    "polygons",
+    "sphere",
+    "cube",
+    "cylinder",
+    "cone",
+    "prism",
+}
+
+_PURE_GEOMETRY_MEASURE_KEYWORDS = {
+    "area",
+    "perimeter",
+    "volume",
+    "surface",
+    "circumference",
+    "radius",
+    "diameter",
+    "hypotenuse",
+    "height",
+    "width",
+    "length",
+}
+
+_GEOMETRIC_WORD_PROBLEM_CUES = {
+    "ladder",
+    "wall",
+    "building",
+    "shadow",
+    "distance",
+    "height",
+    "angle",
+    "angles",
+}
+
 
 def _normalize_domain_label(raw_value: Optional[str]) -> str:
     """Normalize domain labels and map common aliases to canonical domain keys."""
@@ -149,6 +316,83 @@ def _is_problem_in_framework_scope(problem: str) -> bool:
     return False
 
 
+def _looks_like_out_of_domain_math(problem: str) -> bool:
+    """Detect common math topics that are currently outside supported domains."""
+    value = str(problem or "").strip().lower()
+    if not value:
+        return False
+
+    tokens = set(re.findall(r"[a-zA-Z]+", value))
+    keyword_hits = sum(1 for keyword in _OUT_OF_DOMAIN_MATH_KEYWORDS if keyword in tokens)
+    if keyword_hits >= 2:
+        return True
+
+    # Geometry-like formulas/phrasing without clear supported-domain intent.
+    if re.search(r"\b(area|perimeter|circumference|volume)\b", value) and re.search(r"\b(circle|triangle|rectangle|square|sphere|cube|cylinder|cone)\b", value):
+        return True
+
+    return False
+
+
+def _get_domain_signal_scores(problem: str) -> Dict[str, int]:
+    """Score lightweight domain evidence using deterministic keyword signals."""
+    value = str(problem or "").strip().lower()
+    tokens = set(re.findall(r"[a-zA-Z]+", value))
+
+    scores = {domain: 0 for domain in SUPPORTED_NORMAL_MODE_DOMAINS}
+    for domain, keywords in _DOMAIN_SIGNAL_KEYWORDS.items():
+        scores[domain] += sum(1 for keyword in keywords if keyword in tokens)
+
+    if any(keyword in tokens for keyword in _ALGEBRA_PRECALC_OVERLAP_KEYWORDS):
+        scores["algebra"] += 1
+        scores["pre-calculus"] += 1
+
+    if re.search(r"\b(sin|cos|tan|sec|csc|cot)\b", value):
+        scores["pre-calculus"] += 2
+    if re.search(r"\b(p\(|probability|permutation|combination|how\s+many)\b", value):
+        scores["counting-probability"] += 2
+    if re.search(r"\b(solve\s+for|factor|simplify|quadratic|polynomial)\b", value):
+        scores["algebra"] += 2
+
+    return scores
+
+
+def _infer_domain_from_signals(problem: str) -> Tuple[Optional[str], int]:
+    """Infer a likely domain and confidence gap from deterministic signal scores."""
+    scores = _get_domain_signal_scores(problem)
+    ranked = sorted(scores.items(), key=lambda item: item[1], reverse=True)
+    top_domain, top_score = ranked[0]
+    second_score = ranked[1][1] if len(ranked) > 1 else 0
+    gap = top_score - second_score
+
+    if top_score <= 0:
+        return None, 0
+    if top_score >= 2 and gap >= 1:
+        return top_domain, gap
+    return None, gap
+
+
+def _looks_like_pure_geometry_problem(problem: str) -> bool:
+    """Detect plane/solid geometry style prompts outside the supported 3-domain boundary."""
+    value = str(problem or "").strip().lower()
+    if not value:
+        return False
+
+    tokens = set(re.findall(r"[a-zA-Z]+", value))
+
+    has_shape = any(keyword in tokens for keyword in _PURE_GEOMETRY_SHAPE_KEYWORDS)
+    has_measure = any(keyword in tokens for keyword in _PURE_GEOMETRY_MEASURE_KEYWORDS)
+    if has_shape and has_measure:
+        return True
+
+    # Block common real-world right-triangle geometry word problems.
+    if "ladder" in tokens and any(keyword in tokens for keyword in {"wall", "ground", "angle", "height"}):
+        return True
+
+    cue_hits = sum(1 for cue in _GEOMETRIC_WORD_PROBLEM_CUES if cue in tokens)
+    return cue_hits >= 3 and "probability" not in tokens
+
+
 def _resolve_domain_for_normal_mode(problem: str, requested_subject: Optional[str]) -> Tuple[Optional[str], Dict[str, Any]]:
     """Resolve effective domain for normal mode and detect unsupported-domain requests."""
     requested_raw = (requested_subject or "").strip()
@@ -159,6 +403,8 @@ def _resolve_domain_for_normal_mode(problem: str, requested_subject: Optional[st
         "resolved_domain": None,
         "detection_source": None,
         "detected_subject": None,
+        "signal_inferred_subject": None,
+        "signal_confidence_gap": 0,
         "math_scope_signal": False,
     }
 
@@ -178,12 +424,41 @@ def _resolve_domain_for_normal_mode(problem: str, requested_subject: Optional[st
         return None, details
 
     detected_subject = _normalize_domain_label(pipeline.prompt_generator.classify_subject(problem))
+    signal_subject, signal_gap = _infer_domain_from_signals(problem)
     details["detected_subject"] = detected_subject or None
+    details["signal_inferred_subject"] = signal_subject
+    details["signal_confidence_gap"] = signal_gap
+
+    if _looks_like_pure_geometry_problem(problem):
+        details["detection_source"] = "pure_geometry_out_of_scope"
+        return None, details
 
     if normalized_requested in SUPPORTED_NORMAL_MODE_DOMAINS:
+        if signal_subject and signal_subject != normalized_requested:
+            details["detection_source"] = "subject_mismatch_signal"
+            return None, details
+
+        if detected_subject in SUPPORTED_NORMAL_MODE_DOMAINS and detected_subject != normalized_requested:
+            details["detection_source"] = "subject_mismatch"
+            return None, details
+
+        if _looks_like_out_of_domain_math(problem):
+            details["detection_source"] = "out_of_domain_math"
+            return None, details
+
+        # Fail closed when subject is explicitly selected but both detectors are uncertain.
+        if detected_subject == "general" and not signal_subject:
+            details["detection_source"] = "ambiguous_requested_subject"
+            return None, details
+
         details["resolved_domain"] = normalized_requested
         details["detection_source"] = "request_subject"
         return normalized_requested, details
+
+    if signal_subject in SUPPORTED_NORMAL_MODE_DOMAINS:
+        details["resolved_domain"] = signal_subject
+        details["detection_source"] = "auto_detected_signal"
+        return signal_subject, details
 
     if detected_subject in SUPPORTED_NORMAL_MODE_DOMAINS:
         details["resolved_domain"] = detected_subject
@@ -1530,6 +1805,23 @@ async def save_result(request: SaveResultRequest):
             domain=str(domain),
             difficulty=str(difficulty),
         )
+
+        resolved_domain, domain_guard = _resolve_domain_for_normal_mode(
+            problem=str(benchmark_result.get("problem", "") or ""),
+            requested_subject=str(domain),
+        )
+        if not resolved_domain:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "This framework currently only supports the following 3 domains "
+                    "(algebra, pre-calculus, and counting-probability)."
+                ),
+            )
+
+        # Keep normalized domain metadata in persisted records.
+        metadata["domain"] = resolved_domain
+        metadata["domain_guard"] = domain_guard
 
         run_mode = _resolve_run_mode(metadata.get("run_mode") or benchmark_result.get("run_mode"))
         has_ground_truth = bool(_normalize_ground_truth(benchmark_result.get("ground_truth")))

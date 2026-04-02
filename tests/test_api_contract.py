@@ -180,6 +180,34 @@ def test_manual_save_persists_result(monkeypatch):
     assert payload["storage"]["document_id"] == "doc_123"
 
 
+def test_manual_save_rejects_out_of_scope_payload(monkeypatch):
+    called = {"save_called": False}
+
+    def _should_not_save(*args, **kwargs):
+        called["save_called"] = True
+        return {"success": True}
+
+    monkeypatch.setattr(main.firestore_store, "save_benchmark_result", _should_not_save)
+
+    client = TestClient(main.app)
+    response = client.post(
+        "/results/save",
+        json={
+            "result": {
+                **_mock_benchmark_result(problem="Who wrote Hamlet?"),
+                "run_mode": "benchmark",
+            },
+            "source": "frontend_manual_save",
+            "metadata": {"subject": "history", "difficulty": "basic", "run_mode": "benchmark"},
+        },
+    )
+
+    assert response.status_code == 422
+    payload = response.json()
+    assert "only supports the following 3 domains" in payload["detail"]
+    assert called["save_called"] is False
+
+
 def test_benchmark_skips_weakest_technique_when_history_has_15_samples(monkeypatch):
     captured = {}
 
@@ -391,6 +419,105 @@ def test_normal_mode_rejects_non_math_prompt_even_with_supported_subject_without
     assert "only supports the following 3 domains" in payload["detail"]
 
 
+def test_normal_mode_rejects_out_of_domain_math_even_with_supported_subject():
+    client = TestClient(main.app)
+    response = client.post(
+        "/benchmark",
+        json={
+            "problem": "Find the area of a triangle with base 10 and height 6.",
+            "subject": "algebra",
+            "difficulty": "basic",
+            "run_mode": "normal",
+        },
+    )
+
+    assert response.status_code == 422
+    payload = response.json()
+    assert "only supports the following 3 domains" in payload["detail"]
+
+
+def test_normal_mode_rejects_ladder_geometry_word_problem_with_supported_subject():
+    client = TestClient(main.app)
+    response = client.post(
+        "/benchmark",
+        json={
+            "problem": (
+                "A 15-meter ladder leans against a wall. The foot of the ladder is 9 meters "
+                "away from the wall. Find the angle theta that the ladder makes with the ground. "
+                "Find the height at which the ladder touches the wall."
+            ),
+            "subject": "algebra",
+            "difficulty": "basic",
+            "run_mode": "normal",
+        },
+    )
+
+    assert response.status_code == 422
+    payload = response.json()
+    assert "only supports the following 3 domains" in payload["detail"]
+
+
+def test_normal_mode_rejects_subject_mismatch_for_supported_domains(monkeypatch):
+    monkeypatch.setattr(main.pipeline.prompt_generator, "classify_subject", lambda _: "counting-probability")
+
+    client = TestClient(main.app)
+    response = client.post(
+        "/benchmark",
+        json={
+            "problem": "A fair die is rolled twice. What is the probability the sum is 7?",
+            "subject": "algebra",
+            "difficulty": "basic",
+            "run_mode": "normal",
+        },
+    )
+
+    assert response.status_code == 422
+    payload = response.json()
+    assert "only supports the following 3 domains" in payload["detail"]
+
+
+def test_normal_mode_rejects_subject_mismatch_from_signal_when_classifier_is_general(monkeypatch):
+    monkeypatch.setattr(main.pipeline.prompt_generator, "classify_subject", lambda _: "general")
+
+    client = TestClient(main.app)
+    response = client.post(
+        "/benchmark",
+        json={
+            "problem": "A fair die is rolled twice. What is the probability that the sum is 7?",
+            "subject": "algebra",
+            "difficulty": "basic",
+            "run_mode": "normal",
+        },
+    )
+
+    assert response.status_code == 422
+    payload = response.json()
+    assert "only supports the following 3 domains" in payload["detail"]
+
+
+def test_normal_mode_allows_supported_subject_when_classifier_is_general_but_signal_is_clear(monkeypatch):
+    monkeypatch.setattr(main.pipeline.prompt_generator, "classify_subject", lambda _: "general")
+    monkeypatch.setattr(main.pipeline, "benchmark", lambda **kwargs: _mock_benchmark_result(problem=kwargs["problem"], ground_truth=kwargs.get("ground_truth")))
+    monkeypatch.setattr(main.firestore_store, "get_best_technique_by_profile", _mock_no_history)
+    monkeypatch.setattr(main.firestore_store, "get_best_technique_by_domain", _mock_no_history)
+
+    client = TestClient(main.app)
+    response = client.post(
+        "/benchmark",
+        json={
+            "problem": "Solve for x: 2x + 3 = 11",
+            "subject": "algebra",
+            "difficulty": "basic",
+            "run_mode": "normal",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["run_mode"] == "normal"
+    assert payload["best_technique"] in {"few_shot", "zero_shot"}
+
+
 def test_normal_mode_rejects_out_of_scope_problem_when_subject_is_general(monkeypatch):
     monkeypatch.setattr(main.pipeline.prompt_generator, "classify_subject", lambda _: "general")
 
@@ -458,6 +585,46 @@ def test_benchmark_mode_rejects_non_math_prompt_even_with_supported_subject_with
             "difficulty": "basic",
             "run_mode": "benchmark",
             "ground_truth": "life",
+        },
+    )
+
+    assert response.status_code == 422
+    payload = response.json()
+    assert "only supports the following 3 domains" in payload["detail"]
+
+
+def test_benchmark_mode_rejects_out_of_domain_math_even_with_supported_subject():
+    client = TestClient(main.app)
+    response = client.post(
+        "/benchmark",
+        json={
+            "problem": "Find the area of a triangle with base 10 and height 6.",
+            "subject": "algebra",
+            "difficulty": "basic",
+            "run_mode": "benchmark",
+            "ground_truth": "30",
+        },
+    )
+
+    assert response.status_code == 422
+    payload = response.json()
+    assert "only supports the following 3 domains" in payload["detail"]
+
+
+def test_benchmark_mode_rejects_ladder_geometry_word_problem_with_supported_subject():
+    client = TestClient(main.app)
+    response = client.post(
+        "/benchmark",
+        json={
+            "problem": (
+                "A 15-meter ladder leans against a wall. The foot of the ladder is 9 meters "
+                "away from the wall. Find the angle theta that the ladder makes with the ground. "
+                "Find the height at which the ladder touches the wall."
+            ),
+            "subject": "algebra",
+            "difficulty": "basic",
+            "run_mode": "benchmark",
+            "ground_truth": "12 meters",
         },
     )
 
