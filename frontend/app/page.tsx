@@ -597,6 +597,9 @@ export default function Home() {
   const [saveStatus, setSaveStatus] = useState('')
   const [didSaveToDb, setDidSaveToDb] = useState(false)
   const [didExportJson, setDidExportJson] = useState(false)
+  const [savingBaselineToDb, setSavingBaselineToDb] = useState(false)
+  const [baselineSaveStatus, setBaselineSaveStatus] = useState('')
+  const [didSaveBaselineToDb, setDidSaveBaselineToDb] = useState(false)
   const [streamingResponse, setStreamingResponse] = useState('')
   const [streamingTechnique, setStreamingTechnique] = useState('')
   const [streamingStatus, setStreamingStatus] = useState('')
@@ -1197,6 +1200,8 @@ export default function Home() {
     setSaveStatus('')
     setDidSaveToDb(false)
     setDidExportJson(false)
+    setBaselineSaveStatus('')
+    setDidSaveBaselineToDb(false)
     setResult(null)
     setBaselineResult(null)
     setExpandedTechnique(null)
@@ -1378,6 +1383,8 @@ export default function Home() {
     setError('')
     setIsScopeError(false)
     setSaveStatus('')
+    setBaselineSaveStatus('')
+    setDidSaveBaselineToDb(false)
     setResult(null)
     setBaselineResult(null)
     setExpandedTechnique(null)
@@ -1398,6 +1405,8 @@ export default function Home() {
         body: JSON.stringify({
           problem,
           runs: benchmarkRuns,
+          subject,
+          difficulty,
           ...(groundTruthValue ? { ground_truth: groundTruthValue } : {}),
         }),
       })
@@ -1427,6 +1436,47 @@ export default function Home() {
 
   const handleRunConsistencyTest = async () => {
     await runBenchmarkFlow(CONSISTENCY_TEST_RUNS_PER_TECHNIQUE, 'consistency')
+  }
+
+  const handleSaveBaselineToDb = async () => {
+    if (!baselineResult) return
+
+    setSavingBaselineToDb(true)
+    setBaselineSaveStatus('')
+
+    try {
+      const response = await fetch(apiUrl('/baseline/save'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          result: baselineResult,
+          source: 'frontend_manual_save',
+          metadata: {
+            subject,
+            difficulty,
+            domain: subject,
+            has_ground_truth: baselineResult.ground_truth_used,
+          },
+        }),
+      })
+
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok || !data?.storage) {
+        throw new Error(data?.detail || data?.storage?.error || 'Failed to save baseline to DB')
+      }
+
+      if (data.storage.success) {
+        setDidSaveBaselineToDb(true)
+        setBaselineSaveStatus('Saved to DB successfully.')
+      } else {
+        setBaselineSaveStatus(`Save failed: ${data.storage.error || 'Unknown error'}`)
+      }
+    } catch (err) {
+      setBaselineSaveStatus(err instanceof Error ? err.message : 'Failed to save baseline to DB')
+    } finally {
+      setSavingBaselineToDb(false)
+    }
   }
 
   const handleSaveToDb = async () => {
@@ -2186,10 +2236,43 @@ export default function Home() {
                       {baselineResult.model_name}
                     </span>
                   </div>
-                  <span className="font-mono text-xs" style={{ color: 'var(--text-muted)' }}>
-                    {baselineResult.runs_succeeded}/{baselineResult.runs_requested} run{baselineResult.runs_requested !== 1 ? 's' : ''} succeeded
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-xs" style={{ color: 'var(--text-muted)' }}>
+                      {baselineResult.runs_succeeded}/{baselineResult.runs_requested} run{baselineResult.runs_requested !== 1 ? 's' : ''} succeeded
+                    </span>
+                    {baselineResult.runs_requested >= 3 && (
+                      <button
+                        onClick={handleSaveBaselineToDb}
+                        disabled={savingBaselineToDb || didSaveBaselineToDb}
+                        className="px-3 py-1.5 rounded-md text-xs font-medium transition-colors disabled:cursor-not-allowed"
+                        style={{
+                          border: '1px solid var(--border)',
+                          color: didSaveBaselineToDb ? 'var(--green)' : 'var(--text)',
+                          background: 'var(--surface)',
+                        }}
+                      >
+                        {savingBaselineToDb ? 'Saving\u2026' : didSaveBaselineToDb ? '\u2713 Saved' : 'Save to DB'}
+                      </button>
+                    )}
+                  </div>
                 </div>
+
+                {/* Baseline save status */}
+                {baselineSaveStatus && (() => {
+                  const isSuccess = baselineSaveStatus.startsWith('Saved')
+                  return (
+                    <div
+                      className="px-6 py-2 text-xs font-mono"
+                      style={{
+                        background: isSuccess ? '#f0fdf4' : '#fef2f2',
+                        borderBottom: '1px solid var(--border)',
+                        color: isSuccess ? 'var(--green)' : '#dc2626',
+                      }}
+                    >
+                      {baselineSaveStatus}
+                    </div>
+                  )
+                })()}
 
 
 

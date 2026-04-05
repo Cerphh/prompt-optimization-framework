@@ -209,6 +209,23 @@ class AccuracyScorer:
                 if inline_expression:
                     candidates.append(inline_expression)
 
+        # Extract individual numeric tokens (including N%, fractions) from
+        # each candidate line so embedded values like "0.4 or 40%" are
+        # tested individually against the expected answer.
+        # Use lookaround to avoid pulling numbers attached to variables (e.g. 15a)
+        # or factorial notation (e.g. 6!).
+        extra_tokens = []
+        for cand in candidates:
+            tokens = re.findall(
+                r'(?<![a-zA-Z])(?:[-+]?\d+(?:\.\d+)?%|[-+]?\d+(?:\.\d+)?\s*/\s*\d+(?:\.\d+)?|[-+]?\d+(?:\.\d+)?)(?![a-zA-Z!])',
+                cand,
+            )
+            for token in tokens:
+                token = token.strip()
+                if token:
+                    extra_tokens.append(token)
+        candidates.extend(extra_tokens)
+
         return self._unique_preserve_order(candidates)
 
     def _has_explicit_answer_signal(self, response: str) -> bool:
@@ -424,14 +441,28 @@ class AccuracyScorer:
         return value
     
     def _numeric_match(self, candidate: str, expected: str) -> bool:
-        """Check if candidate numerically matches expected."""
+        """Check if candidate numerically matches expected.
+
+        Also handles percentage equivalence: 40% == 0.4 == 2/5.
+        """
         try:
             c_val = self._parse_numeric_value(candidate)
             e_val = self._parse_numeric_value(expected)
 
             if c_val is not None and e_val is not None:
-                # Allow small floating point differences
-                return abs(c_val - e_val) < 0.0001
+                # Direct comparison
+                if abs(c_val - e_val) < 0.0001:
+                    return True
+                # Percentage equivalence: if one looks like a percent,
+                # compare its decimal form against the other.
+                c_is_pct = '%' in str(candidate)
+                e_is_pct = '%' in str(expected)
+                if c_is_pct and not e_is_pct:
+                    if abs(c_val / 100.0 - e_val) < 0.0001:
+                        return True
+                if e_is_pct and not c_is_pct:
+                    if abs(e_val / 100.0 - c_val) < 0.0001:
+                        return True
         except (ValueError, IndexError):
             pass
         return False
@@ -567,8 +598,23 @@ class AccuracyScorer:
 
         # Remove variable assignments like "x = " so "x = 1, x = 2" -> "1, 2"
         value = re.sub(r'[a-zA-Z]\s*=\s*', '', value)
+        # Remove function-call notation like r(6), f(2), g(10) to avoid
+        # the argument being treated as a separate answer value.
+        value = re.sub(r'[a-zA-Z]+\s*\(\s*[-+]?\d+(?:\.\d+)?\s*\)', '', value)
         # Remove connectors
         value = re.sub(r'\b(?:and|or)\b', ',', value, flags=re.IGNORECASE)
+
+        # Expand ± and +/- notation: "±3" or "+/-3" → "+3, -3"
+        value = re.sub(
+            r'[±]\s*(\d+(?:\.\d+)?(?:\s*/\s*\d+(?:\.\d+)?)?)',
+            lambda m: f'+{m.group(1)}, -{m.group(1)}',
+            value,
+        )
+        value = re.sub(
+            r'\+\s*/\s*-\s*(\d+(?:\.\d+)?(?:\s*/\s*\d+(?:\.\d+)?)?)',
+            lambda m: f'+{m.group(1)}, -{m.group(1)}',
+            value,
+        )
 
         numbers = re.findall(r'[-+]?\d+(?:\.\d+)?(?:\s*/\s*\d+(?:\.\d+)?)?', value)
         if len(numbers) < 2:

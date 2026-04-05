@@ -235,6 +235,125 @@ class FirestoreStore:
                 "error": str(exc),
             }
 
+    def save_baseline_result(
+        self,
+        baseline_result: Dict[str, Any],
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Persist a baseline result to the baseline_results collection in Firestore.
+
+        Schema: baseline_results/{domain}/{difficulty}/{problem_id}
+        - result_per_run: stores run1/run2/run3 payloads
+        - 3_run_ave: stores aggregated metrics from those runs
+
+        Baseline results are kept separate from benchmark_results so they
+        are never included in the historical data used by normal mode.
+        """
+        if not self.enabled:
+            return {
+                "success": False,
+                "reason": "disabled",
+                "error": "Firestore persistence is disabled.",
+            }
+
+        if self.db is None:
+            return {
+                "success": False,
+                "reason": "not_initialized",
+                "error": self.initialization_error or "Firestore is not initialized.",
+            }
+
+        try:
+            metadata = metadata or {}
+            domain = self._resolve_domain(benchmark_result=baseline_result, metadata=metadata)
+            difficulty = self._resolve_difficulty(benchmark_result=baseline_result, metadata=metadata)
+            problem_text = metadata.get("problem") or baseline_result.get("problem") or "unknown_problem"
+            problem_id = self._build_problem_document_id(problem_text)
+
+            run_history = baseline_result.get("run_history", [])
+            result_per_run: List[Dict[str, Any]] = []
+            for run in run_history:
+                if not isinstance(run, dict) or not run.get("success", False):
+                    continue
+                scores = run.get("scores", {}) if isinstance(run.get("scores"), dict) else {}
+                result_per_run.append({
+                    "run_index": run.get("run_index"),
+                    "source": "baseline",
+                    "domain": domain,
+                    "difficulty": difficulty,
+                    "run_mode": "baseline",
+                    "technique": "raw_baseline",
+                    "prompt_used": baseline_result.get("prompt_used"),
+                    "model_response": run.get("response", ""),
+                    "performance_score": self._to_float(scores.get("overall")),
+                    "overall": self._to_float(scores.get("overall")),
+                    "metric_result": {
+                        "accuracy": self._to_float(scores.get("accuracy")),
+                        "consistency": self._to_float(scores.get("consistency")),
+                        "efficiency": self._to_float(scores.get("efficiency")),
+                        "overall": self._to_float(scores.get("overall")),
+                    },
+                })
+
+            result_per_run = result_per_run[-3:]
+
+            three_run_ave = self._compute_3_run_average(result_per_run)
+
+            # Override with the actual composite scores from the baseline response
+            # (which include consistency), so Firestore matches the UI.
+            response_scores = baseline_result.get("scores")
+            if isinstance(response_scores, dict):
+                composite_overall = self._to_float(response_scores.get("overall"))
+                if composite_overall is not None:
+                    three_run_ave["avg_performance_score"] = round(composite_overall, 4)
+                    if isinstance(three_run_ave.get("metric_result"), dict):
+                        three_run_ave["metric_result"]["overall"] = round(composite_overall, 4)
+                    if isinstance(three_run_ave.get("metric_averages"), dict):
+                        three_run_ave["metric_averages"]["overall"] = round(composite_overall, 4)
+                # Also store the actual consistency score
+                composite_consistency = self._to_float(response_scores.get("consistency"))
+                if composite_consistency is not None:
+                    if isinstance(three_run_ave.get("metric_result"), dict):
+                        three_run_ave["metric_result"]["consistency"] = round(composite_consistency, 4)
+                    if isinstance(three_run_ave.get("metric_averages"), dict):
+                        three_run_ave["metric_averages"]["consistency"] = round(composite_consistency, 4)
+
+            has_ground_truth = metadata.get("has_ground_truth", False)
+            evaluation_quality = "ground_truth" if has_ground_truth else "no_ground_truth"
+
+            baseline_collection = "baseline_results"
+            domain_doc_ref = self.db.collection(baseline_collection).document(domain)
+            difficulty_collection_ref = domain_doc_ref.collection(difficulty)
+            problem_doc_ref = difficulty_collection_ref.document(problem_id)
+
+            problem_doc_ref.set(
+                {
+                    "problem_id": problem_id,
+                    "problem": problem_text,
+                    "has_ground_truth": has_ground_truth,
+                    "evaluation_quality": evaluation_quality,
+                    "technique": "raw_baseline",
+                    "result_per_run": self._encode_runs_as_named_map(result_per_run),
+                    "3_run_ave": three_run_ave,
+                },
+                merge=True,
+            )
+
+            return {
+                "success": True,
+                "collection": baseline_collection,
+                "domain": domain,
+                "difficulty": difficulty,
+                "problem_id": problem_id,
+                "result_per_run_count": len(result_per_run),
+            }
+        except Exception as exc:
+            return {
+                "success": False,
+                "reason": "write_failed",
+                "error": str(exc),
+            }
+
     def _build_run_entries_from_benchmark_result(
         self,
         benchmark_result: Dict[str, Any],
