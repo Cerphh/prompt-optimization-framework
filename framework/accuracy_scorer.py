@@ -82,6 +82,45 @@ class AccuracyScorer:
 
         return 0.0
 
+    def score_final_answer_only(self, response: str, expected: Any, problem: str = None) -> float:
+        """Score accuracy using ONLY the model's final/concluding answer.
+
+        Unlike score(), this does NOT scan all numbers in the response.
+        Only checks explicit answer lines, the last line, and conclusion
+        lines (therefore/thus/so).  This prevents intermediate calculation
+        steps from inflating accuracy.
+        """
+        if not response or len(response.strip()) == 0:
+            return 0.0
+
+        if expected is None and problem:
+            expected = self._auto_solve_simple_problem(problem)
+        if expected is None and problem:
+            expected = self._auto_solve_equation_problem(problem)
+
+        if isinstance(expected, dict) and expected.get("type") == "equation_roots":
+            return self._score_equation_roots(response, expected)
+
+        if expected is None:
+            return self._heuristic_score(response, problem)
+
+        expected_str = str(expected).strip()
+
+        expected_value_set = self._extract_value_set(expected_str)
+        if expected_value_set is not None:
+            return self._score_multi_value_response(response, expected_value_set)
+
+        # Only use priority candidates: explicit answer lines, last line,
+        # and conclusion lines.  Do NOT fall through to _extract_answers()
+        # which scans every number in the entire response.
+        candidates = self._extract_priority_answers(response)
+
+        for candidate in candidates:
+            if self._strong_match(candidate, expected_str):
+                return 1.0
+
+        return 0.0
+
     def _strong_match(self, candidate: str, expected: str) -> bool:
         """Apply strict match strategies in priority order."""
         if self._exact_match(candidate, expected):
@@ -200,6 +239,16 @@ class AccuracyScorer:
         )
         if lead_in_match:
             tail = lead_in_match.group(1).strip().rstrip('.;,')
+            if self._looks_math_like(tail):
+                return tail
+
+        # Match natural language "... is 11" without requiring : or = after "is".
+        plain_is_match = re.search(
+            r'(?i)\b(?:is|equals|becomes|gives)\s+([-+]?\d[^\n]*?)$',
+            value,
+        )
+        if plain_is_match:
+            tail = plain_is_match.group(1).strip().rstrip('.;,')
             if self._looks_math_like(tail):
                 return tail
 

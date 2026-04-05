@@ -1765,7 +1765,7 @@ async def run_baseline(request: BaselineRequest):
                 "continuation_rounds": result_metrics.get("continuation_rounds", 0),
             }
 
-            acc = accuracy_scorer.score(response_text, ground_truth, raw_prompt)
+            acc = accuracy_scorer.score_final_answer_only(response_text, ground_truth, raw_prompt)
             eff = efficiency_scorer.score(response_text, metrics)
             norm = consistency_scorer.normalize_output(response_text)
             normalized_outputs.append(norm)
