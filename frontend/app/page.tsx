@@ -127,7 +127,39 @@ interface TechniqueRow {
   efficiency: number
   overall: number
   overallIsProvisional: boolean
+  metrics: {
+    elapsed_time: number
+    prompt_tokens: number
+    completion_tokens: number
+    total_tokens: number
+  }
+  wordCount: number
   error?: string
+}
+
+const countWords = (value?: string): number => {
+  const normalized = (value || '').trim()
+  if (!normalized) {
+    return 0
+  }
+  return normalized.split(/\s+/).length
+}
+
+const formatElapsedTime = (value: number): string => {
+  if (!Number.isFinite(value) || value <= 0) {
+    return '0.00s'
+  }
+  if (value >= 10) {
+    return `${value.toFixed(1)}s`
+  }
+  return `${value.toFixed(2)}s`
+}
+
+const formatWholeNumber = (value: number): string => {
+  if (!Number.isFinite(value)) {
+    return '0'
+  }
+  return Math.round(value).toLocaleString()
 }
 
 const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://127.0.0.1:8000').replace(/\/+$/, '')
@@ -512,6 +544,7 @@ export default function Home() {
   const [error, setError] = useState('')
   const [isScopeError, setIsScopeError] = useState(false)
   const [expandedTechnique, setExpandedTechnique] = useState<string | null>(null)
+  const [efficiencyInfo, setEfficiencyInfo] = useState<{ technique: string; x: number; y: number } | null>(null)
   const [showIndividualRuns, setShowIndividualRuns] = useState(false)
   const [healthStatus, setHealthStatus] = useState<'checking' | 'healthy' | 'unhealthy'>('checking')
   const [validationError, setValidationError] = useState('')
@@ -1383,6 +1416,7 @@ export default function Home() {
   const techniqueRows: TechniqueRow[] = result
     ? visibleTechniqueEntries.map(([techniqueName, techniqueResult]) => {
         const scores = techniqueResult?.scores || ({} as Partial<TechniqueResult['scores']>)
+        const metrics = techniqueResult?.metrics
         return {
           technique: techniqueName,
           success: techniqueResult?.success ?? false,
@@ -1394,6 +1428,13 @@ export default function Home() {
           efficiency: toSafeNumber(scores.efficiency),
           overall: toSafeNumber(scores.overall),
           overallIsProvisional: Boolean(scores.overall_is_provisional),
+          metrics: {
+            elapsed_time: toSafeNumber(metrics?.elapsed_time),
+            prompt_tokens: toSafeNumber(metrics?.prompt_tokens),
+            completion_tokens: toSafeNumber(metrics?.completion_tokens),
+            total_tokens: toSafeNumber(metrics?.total_tokens),
+          },
+          wordCount: countWords(techniqueResult?.response),
           error: techniqueResult?.error,
         }
       })
@@ -1433,6 +1474,102 @@ export default function Home() {
 
   const bestConsistencyIsProvisional =
     result?.best_result?.scores?.consistency_is_provisional === true
+
+  const renderEfficiencyCell = (tech: TechniqueRow) => {
+    const isOpen = efficiencyInfo?.technique === tech.technique
+
+    return (
+      <div className="inline-flex items-center justify-center gap-1.5">
+        <span className="font-mono">{formatScore(tech.efficiency, compScoreFormat)}</span>
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation()
+            if (isOpen) {
+              setEfficiencyInfo(null)
+            } else {
+              const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+              setEfficiencyInfo({ technique: tech.technique, x: rect.right + 8, y: rect.top - 4 })
+            }
+          }}
+          className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-full text-[9px] font-semibold leading-none transition-colors shrink-0"
+          style={{
+            background: isOpen ? 'var(--accent)' : 'transparent',
+            color: isOpen ? '#fff' : 'var(--text-subtle)',
+            border: isOpen ? '1px solid var(--accent)' : '1px solid var(--border)',
+          }}
+          aria-label={`Show efficiency breakdown for ${tech.technique}`}
+          title="Efficiency breakdown"
+        >
+          i
+        </button>
+      </div>
+    )
+  }
+
+  const renderEfficiencyPopover = () => {
+    if (!efficiencyInfo) return null
+    const tech = techniqueRows.find((r) => r.technique === efficiencyInfo.technique)
+    if (!tech) return null
+
+    // Clamp so the popover stays on screen (popover is ~240px wide, ~200px tall)
+    const popoverWidth = 240
+    const popoverHeight = 210
+    const viewportW = typeof window !== 'undefined' ? window.innerWidth : 1200
+    const viewportH = typeof window !== 'undefined' ? window.innerHeight : 800
+    const left = Math.min(efficiencyInfo.x, viewportW - popoverWidth - 12)
+    const top = Math.min(Math.max(efficiencyInfo.y, 8), viewportH - popoverHeight - 12)
+
+    return (
+      <div
+        className="fixed inset-0 z-50"
+        onClick={() => setEfficiencyInfo(null)}
+      >
+        <div
+          className="fixed w-60 rounded-lg p-4 shadow-xl"
+          style={{
+            left: `${left}px`,
+            top: `${top}px`,
+            background: 'var(--surface)',
+            border: '1px solid var(--border)',
+            color: 'var(--text)',
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[10px] font-mono uppercase tracking-widest" style={{ color: 'var(--text-subtle)' }}>
+              Efficiency Breakdown
+            </p>
+            <button
+              type="button"
+              onClick={() => setEfficiencyInfo(null)}
+              className="text-xs leading-none px-1"
+              style={{ color: 'var(--text-subtle)' }}
+            >
+              ✕
+            </button>
+          </div>
+          <p className="text-xs font-medium mb-3" style={{ color: 'var(--text-muted)' }}>
+            {tech.technique.toUpperCase()} · {formatScore(tech.efficiency, compScoreFormat)}
+          </p>
+          <div className="space-y-2 text-xs font-mono">
+            {([
+              ['Elapsed time', formatElapsedTime(tech.metrics.elapsed_time)],
+              ['Prompt tokens', formatWholeNumber(tech.metrics.prompt_tokens)],
+              ['Completion tokens', formatWholeNumber(tech.metrics.completion_tokens)],
+              ['Total tokens', formatWholeNumber(tech.metrics.total_tokens)],
+              ['Word count', formatWholeNumber(tech.wordCount)],
+            ] as const).map(([label, val]) => (
+              <div key={label} className="flex items-center justify-between">
+                <span style={{ color: 'var(--text-subtle)' }}>{label}</span>
+                <span>{val}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   /* Whether we're in "results" mode (sidebar + right panel) */
   const hasStarted = loading || !!result
@@ -2236,8 +2373,8 @@ export default function Home() {
                                     <td className="text-center px-4 py-3 font-mono">
                                       {tech.consistencyAvailable ? formatScore(tech.consistency, compScoreFormat, 'PROV') : 'PROV'}
                                     </td>
-                                    <td className="text-center px-4 py-3 font-mono">
-                                      {formatScore(tech.efficiency, compScoreFormat)}
+                                    <td className="text-center px-4 py-3">
+                                      {renderEfficiencyCell(tech)}
                                     </td>
                                     <td
                                       className="text-center px-4 py-3 font-mono font-semibold"
@@ -2656,8 +2793,8 @@ export default function Home() {
                             <td className="text-center px-4 py-3 font-mono">
                               {tech.consistencyAvailable ? formatScore(tech.consistency, compScoreFormat, 'PROV') : 'PROV'}
                             </td>
-                            <td className="text-center px-4 py-3 font-mono">
-                              {formatScore(tech.efficiency, compScoreFormat)}
+                            <td className="text-center px-4 py-3">
+                              {renderEfficiencyCell(tech)}
                             </td>
                             <td
                               className="text-center px-4 py-3 font-mono font-semibold"
@@ -2693,6 +2830,8 @@ export default function Home() {
         </section>
         </div>
       )}
+      {/* ═══ Efficiency Breakdown Popover ═══ */}
+      {renderEfficiencyPopover()}
       {/* ═══ Technique Details Modal ═══ */}
       {expandedTechnique && expandedResult && (
         <div
