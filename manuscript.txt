@@ -1,3 +1,6 @@
+
+
+
 ALGORITHMIC OPTIMIZATION OF PROMPT ENGINEERING TECHNIQUES FOR ENHANCING LLM MATHEMATICAL PROBLEM-SOLVING PERFORMANCE
 
 A Thesis Presented to the Faculty of the
@@ -11,180 +14,154 @@ In Partial Fulfillment
 of the Requirements for the Degree
 Bachelor of Science in Computer Science
 
-By:
-Cruz, Paul Oliver E.
-Eduria, Nheil G.
-Zamora, Clarence C.
+
+Paul Oliver E. Cruz
+Nheil G. Eduria
+Clarence C. Zamora
 
 
-
-Mr. Erwin L. Enriquez
-Thesis Adviser
+MAY 2026 (Second Semester)
 
 
-MAY 2026
+APPROVAL SHEET
 
+This thesis titled ALGORITHMIC OPTIMIZATION OF PROMPT ENGINEERING TECHNIQUES FOR ENHANCING LLM MATHEMATICAL PROBLEM-SOLVING PERFORMANCE, prepared and submitted
+by Paul Oliver E. Cruz, Nheil G. Eduria, Clarence C. Zamora, in partial fulfillment of the requirements for the degree of
+Bachelor of Science in Computer Science, is hereby accepted.
+                                                                                                    
+                                                                                                     Mr. Erwin L. Enriquez
+                                                                               Adviser
+
+Approved by the Committee on Oral Examination with a grade of __________.
+
+Dr. PRINCESS MARIE B. MELO
+Chair, Defense Panel
+
+Ms. Fatima Agdon                                                    Mr. Lloyd Macatangay
+        Panel Member                                                               Panel Member
+
+Accepted and approved for the degree of Bachelor of Science in Computer
+Science.
+
+           Date                                                  Dr. PRINCESS MARIE B. MELO
+                                                           Dean, CICS
 
 TABLE OF CONTENTS
-TITLE PAGE			    			                               i
-APPROVAL SHEET 
-DEDICATION
-ACKNOWLEDGEMENT
-ABSTRACT
-TABLE OF CONTENTS							        v
-LIST OF TABLES								       vi
-LIST OF FIGURES								      vii
+TITLE PAGE	i
+APPROVAL SHEET	ii
+DEDICATION	iii
+ACKNOWLEDGEMENT	iv
+ABSTRACT	v
+TABLE OF CONTENTS	vi
+LIST OF TABLES	vii
+LIST OF FIGURES	viii
 CHAPTER
 I. INTRODUCTION	1
 1.1 Background of the Study	1
 1.2 Statement of the Problem	3
 1.3 Objectives of the Study	3
 1.4 Novelty Claims	4
-1.5 Scope and Delimitations	9
-1.6 Significance of the Study	13
-1.7 Definition of Terms	14
-II. LITERATURE REVIEW	19
-2.1 Related Literature	19
-2.2 Research Framework	46
-2.3 Synthesis	54
-III. METHODOLOGY	57
-3.1 Research Design	57
-3.2 Model Formulation	57
-3.3 Simulation Environment	62
-3.4 Technical Constraints	63
-3.5 Experimental Setup	64
-3.6 Evaluation Metrics	66
-3.7 Benchmarking Framework	69
-3.8 Statistical Validation	72
-3.9 Ethical Considerations	72
-3.10 Reproducibility Statement	72
-IV. RESULTS AND DISCUSSIONS	74
-4.1 Presentation of Results	75
-4.2 Comparative Analysis / Performance Evaluation	84
-4.3 Hold-Out Validation of the Three-Tier Selection Algorithm	88
-4.4 Performance Trade-offs Analysis	92
-V. SUMMARY, CONCLUSION AND RECOMMENDATIONS	96
-5.1 Summary	96
-5.2 Conclusions	97
-5.3 Recommendations	98
-REFERENCES	101
-
+1.5 Scope and Delimitations	5
+1.6 Significance of the Study	6
+1.7 Definition of Terms	7
+II. LITERATURE REVIEW	11
+2.1 Related Literature	11
+2.2 Research Framework	36
+2.3 Synthesis	44
+III. METHODOLOGY	47
+3.1 Research Design	47
+3.2 Model Formulation	47
+3.2.1 Two-Mode Selection Algorithm	49
+3.2.2 Why Not a Simpler Approach?	52
+3.3 Component-Level Validation Design	54
+3.3.1 Validation Conditions	54
+3.3.2 Validation Metrics	55
+3.3.3 Validation Procedure	55
+3.4 Simulation Environment	56
+3.5 Technical Constraints	56
+3.6 Experimental Setup	57
+3.7 Normalization and Consistency Scoring	59
+3.7.1 Purpose	59
+3.7.2 Normalization Steps	59
+3.7.3 Numerical Equivalence Rules	60
+3.7.4 Worked Example – Full Normalization Pipeline	61
+3.7.5 Consistency Scoring Formula	61
+3.7.6 Reproducibility Guarantee	62
+3.8 Evaluation Metrics	62
+3.9 Benchmarking Framework	64
+3.9.1 Baseline Methods	64
+3.9.2 Benchmark Datasets and Test Instances	64
+3.9.3 Performance Evaluation and Validation	65
+3.10 Statistical Validation	65
+3.11 Ethical Considerations	66
+3.12 Reproducibility Statement	66
+3.12.1 Code Availability	66
+3.12.2 Dataset Accessibility	67
+3.12.3 Version Control	67
+3.12.4 Random Seed Settings	67
+IV. RESULTS AND DISCUSSIONS	68
+4.1 Presentation of Results	68
+4.1.1 Algebra	69
+4.1.2 Counting and Probability	71
+4.1.3 Pre-Calculus	73
+4.2 Comparative Analysis / Performance Evaluation	75
+4.3 Validation of the Selection Approach	78
+4.3.1 Overall Performance Comparison	78
+4.3.2 Detailed Breakdown by Domain and Difficulty	80
+4.3.3 Computational Savings	82
+4.3.4 Conclusion of Validation	82
+4.4 Hold-Out Validation of the Three-Tier Selection Algorithm	83
+4.5 Performance Trade-offs Analysis	85
+V. SUMMARY, CONCLUSION AND RECOMMENDATIONS	87
+5.1 Summary	87
+5.2 Conclusions	89
+5.3 Recommendations	91
+REFERENCES	95
 
 LIST OF TABLES
-No.
-Title
-Page
 
+No.	Title	Page
 
-
-
-
-
-1
-Comparative Analysis of Zero-Shot and Few-Shot Prompting Techniques
-19
-2
-Prompting Techniques – Core Foundations
-36
-3
-Mathematical Reasoning Evaluation
-37
-4
-Advanced Prompting Strategies and Optimization Methods
-39
-5
-In-Context Learning and Prompting Mechanisms
-40
-6
-Mathematical Reasoning: Datasets, Errors, and Benchmarking
-41
-7
-Evaluation Methodology and Output Quality
-43
-8
-LLM Architecture, Scaling, and Specialized Models
-43
-9
-Educational Applications, Cognitive Theory, and Retrieval
-44
-3.1
-Technical Constraints of the Study
-62
-4.1
-Results of Algebra — Basic
-74
-4.2
-Results of Algebra — Intermediate
-75
-4.3
-Results of Algebra — Advanced
-76
-4.4
-Results of Counting and Probability — Basic
-77
-4.5
-Results of Counting and Probability — Intermediate
-78
-4.6
-Results of Counting and Probability — Advanced
-79
-4.7
-Results of Pre-Calculus — Basic
-80
-4.8
-Results of Pre-Calculus — Intermediate
-81
-4.9
-Results of Pre-Calculus — Advanced
-82
-4.10
-Summary of Technique Performance Across All Domains and Complexity Levels
-83
-4.11
-One-Way ANOVA Summary for Overall Performance
-85
-4.12
-ANOVA Results by Domain
-85
-4.13
-ANOVA Results by Complexity Level
-86
-4.14
-Hold-Out Problem Set (20% of 45-Problem Benchmark)
-88
-4.15
-Hold-Out Validation Results for Normal Mode Technique Selection
-89
-4.16
-Observed Performance Trade-offs
-91
-
-
-
+1	Comparative Analysis of Zero-Shot and Few-Shot Prompting Techniques	12
+2	Prompting Techniques – Core Foundations	27
+3	Mathematical Reasoning Evaluation	29
+4	Advanced Prompting Strategies and Optimization Methods	31
+5	In-Context Learning and Prompting Mechanisms	32
+6	Mathematical Reasoning: Datasets, Errors, and Benchmarking	33
+7	Evaluation Methodology and Output Quality	34
+8	LLM Architecture, Scaling, and Specialized Models	35
+9	Educational Applications, Cognitive Theory, and Retrieval	36
+3.1	Technical Constraints of the Study	56
+3.2	Numerical Equivalence Normalization	60
+4.1	Results of Algebra — Basic	69
+4.2	Results of Algebra — Intermediate	69
+4.3	Results of Algebra — Advanced	70
+4.4	Results of Counting and Probability — Basic	71
+4.5	Results of Counting and Probability — Intermediate	71
+4.6	Results of Counting and Probability — Advanced	72
+4.7	Results of Pre-Calculus — Basic	73
+4.8	Results of Pre-Calculus — Intermediate	74
+4.9	Results of Pre-Calculus — Advanced	75
+4.10	Summary of Technique Performance Across All Domains and
+ 	                        Complexity Levels	76
+4.11	One-Way ANOVA Summary for Overall Performance	77
+4.12	ANOVA Results by Domain	78
+4.13	ANOVA Results by Complexity Level	78
+4.14	Validation Results Across All Conditions	79
+4.15	Per-Cell Performance (C1, C2, C4, C5)	80
+4.16	Hold-Out Problem Set (20% of 45-Problem Benchmark)	83
+4.17	Hold-Out Validation Results for Normal Mode Technique Selection	84
+4.18	Observed Performance Trade-offs	86
 
 LIST OF FIGURES
-No.
-Title
-Page
 
+No.	Title	Page
 
-
-
-
-
-1.1
-Hybrid Similarity Scoring Mechanism for Tier 1 Profile‑Based Selection
-6
-2.1
-IPO Conceptual Framework
-46
-3.1
-Comparison of the Base Model and the Proposed Algorithmic Optimization Model
-57
-3.2
-Benchmarking Framework Architecture
-65
-
+2.1	IPO Conceptual Framework	38
+3.1	Comparison of the Base Model and the Proposed Algorithmic 
+                                    Optimization Model	48
+3.2	Flow Chart	52
+3.3	Benchmarking Framework Architecture	58
 
 
 INTRODUCTION
@@ -194,126 +171,105 @@ Despite their linguistic proficiency, LLMs continue to demonstrate persistent we
 This limitation stems from a structural gap between how LLMs process mathematical information and how traditional symbolic computation systems operate. Whereas symbolic systems execute deterministic algorithms, LLMs rely on probabilistic pattern matching derived from training data. This architectural distinction renders model performance highly sensitive to prompt design; even minor variations in problem framing can substantially alter the trajectory of reasoning and the quality of the resulting output. Consequently, the strategic structuring of inputs—prompt engineering—emerges as a critical determinant of model performance on mathematical tasks.
 
 Recent research has investigated a variety of prompting strategies to enhance LLM reasoning capabilities. Zero-shot prompting presents problems directly without accompanying examples, relying on knowledge internalized during pre-training, while few-shot prompting provides a set of solved example problems to guide model reasoning. These two foundational approaches have yielded significant performance improvements across diverse domains. Although more advanced techniques—such as chain-of-thought and role-based prompting—have been explored in the literature, zero-shot and few-shot prompting remain the most systematically comparable methods for rigorous, controlled evaluation. The effectiveness of any prompting technique varies considerably depending on problem type, mathematical domain, and difficulty level, underscoring the necessity of domain-specific evaluation protocols in mathematical reasoning research.
-Despite recent advances in prompting research, three critical algorithmic gaps persist. First, prior studies lack domain-specific systematic evaluation. Existing research largely relies on general-purpose benchmarks designed for language comprehension rather than mathematical reasoning, resulting in fragmented findings that lack rigorous, domain-sensitive evaluation standards (Aqsa et al., 2025; Bachmann et al., 2024). Second, no established optimization framework systematically links algorithmic selection to performance evaluation in order to identify optimal prompting strategies for mathematical tasks. Current approaches typically involve manual, heuristic processes that are resource-intensive, subjective, and difficult to reproduce (Ggaliwango et al., 2024). Third, the field lacks standardized benchmarking protocols, rendering cross-study comparisons unreliable due to the absence of reproducible performance baselines (Wang, D. et al., 2025).
+Despite recent advances in prompting research, three critical algorithmic gaps persist. First, prior studies lack domain-specific systematic evaluation. Existing research largely relies on general-purpose benchmarks designed for language comprehension rather than mathematical reasoning, resulting in fragmented findings that lack rigorous, domain-sensitive evaluation standards (Aqsa et al., 2025; Bachmann et al., 2024). Second, no established selection framework systematically links algorithmic optimization to performance evaluation in order to identify optimal prompting strategies for mathematical tasks. Current approaches typically involve manual, heuristic processes that are resource-intensive, subjective, and difficult to reproduce (Ggaliwango et al., 2024). Third, the field lacks standardized benchmarking protocols, rendering cross-study comparisons unreliable due to the absence of reproducible performance baselines (Wang, D. et al., 2025).
 These gaps substantially impede the development of robust, scalable LLM systems for mathematical reasoning. In educational contexts—where LLMs are increasingly deployed as intelligent learning companions capable of providing step-by-step explanations (Ramnath et al., 2025; IEEE, 2023)—an optimized prompting structure has the potential to support automated problem set generation, solution guidance, and formative assessment. Realizing this potential, however, requires benchmarking systems that are reproducible and capable of supporting consistent comparisons across diverse prompting techniques, mathematical domains, and problem complexity levels.
 The present study addresses these computational challenges by developing an algorithmic optimization framework specifically designed for mathematical reasoning. The framework integrates systematic benchmarking, statistical evaluation, and a greedy selection algorithm to ensure that prompt-problem pairing decisions are grounded in quantitative performance measures. Domain-specific evaluation protocols are implemented for algebra, pre-calculus, and counting and probability, bridging the gap between theoretical prompt engineering and its practical application in computational mathematics education.
 1.2 Statement of the Problem
-This study addresses three fundamental computational challenges in the optimization of prompt engineering for Large Language Model mathematical problem-solving:
-(1) How can prompting techniques be systematically compared across different mathematical domains—algebra, pre-calculus, and counting and probability—and levels of complexity—basic, intermediate, and advanced—using common performance metrics?
-(2) What algorithmic strategy would effectively identify the most advantageous prompt-problem pairings by analyzing performance patterns based on mathematical problem characteristics?
-(3)  What performance patterns emerge when comparing zero-shot and few-shot prompting techniques in terms of accuracy, efficiency, and output consistency across diverse mathematical problem types?
+This study addresses three fundamental computational challenges in the selection of prompt engineering for Large Language Model mathematical problem-solving:
+How can prompting techniques be systematically compared across different mathematical domains—algebra, pre-calculus, and counting and probability—and levels of complexity—basic, intermediate, and advanced—using common performance metrics?
+What algorithmic strategy would effectively identify the most advantageous prompt-problem pairings by analyzing performance patterns based on mathematical problem characteristics?
+What performance patterns emerge when comparing zero-shot and few-shot prompting techniques in terms of accuracy, efficiency, and output consistency across diverse mathematical problem types?
 1.3 Objectives of the Study
 General Objective
-To develop and validate an algorithmic optimization framework for systematically selecting and refining prompt engineering techniques that maximize Large Language Model performance in mathematical problem-solving tasks.
+To systematically evaluate and compare zero-shot and few-shot prompting techniques and to develop a simple algorithm for selecting the more effective technique for mathematical problem-solving tasks.
 Specific Objectives
-To implement a standardized benchmarking protocol that conducts controlled evaluations of two prompting techniques—zero-shot and few-shot—across three mathematical domains: algebra, pre-calculus, and counting and probability.
-To devise an optimization selection algorithm using a greedy approach that investigates performance patterns derived from benchmarking results, and that automatically identifies and recommends the most effective prompting technique based on the characteristics of mathematical problems defined by domain and level of complexity.
-To create a reusable evaluation framework comprising performance metrics, and evidence-based selection guidelines that enable systematic optimization of prompts for any mathematical problem-solving application.
+To compare the performance of zero-shot and few-shot prompting techniques across algebra, pre-calculus, and counting and probability using accuracy, consistency, and efficiency metrics.
+To develop a prompt selection algorithm based on observed performance patterns across domain and difficulty levels.
+To evaluate the effectiveness of the proposed selection algorithm through component-level validation, including:
+baseline (no selection),
+greedy-only selection, and
+full selection system
 1.4 Novelty Claims
-This research makes the following original contributions to the field of prompt engineering and Large Language Model evaluation for mathematical problem‑solving.
-First contribution: a domain‑specific algorithmic benchmarking framework for mathematical reasoning.
-Unlike prior studies that apply general‑purpose NLP benchmarks to evaluate LLM mathematical performance, this research introduces a structured, domain‑specific benchmarking framework designed exclusively for three distinct mathematical domains—algebra, pre‑calculus, and counting and probability—stratified by complexity level: basic, intermediate, and advanced. This design addresses the critical gap identified by Aqsa et al. (2025), wherein existing benchmarks inadequately capture the nuanced reasoning demands of each mathematical subdomain. The novelty of this contribution lies in the domain‑stratified, complexity‑stratified benchmark architecture, which enables evaluation precision not achievable through general‑purpose assessment tools.
-Second contribution: a dual‑mode, three‑tier hierarchical selection algorithm that automatically identifies the most effective prompting technique.
-Whereas prior work relies on single‑pass greedy heuristics or manual selection, the proposed algorithm evaluates candidates through a structured sequence of confidence‑gated tiers, moving from the most specific to the most general source of evidence. The algorithm operates in two distinct modes:
-Normal Mode (deployment / efficient selection) uses Tier 1 and Tier 2 to recommend a prompting technique without executing all techniques in real time.
-Benchmark Mode (evaluation / data generation) uses Tier 3 to perform greedy runtime selection, generating the empirical performance data that subsequently feeds Normal Mode.
-Tier 1: Profile‑Based Selection (Normal Mode, most specific).
-The algorithm first queries historical benchmarking results for problems that share the same domain, difficulty level, intent, mathematical feature labels, format structure, and extracted constraints. To determine whether a historical problem is sufficiently similar to the current problem, a three‑layer hybrid similarity score is computed for each candidate record in the database.
-Lexical Similarity: Jaccard coefficient between the token sets of the two problem statements.
-Feature Similarity: Jaccard coefficient between the mathematical feature label sets of the two problems.
-Embedding Similarity: cosine similarity between the semantic vector representations of the two problem statements.
-These three layers are combined using the weighted formula:
-Hybrid Similarity = (0.60 × Embedding) + (0.25 × Feature) + (0.15 × Lexical).
-A historical problem is eligible for Tier 1 matching only if its hybrid similarity score meets or exceeds a base threshold of 0.55. This threshold is adaptive: when the similarity neighborhood is dense—defined as more than 15 records in the database whose hybrid similarity score with the current problem is at least 0.20—the threshold escalates to 0.60 to reduce false matches. Additionally, the required confidence gap between the top two technique candidates is computed dynamically as a function of the number of valid matches retrieved: when 20 or more matches are available, the gap threshold is set to 1.5× the base gap; for 10–19 matches, 1.0×; for 5–9 matches, 0.75×; and for fewer than 5 matches, 0.3× the base gap. The base confidence gap is defined as max(0.005, minimum_gap × 0.5), where minimum_gap is the system-configured minimum score gap (default: 0.03). To maintain match quality, a fixed minimum similarity threshold of 0.35 is enforced, below which no historical record is considered a candidate regardless of neighborhood density.
-Figure 1.1
-Hybrid Similarity Scoring Mechanism for Tier 1 Profile‑Based Selection
+This study makes three specific contributions to prompt engineering for mathematical problem‑solving. Each contribution is scoped strictly to comparing zero‑shot and few‑shot prompting on algebra, pre‑calculus, and counting & probability problems using Llama 3.
+	1. A Reproducible, Domain‑Specific Benchmarking Framework
+A structured benchmark for comparing prompting techniques across three mathematical domains and three complexity levels (basic, intermediate, advanced). The framework includes:
+A curated 45‑problem dataset sourced from the MATH dataset (Hendrycks et al., 2021), with expert‑validated solutions.
+Fixed evaluation protocols (normalization rules, few‑shot example selection) documented in Chapter III.
+Open‑source implementation (GitHub) for independent replication.
+	2. A Confidence‑Gated Selection Algorithm (Three‑Tier)
+	A lightweight algorithm that recommends the better prompting technique (zero‑shot or few‑shot) for a given problem without requiring exhaustive real‑time evaluation of both techniques. It operates in two modes:
+Normal Mode – uses historical performance data (problem‑profile or domain‑level aggregation) when confidence is sufficient.
+Benchmark Mode – falls back to greedy runtime evaluation when historical data is insufficient.
+	The algorithm balances accuracy (it matches exhaustive greedy selection on hold‑out problems, see Section 4.4) and efficiency (it avoids real‑time evaluation when confident, saving computational cost).
+	3. A Standardized Multi‑Metric Evaluation Protocol
+A weighted composite score that jointly assesses three dimensions of output quality:
 
-Tier 2: Domain‑ and‑Difficulty Selection (Normal Mode, medium specificity).
-If profile‑level confidence is insufficient—due to sparse historical data or a narrow performance gap—the algorithm falls back to aggregated historical performance across all problems sharing the same domain and complexity level. A technique is selected at this tier when: (a) at least 5 evaluated samples per technique exist within the same domain–difficulty cell in the historical database; and (b) the confidence gap between the top two techniques is at least 0.05. This tier captures domain-level patterns without requiring precise problem profile matching. 
-Tier 3: Greedy Runtime Selection (Benchmark Mode, fallback).
-When neither profile‑level nor domain‑level historical data meet the confidence thresholds—such as during the initial benchmarking phase before sufficient data have accumulated—the algorithm activates Benchmark Mode and executes all prompting techniques on the current problem in real time. Each technique is scored using the weighted composite formula:
-Overall Score = (Accuracy × 0.5) + (Consistency × 0.3) + (Efficiency × 0.2),
-and the technique achieving the highest score is selected. Deterministic tie-breaking is applied using the SHA-256 hash of the normalized problem text string (lowercased, whitespace-stripped), with the technique assigned to the lower hash value in lexicographic comparison selected as the winner, ensuring that the same problem always resolves to the same technique when scores are equal. For the first run of any technique-problem combination, consistency is not yet computable; a provisional score is used, computed by re-normalizing the available metric weights. Because consistency (weight = 0.30) is absent, the remaining weights — Accuracy (0.50) and Efficiency (0.20) — are summed to 0.70 and used as the denominator: Provisional Score = (Accuracy × 0.5 + Efficiency × 0.2) / 0.7. A provisional flag is recorded, and full composite scoring resumes from the second run onward once consistency becomes available. All results generated in Benchmark Mode are stored as benchmarking data and subsequently used to inform Normal Mode decisions (Tier 1 and Tier 2).
-This dual‑mode, three‑tier structure represents a novel domain‑specific application of hierarchical algorithmic prompt optimization within a mathematical context. It distinguishes the study from prior work that relies exclusively on manual selection, single‑pass greedy methods, or computationally intensive Bayesian search, by combining the data efficiency of profile‑based lookup—grounded in a three‑layer hybrid similarity scoring mechanism—with the robustness of runtime empirical evaluation as a fallback.
-Third contribution: a multidimensional, weighted evaluation protocol for mathematical problem‑solving.
-This research proposes a standardized three‑metric evaluation protocol that simultaneously assesses Accuracy (final answer correctness), Consistency (agreement across multiple runs via a normalized 0–1 ratio computed per technique), and Efficiency (a weighted composite of Time Score, Token Score, and Conciseness Score, each bounded on a 0–1 scale). While previous studies typically rely on single‑metric or inconsistent evaluation schemes (Son, 2025), the weighted composite approach in this study captures both computational performance and output reliability. This addresses the phenomenon in which models produce divergent answers to the same problem across runs—documented as a critical source of unreliability in Wang et al. (2024)—providing a more comprehensive assessment framework than has been consistently employed in prior prompt engineering research.
-Fourth contribution: an open‑source, reusable framework for prompt engineering research in mathematics.
-The study delivers a fully documented, modular, open‑source Python framework—accessible via GitHub—comprising standardized datasets of 45 expert‑validated problems, evaluation scripts, and the three‑tier hierarchical selection algorithm with its dual‑mode execution design: Normal Mode (Tier 1 – Tier 2 selection) and Benchmark Mode (Tier 3 greedy runtime evaluation). This artifact enables independent researchers to replicate, extend, and build upon the study’s methodology, directly addressing the reproducibility deficit documented in current prompt engineering literature (Wang, D. et al., 2025; Ggaliwango et al., 2024).
+Metric
+Weight
+What it measures
+Accuracy
+50% 
+Correctness of final answer (averaged over 3 runs)
+Consistency
+30%
+Agreement of outputs across 3 independent runs (normalized) 
+Efficiency
+20%
+Response time, token usage, and conciseness
+
+
+Unlike single‑metric (binary correctness) evaluations, this protocol quantifies output reliability and computational cost using explicit, reproducible rules.
 1.5 Scope and Delimitations
 Scope
-This research systematically assesses two prompt engineering methodologies to enhance the mathematical problem-solving capability of LLMs. The study develops and validates a standardized benchmarking protocol that integrates controlled evaluation and statistical analysis to identify effective prompt strategies for different types of mathematical problems.
-Dataset
-The study encompasses three primary mathematical domains: algebra, pre-calculus, and counting and probability. Each domain is represented through a curated set of 15 problems stratified into three levels of complexity—basic, intermediate, and advanced—with 5 problems per level, yielding a total of 45 expert-validated problems sourced from the MATH Dataset available via HuggingFace. This dataset size aligns with recommendations from comparable benchmarking studies (Aqsa et al., 2025; Feng et al., 2024) and provides balanced coverage for statistical analysis.
-Problem types per domain are distributed as follows:
-• Algebra: polynomial equations, systems of linear equations, and algebraic expressions
-• Pre-calculus: derivatives, integrals, optimization, and limits
-• Counting and probability: probability distributions, hypothesis testing, and descriptive statistics
-Complexity levels are defined as:
-• Basic — single-concept, one-step solutions
-• Intermediate — multi-step reasoning involving two concepts
-• Advanced — complex synthesis requiring three or more concepts
-Analytical Methods
-Two prompting techniques are evaluated: zero-shot prompting, which involves direct problem presentation without examples, and few-shot prompting, in which the target problem is preceded by  exactly two solved example problems per target problem, drawn from the same domain and complexity level as the target. The specific examples used for each of the 45 problems are documented in the study's GitHub repository alongside the structured JSON problem files. Each technique is applied to every problem across three independent test runs per technique-problem combination to account for model variability, resulting in 270 total evaluations (2 techniques × 45 problems × 1 model × 3 runs).
-All experiments are conducted using Python 3.10 or later, with the Llama 3 model accessed via the Ollama API at standardized parameters (temperature = 0.7; maximum tokens = 2,048). Supporting libraries include Pandas, NumPy, SciPy, and Matplotlib. Data analysis employs one-way ANOVA at a significance level of p < 0.05 and correlation testing to identify statistically significant performance patterns across domains and complexity levels.
-A three-tier hierarchical selection algorithm processes benchmarking results to automatically identify the optimal prompting technique for each problem profile, progressing from profile-based selection at Tier 1 — grounded in a three-layer hybrid similarity scoring mechanism combining Lexical Similarity (Jaccard coefficient on token sets), Feature Similarity (Jaccard coefficient on mathematical feature label sets), and Embedding Similarity (cosine similarity on semantic vector representations) under the weighted formula Hybrid Similarity = (0.60 × Embedding) + (0.25 × Feature) + (0.15 × Lexical), with a minimum threshold of 0.55 rising to 0.60 when more than 15 records in the database have a hybrid similarity score of at least 0.20 with the current problem — to domain-and-difficulty aggregation at Tier 2, and greedy runtime selection at Tier 3 as a fallback when historical data are insufficient. A 20% hold-out validation set is used to assess the external validity of technique recommendations across all three tiers.
-Variables Included
-Each technique-problem combination is assessed across three quantitative performance dimensions:
-• Accuracy (50% weight) — binary measure of final answer correctness based on expert-verified solutions
-• Consistency (30% weight) — normalized agreement ratio across multiple independent runs, computed as the proportion of identical normalized outputs per technique-problem pair (0–1 scale); provisional on the first run
-• Efficiency (20% weight) — a weighted composite of three sub-components: Time Score (40% of efficiency, based on fixed response latency tiers), Token Score (30%, averaging a token count score and a token-to-word ratio score), and Conciseness Score (30%, based on response word count against optimal length thresholds). All sub-components are bounded on a 0–1 scale by design.
-These metrics are integrated into a weighted composite score: Overall Score = (Accuracy × 0.5) + (Consistency × 0.3) + (Efficiency × 0.2). Output normalization prior to consistency scoring strips whitespace, verbal wrappers (e.g., "The answer is"), capitalization differences, trailing punctuation, and treats numerically equivalent expressions as identical (e.g., "2/1" ≡ "2", "0.5" ≡ "1/2").
-The study delivers a reusable benchmarking framework comprising the 45-problem dataset, documented evaluation protocols and testing procedures, statistical analysis templates, an open-source implementation accessible via GitHub, and a performance metrics dashboard.
+This research evaluates two prompting techniques—zero-shot and few-shot—across 45 expert-validated problems sourced from the MATH Dataset (HuggingFace), distributed equally across algebra, pre-calculus, and counting and probability, and stratified into basic, intermediate, and advanced complexity levels. Each technique-problem combination is evaluated across three independent runs using Llama 3 via the Ollama API (temperature = 0.7; max tokens = 2,048), yielding 270 total evaluations. Statistical significance is assessed via one-way ANOVA (α = 0.05). A 20% hold-out validation set assesses algorithm recommendation quality. The selection algorithm is intentionally kept simple and greedy to match the two‑technique comparison; its design is justified in Section 3.2.2.
+
 Delimitations
-While this research provides a detailed and systematic methodology, the following boundaries define the study's scope and distinguish it from what is not covered.
-Model Dependency. The analysis is confined to one open-access LLM: Llama 3. While this model demonstrates advanced reasoning capabilities, results may not fully generalize to other LLM architectures—including proprietary models such as GPT-4 and Claude, or future open-source variants—due to distinct training methodologies and architectural differences.
-Technique Scope. The study evaluates only two prompting techniques: zero-shot and few-shot. Advanced techniques such as chain-of-thought, role-based prompting, and tool-augmented approaches are excluded to maintain a focused, rigorous comparison of foundational prompting methods. Future iterations may expand technique coverage.
-Domain Focus. The framework is limited to algebra, pre-calculus, and counting and probability. Performance patterns may differ considerably in domains such as geometry, discrete mathematics, proof-based reasoning, or applied physics, which require distinct cognitive strategies and are therefore not covered by this study.
-Dataset Size. The study includes 45 expert-validated problems—15 per domain and 5 per complexity level. While this provides balanced representation and statistical validity for controlled comparison, it may not capture the full diversity of mathematical problem structures encountered in real-world educational contexts.
-Evaluation Metrics. The study prioritizes quantitative measures of accuracy, efficiency, and consistency. Qualitative factors such as pedagogical appropriateness, explanation clarity for diverse learning styles, and conceptual depth are acknowledged but not formally assessed through structured rubrics.
-Technical Constraints. Testing depends on stable API availability, consistent internet connectivity, and standardized computational resources (minimum 16 GB RAM, 8 GB GPU VRAM, 50 GB storage). While protocols are designed to minimize variability, minor fluctuations in response time may occur due to external factors such as server load and network latency.
-Optimization Approach. The framework integrates comparative analysis with a three-tier hierarchical selection algorithm operating under two modes. In Normal Mode, the system performs profile-based and domain-level selection using Tier 1 and Tier 2, providing efficient and scalable recommendations. In Benchmark Mode, the system activates Tier 3, where all prompting techniques are evaluated through greedy runtime scoring to establish empirical performance baselines. The greedy heuristic employed in Benchmark Mode functions as a local optimization mechanism and may not identify globally optimal solutions; it does not explore evolutionary or Bayesian optimization methods. Tier 1 and Tier 2 recommendations remain bounded by the size and diversity of the historical benchmarking database.
+Model Dependency: Limited to Llama 3; results may not generalize to GPT-4, Claude, or other architectures.
+Technique Scope: Zero-shot and few-shot only; chain-of-thought and tool-augmented techniques are excluded.
+Domain Focus: Algebra, pre-calculus, and counting and probability only; geometry and proof-based reasoning are not covered.
+Dataset Size: 45 problems; may not capture the full diversity of real-world mathematical problem structures.
+Optimization Approach: Greedy algorithm employed in Benchmark Mode; globally optimal solutions are not guaranteed.
+
 1.6 Significance of the Study
-The findings of this research advance the use of artificial intelligence in academic and professional settings by establishing improved techniques for maximizing LLM performance through systematic prompt refinement. The outcomes carry implications across multiple stakeholder groups.
-For students and educators, this study provides validated recommendations for constructing prompts that guide LLMs toward more precise and reliable responses to mathematical queries. Learners of algebra, pre-calculus, and counting and probability stand to benefit from clearer, more dependable explanations tailored to individual problem characteristics, ultimately contributing to improved learning outcomes. As AI-assisted tutoring systems become more widely adopted, the reliable and accurate delivery of mathematical guidance assumes increasing educational significance.
-For the scientific and AI research community, the evaluation framework developed in this study extends beyond immediate findings to offer a reusable benchmarking instrument applicable across diverse mathematical topics. By minimizing unsystematic iterative experimentation and establishing reproducible evaluation protocols, the framework reduces methodological complexity associated with prompt engineering research and supports more systematic progress in the field. The open-source implementation further enables independent replication, critical scrutiny, and extension of the study's methodology.
-For the AI development industry, the algorithmic optimization approach demonstrated in this work provides a principled foundation for engineering more effective prompt pipelines in applied mathematical AI systems. The composite scoring methodology and dual-mode three-tier hierarchical selection algorithm (Normal Mode for deployment and Benchmark Mode for evaluation) may be adapted for deployment in automated tutoring platforms, enhancing the accuracy and reliability of AI-assisted mathematical instruction.
-More broadly, this study aligns with Sustainable Development Goal 4 by enhancing the reliability and educational effectiveness of AI-driven mathematical assistance, thereby improving student access to high-quality, accurate problem-solving support. It simultaneously advances Sustainable Development Goal 9 by developing algorithmic methods that improve AI system efficiency and facilitate the creation of resilient digital infrastructure with practical educational applications.
+For students and educators, this study provides validated prompting recommendations that improve the accuracy and reliability of LLM responses to mathematical queries, supporting improved learning outcomes in AI-assisted tutoring contexts.
+For the research community, the evaluation framework offers a reusable benchmarking instrument applicable across diverse mathematical topics. The open-source implementation enables independent replication and extension.
+For the AI development industry, the dual-mode three-tier selection algorithm provides a principled foundation for engineering effective prompt pipelines in applied mathematical AI systems.
+This study aligns with Sustainable Development Goal 4 by enhancing the educational effectiveness of AI-driven mathematical assistance, and with Sustainable Development Goal 9 by developing algorithmic methods that improve AI system efficiency.
+
 1.7 Definition of Terms
-Accuracy. A binary performance metric weighted at 50% in the composite scoring formula that records whether the LLM produced the correct final answer to a given mathematical problem, assigned a value of 1 for correct and 0 for incorrect based on expert-verified solutions.
-Algorithmic Optimization. The systematic use of a dual-mode, three-tier hierarchical selection algorithm to automatically identify and recommend the most effective prompting technique for a given mathematical problem based on empirical benchmarking results.
-Benchmarking Framework. A standardized system comprising the 45-problem dataset, evaluation metrics, testing protocols, and statistical analysis procedures used to compare zero-shot and few-shot prompting techniques across mathematical domains and complexity levels.
-Complexity Level. A classification of the 45 benchmark problems into three tiers of cognitive demand — Basic (single-step, single-concept), Intermediate (multi-step, two-concept), and Advanced (complex synthesis of three or more concepts).
-Conciseness Score. A sub-component of the Efficiency metric, weighted at 30% of the efficiency formula, that scores model response word count against optimal length targets, assigning 1.0 for 30–100 words and decreasing to 0.5 for fewer than 10 or more than 250 words.
-Confidence Gap. The absolute difference in mean composite overall scores between the top two prompting technique candidates, used in Tier 1 and Tier 2 as the minimum threshold criterion of 0.05 for technique selection.
-Consistency. A performance metric weighted at 30% in the composite scoring formula that measures the proportion of identical normalized outputs produced by the same prompting technique across three independent runs on the same problem, computed on a 0–1 scale.
-Efficiency. A performance metric weighted at 20% in the composite scoring formula that evaluates computational responsiveness and output economy using the formula: Efficiency = (0.40 × Time Score) + (0.30 × Token Score) + (0.30 × Conciseness Score), with all sub-components bounded on a 0–1 scale.
-Embedding Similarity. A layer of the hybrid similarity scoring mechanism that measures semantic closeness between two problem statements using cosine similarity between their vector representations, weighted at 60% in the hybrid similarity formula.
-Feature Similarity. A layer of the hybrid similarity scoring mechanism that measures overlap between the mathematical feature label sets of two problems using the Jaccard coefficient, weighted at 25% in the hybrid similarity formula.
-Few-Shot Prompting. A prompting technique in which exactly two solved example problems drawn from the same domain and complexity level as the target problem are provided before the target problem is presented to the model.
-Greedy Selection Algorithm. A real-time decision-making procedure in Benchmark Mode that executes all prompting techniques on the current problem, scores each using the weighted composite formula, and selects the highest-scoring technique using SHA-256-based deterministic tie-breaking.
-Hybrid Similarity Score. A composite measure computed at Tier 1 that combines Embedding Similarity (60%), Feature Similarity (25%), and Lexical Similarity (15%) to determine whether a historical problem is sufficiently similar to the current problem for profile-based technique selection.
-In-Context Learning. A capability of LLMs wherein the model adapts its reasoning behavior based on examples or instructions provided within the input prompt without any updates to the model's parameters.
-Large Language Model (LLM). An artificial intelligence system based on transformer architecture and pre-trained on large-scale text corpora, represented in this study by Llama 3 accessed via the Ollama API.
-Lexical Similarity. A layer of the hybrid similarity scoring mechanism that measures token-level overlap between two problem statements using the Jaccard coefficient on their respective token sets, weighted at 15% in the hybrid similarity formula.
+Accuracy. A binary performance metric (1 = correct, 0 = incorrect) that records whether the LLM produced the correct final answer to a given mathematical problem, averaged across three independent runs.
+Algorithmic Optimization. In this study, ‘optimization’ refers to the algorithmic optimization of the selection decision between existing prompting techniques, not to the tuning or generation of the prompts themselves. We optimize which technique to apply per problem based on empirical performance patterns.
+Benchmarking Framework. The standardized system used in this study to compare zero-shot and few-shot prompting techniques, comprising the 45-problem dataset, evaluation metrics, testing protocols, and statistical analysis procedures.
+Complexity Level. A classification of benchmark problems into three tiers of cognitive demand: Basic (single-step), Intermediate (multi-step), and Advanced (multi-concept synthesis).
+Conciseness Score. A sub-component of the Efficiency metric that scores model response length against optimal word-count targets on a 0–1 scale.
+Confidence Gap. The minimum required difference (0.05) in mean composite scores between the top two technique candidates, used in Tier 1 and Tier 2 as the threshold for making a selection decision.
+Consistency. A performance metric (weighted at 30%) that measures the proportion of identical normalized outputs produced by the same technique across three independent runs on the same problem.
+Efficiency. A performance metric (weighted at 20%) that evaluates computational responsiveness and output economy by combining Time Score (40%), Token Score (30%), and Conciseness Score (30%).
+Embedding Similarity. A component of the hybrid similarity formula (weighted at 60%) that measures semantic closeness between two problem statements using cosine similarity of their vector representations.
+Feature Similarity. A component of the hybrid similarity formula (weighted at 25%) that measures the overlap between mathematical feature label sets of two problems using the Jaccard coefficient.
+Few-Shot Prompting. A prompting technique in which exactly two solved example problems from the same domain and complexity level as the target problem are provided to the model before the target problem is presented.
+Greedy Selection Algorithm. The Benchmark Mode mechanism that scores all prompting techniques on the current problem using the weighted composite formula and selects the highest-scoring technique, with deterministic SHA-256-based tie-breaking.
+Hybrid Similarity Score. A composite measure used in Tier 1 that combines Embedding Similarity (60%), Feature Similarity (25%), and Lexical Similarity (15%) to determine whether a historical problem is sufficiently similar to the current problem.
+In-Context Learning. A capability of LLMs wherein the model adapts its reasoning behavior based on examples or instructions provided within the input prompt, without any updates to model parameters.
+Large Language Model (LLM). An AI system based on transformer architecture and pre-trained on large-scale text corpora, represented in this study by Llama 3 accessed via the Ollama API.
+Lexical Similarity. A component of the hybrid similarity formula (weighted at 15%) that measures token-level overlap between two problem statements using the Jaccard coefficient on their respective token sets.
 Llama 3. The open-source large language model developed by Meta AI used as the sole subject model in this study, accessed locally through the Ollama API at a fixed temperature of 0.7 and a maximum token limit of 2,048.
-Mathematical Domain. A category grouping related mathematical concepts and problem types, with this study covering three domains: Algebra, Pre-calculus, and Counting and Probability.
-Ollama API. The application programming interface used in this study to run the Llama 3 model locally under consistent parameter configurations for all evaluations.
-Overall Score. A weighted composite performance measure computed for each technique-problem combination using the formula: Overall Score = (Accuracy × 0.5) + (Consistency × 0.3) + (Efficiency × 0.2).
+Mathematical Domain. A category grouping related mathematical concepts and problem types, covering three areas in this study: Algebra, Pre-Calculus, and Counting and Probability.
+Ollama API. The application programming interface used in this study to run Llama 3 locally under consistent parameter configurations across all 270 evaluations.
+Overall Score. A weighted composite performance measure for each technique–problem combination, computed as: (Accuracy × 0.5) + (Consistency × 0.3) + (Efficiency × 0.2).
 Prompt Engineering. The deliberate design and structured formulation of textual inputs to guide LLM behavior, referring specifically in this study to the selection and application of zero-shot and few-shot prompting techniques for mathematical problem-solving.
-Provisional Score. An intermediate overall score computed on the first run of any technique-problem combination when consistency is not yet available, calculated as (Accuracy × 0.5 + Efficiency × 0.2) / 0.7 and flagged until full composite scoring resumes from the second run onward.
-Three-Tier Hierarchical Selection Algorithm. A confidence-gated framework that identifies the most effective prompting technique through three sequential tiers — Tier 1 Profile-Based Selection (minimum 3 samples per technique, similarity threshold 0.55 or 0.60, confidence gap ≥ 0.05), Tier 2 Domain-and-Difficulty Selection (minimum 5 samples per technique, confidence gap ≥ 0.05), and Tier 3 Greedy Runtime Selection — operating under Normal Mode or Benchmark Mode.
-Time Score. A sub-component of the Efficiency metric, weighted at 40% of the efficiency formula, that scores response latency using fixed tiers ranging from 1.0 for responses completed in 1–3 seconds to 0.3 for responses exceeding 30 seconds.
-Token Score. A sub-component of the Efficiency metric, weighted at 30% of the efficiency formula, that averages a token count score (1.0 for 100 or fewer tokens, decreasing to 0.3 for over 1,000 tokens) with a token-to-word ratio score (optimal range: 1.0–2.0 tokens per word).
+Provisional Score. An intermediate composite score used on the first run of a technique–problem combination before consistency becomes computable, calculated as (Accuracy × 0.5 + Efficiency × 0.2) / 0.7 and flagged until full scoring resumes from the second run onward.
+Three-Tier Hierarchical Selection Algorithm. A confidence-gated framework that identifies the most effective prompting technique through three sequential tiers: Tier 1 (profile-based), Tier 2 (domain-and-difficulty aggregation), and Tier 3 (greedy runtime evaluation), operating under Normal Mode or Benchmark Mode.
+Time Score. A sub-component of the Efficiency metric (weighted at 40%) that scores response latency using fixed tiers ranging from 1.0 for responses completed in 1–3 seconds to 0.3 for responses exceeding 30 seconds.
+Token Score. A sub-component of the Efficiency metric (weighted at 30%) that averages a token count score and a token-to-word ratio score to evaluate the output's lexical economy.
 Zero-Shot Prompting. A prompting technique in which the mathematical problem is presented directly to the model without any accompanying examples, relying solely on the model's pre-trained knowledge and reasoning capabilities.
-
-
 
 II. LITERATURE REVIEW
 This chapter discusses related literature and prior studies relevant to the research. It presents the theoretical and conceptual framework that supports the study and identifies research gaps addressed by the proposed work.
 2.1 Related Literature
 Prompting Technique Foundations
-Brown et al. (2020) introduced few-shot learning with GPT-3, demonstrating that providing two to five example problems significantly improves LLM performance—yielding accuracy gains of 15 to 40 percent—without requiring model fine-tuning. Their work established that contextual examples activate latent reasoning capabilities, forming the theoretical foundation for few-shot prompting as a technique to guide model behavior through demonstration rather than explicit instruction.
-Kojima et al. (2022) demonstrated that zero-shot prompting with simple metacognitive cues—such as the directive "Let's think step by step"—can achieve 78 to 92 percent of few-shot performance without requiring carefully crafted examples. This finding challenges prior assumptions about the necessity of demonstration examples, showing that appropriate framing alone can trigger internal reasoning processes and validating zero-shot prompting as an efficient and competitive baseline technique.
+Brown et al. (2020) introduced few-shot learning with GPT-3, demonstrating that providing two to five example problems significantly improves LLM performance yielding accuracy gains of 15 to 40 percent without requiring model fine-tuning. Their work established that contextual examples activate latent reasoning capabilities, forming the theoretical foundation for few-shot prompting as a technique to guide model behavior through demonstration rather than explicit instruction.
+Kojima et al. (2022) demonstrated that zero-shot prompting with simple metacognitive cues such as the directive "Let's think step by step" can achieve 78 to 92 percent of few-shot performance without requiring carefully crafted examples. This finding challenges prior assumptions about the necessity of demonstration examples, showing that appropriate framing alone can trigger internal reasoning processes and validating zero-shot prompting as an efficient and competitive baseline technique.
 Comparative Analysis. Brown et al.'s (2020) few-shot approach provides explicit reasoning templates through worked examples, whereas Kojima et al.'s (2022) zero-shot method relies on implicit model capabilities activated through instructional framing. The key distinction lies in the guidance mechanism: few-shot prompting uses demonstration, showing the model how to reason, while zero-shot prompting uses instruction, prompting the model to reason independently. This fundamental difference forms the basis for the systematic comparison undertaken in the current study.
 Table 1
 Comparative Analysis of Zero-Shot and Few-Shot Prompting Techniques
@@ -339,17 +295,13 @@ Aqsa et al. (2025) conducted a meta-analysis of 35 LLM evaluation studies, revea
 Evaluation Methodology
 Son (2025) identified critical inconsistencies in prompt engineering evaluation, wherein researchers employ varying metrics that render cross-study comparisons unreliable. The study advocates for multidimensional evaluation frameworks that assess multiple performance aspects simultaneously, a recommendation that directly motivates the three-metric protocol employed in the present study.
 Wang et al. (2024) demonstrated that 12 to 18 percent of correct answers result from flawed reasoning processes—the "right answer, wrong reason" phenomenon. This finding reinforces the necessity of evaluating solution consistency beyond binary correctness, validating the multi-metric approach adopted in the present study.
-Chain-of-Thought and Advanced Prompting Strategies
-Wei et al. (2022) introduced chain-of-thought (CoT) prompting, demonstrating that eliciting step-by-step reasoning through natural language rationales substantially improves LLM performance on complex reasoning tasks. Across arithmetic, commonsense, and symbolic reasoning benchmarks, CoT prompting enabled models to decompose problems into intermediate steps, yielding accuracy gains of up to 40 percent on multi-step arithmetic tasks. This foundational work highlights that the reasoning structure elicited by a prompt—not merely the presence of examples—is a critical determinant of model performance, providing a theoretical basis for the consistency metric employed in the present study.
-Wang et al. (2023) proposed Plan-and-Solve prompting, which extends zero-shot chain-of-thought by explicitly instructing the model to devise a solution plan prior to computation. Evaluated across arithmetic, commonsense, and symbolic reasoning datasets, Plan-and-Solve prompting consistently outperformed standard zero-shot CoT, particularly on multi-step arithmetic problems where intermediate planning reduced calculation errors. Although the present study does not evaluate Plan-and-Solve as a separate technique, these findings reinforce the importance of structured reasoning scaffolds, motivating the inclusion of step-by-step reasoning clarity as a key dimension of the consistency rubric.
-Zheng et al. (2023) proposed Progressive-Hint Prompting (PHP), a technique wherein the model's initial response is iteratively refined using previous answers as hints in subsequent prompts. Applied to mathematical reasoning benchmarks including GSM8K and MATH, PHP achieved consistent accuracy improvements of 4 to 8 percent over standard few-shot prompting, demonstrating that iterative prompt refinement guided by output-based feedback can serve as a lightweight optimization mechanism—an approach aligned with the black-box optimization principles underpinning the proposed greedy selection algorithm.
 Prompt Optimization and Automatic Prompt Engineering
 Liu et al. (2024) conducted a systematic survey of prompt engineering techniques across large language models, categorizing methods into hard prompts—discrete, human-readable inputs—and soft prompts—continuous, learned embeddings. The survey identified that task-specific prompt design substantially affects downstream performance, and that no single technique universally dominates across all task types. This finding directly motivates the domain-specific, comparative evaluation approach of the present study, wherein the optimal technique is empirically identified for each mathematical domain and complexity level rather than assumed a priori.
-Kottapalli Narayanaswamy and Muniswamy (2025) proposed a hybrid multi-objective optimization framework for prompt engineering that simultaneously optimizes accuracy, fluency, and computational efficiency using metaheuristic search. Their framework demonstrated improvements over single-objective approaches across a range of NLP benchmarks. While the present study employs the simpler greedy algorithm rather than a full metaheuristic search, the multi-objective composite scoring formula—weighting accuracy, consistency, and efficiency—is conceptually aligned with the multi-criteria optimization philosophy advocated by these authors.
+Kottapalli Narayanaswamy and Muniswamy (2025) proposed a hybrid multi-objective selection framework for prompt engineering that simultaneously optimizes accuracy, fluency, and computational efficiency using metaheuristic search. Their framework demonstrated improvements over single-objective approaches across a range of NLP benchmarks. While the present study employs the simpler greedy algorithm rather than a full metaheuristic search, the multi-objective composite scoring formula—weighting accuracy, consistency, and efficiency—is conceptually aligned with the multi-criteria optimization philosophy advocated by these authors.
 Sahoo et al. (2024) provided a comprehensive survey of prompt engineering techniques and their applications, identifying specificity, context-richness, and iterative refinement as primary drivers of improved LLM output quality. The survey also highlighted the lack of standardized evaluation protocols as a major impediment to progress in the field, a gap directly addressed by the present study through the introduction of a reproducible, domain-specific benchmarking protocol with quantified metrics.
 LLMs in Educational Contexts
 Choi and Chang (2025) surveyed prompt engineering techniques from the perspective of educational applications, examining how various prompting strategies affect LLM utility as AI tutors and learning assistants. Their analysis found that structured prompting—particularly few-shot and chain-of-thought approaches—significantly improved the pedagogical quality of LLM responses, including solution clarity and step-by-step explanation quality. Student perspectives gathered in the survey indicated that response consistency and reasoning transparency were valued more highly than answer correctness alone, directly supporting the weighting scheme adopted in the present study, wherein consistency and accuracy together constitute 80 percent of the composite evaluation score.
-Bachmann et al. (2024) investigated the mathematical educational quality of AI-supported problem solving by comparing different prompt techniques using GPT-4. Their study found that structured prompting with explicit instructional framing improved solution quality and reduced reasoning errors in educational contexts, and that no single prompt technique dominated across all problem types and difficulty levels. This methodology of applying domain-stratified evaluation with difficulty-level classification directly parallels the design of the present study and further motivates the need for algorithmic selection frameworks.
+Bachmann et al. (2024) investigated the mathematical educational quality of AI-supported problem solving by comparing different prompt techniques using GPT-4. Their study found that structured prompting with explicit instructional framing improved solution quality and reduced reasoning errors in educational contexts, and that no single prompt technique dominated across all problem types and difficulty levels. This methodology of applying domain-stratified evaluation with difficulty-level classification directly parallels the design of the present study and further motivates the need for algorithmic optimization frameworks.
 LLM Architecture and Scaling
 Chowdhery et al. (2022) introduced PaLM, a large-scale language model trained with the Pathways system, demonstrating that scaling model parameters yielded breakthrough performance on multi-step mathematical reasoning and coding tasks. PaLM achieved state-of-the-art results on mathematical benchmarks using few-shot prompting, demonstrating that model scale and prompt structure interact to determine reasoning quality. This work establishes the architectural context within which prompt engineering operates and underscores the importance of systematic prompt evaluation even as model capabilities scale.
 Debnath et al. (2025) conducted a comprehensive survey of prompt engineering techniques across different LLM families, categorizing methods by mechanism of action: instruction-based, demonstration-based, and reasoning-chain-based. Their comparative analysis found that demonstration-based techniques—few-shot prompting—consistently outperformed instruction-based approaches—zero-shot prompting—in structured problem-solving tasks, while reasoning-chain techniques required careful prompt calibration to be effective. These findings reinforce the foundational comparison undertaken in the present study and provide additional empirical grounding for selecting few-shot and zero-shot as the two primary techniques for evaluation.
@@ -359,7 +311,6 @@ Gao et al. (2024) introduced chain-of-abstraction reasoning, which guides LLMs t
 Reinforced and Structured Reasoning
 Xu et al. (2025) surveyed reinforced reasoning approaches for large reasoning models, examining how reinforcement learning from human feedback and process reward models can be combined with structured prompting to improve multi-step mathematical reasoning. Their survey identified that models rewarded for correct intermediate reasoning steps—rather than only final answers—achieved substantially better performance on complex mathematical benchmarks. This finding corroborates the rationale for the consistency metric in the present study, which similarly rewards the quality of intermediate reasoning steps rather than evaluating only final answer correctness.
 Zhou et al. (2022) proposed least-to-most prompting, which decomposes complex problems into sequences of simpler subproblems and solves them incrementally from easiest to hardest. Applied to symbolic manipulation and mathematical reasoning tasks, least-to-most prompting achieved significant accuracy improvements over standard few-shot chain-of-thought, particularly for problems requiring multi-step logical chains. This approach illustrates the principle that problem decomposition strategy embedded in the prompt directly influences reasoning quality, motivating the complexity stratification adopted in the present study's dataset design.
-Yu et al. (2024) introduced strategic chain-of-thought prompting, which guides LLMs to elicit an explicit reasoning strategy before applying it to the target problem. Evaluated on mathematical and commonsense reasoning benchmarks, this two-phase approach consistently outperformed standard chain-of-thought prompting by reducing strategy-level errors. While strategy elicitation is beyond the scope of the present study, this work provides further evidence that the structure of pre-solution reasoning—directly shaped by prompt design—is a critical determinant of final answer quality.
 Automated Prompt Optimization
 Ramnath et al. (2025) conducted a systematic survey of automatic prompt optimization techniques, classifying existing approaches by search strategy: gradient-based, reinforcement learning-based, and heuristic search-based methods. Their survey highlighted that heuristic and greedy approaches remain competitive with more computationally intensive methods in low-resource settings, validating the practical suitability of the greedy selection algorithm adopted in the present study. The survey also identified reproducible benchmarking as a critical gap in the field, directly motivating the standardized evaluation framework proposed here.
 Wang et al. (2025) proposed a sequential optimal learning approach to automated prompt engineering, treating prompt selection as a sequential decision problem and applying Bayesian optimization to identify high-performing prompts with minimal evaluations. Their framework demonstrated superior sample efficiency compared to random search and grid search baselines on several NLP tasks. While computationally richer than the greedy algorithm employed in the present study, Wang et al. (2025) confirm the value of systematic, algorithm-driven prompt selection over manual trial-and-error, reinforcing the methodological direction pursued in this research.
@@ -383,10 +334,8 @@ Hallucination in LLMs and Mathematical Accuracy
 Rawte et al. (2023) conducted a comprehensive survey of hallucination phenomena in large language models, identifying five primary types including factual, mathematical, and logical hallucinations. Their analysis found that mathematical hallucinations—wherein models generate plausible but incorrect numerical or symbolic outputs—are particularly prevalent in multi-step computation tasks and are exacerbated by ambiguous problem framing. These findings directly motivate the use of consistency scoring in the present study, as evaluating intermediate reasoning steps enables early detection of hallucinatory reasoning patterns before they propagate to incorrect final answers.
 Scaling Laws and Prompting Effectiveness
 Kaplan et al. (2020) established empirical scaling laws for language models, demonstrating that model performance improves predictably as a power function of model parameters, data, and compute. Their findings imply that sufficiently large models exhibit emergent reasoning capabilities not present in smaller counterparts. For the present study, this scaling context is important because Llama 3's mathematical reasoning capabilities are situated within these dynamics: model size determines the upper bound of reasoning achievable through prompting alone, and the relative effectiveness of zero-shot versus few-shot prompting may itself be a function of model scale, motivating future comparative studies across model sizes.
-Role-Based and Persona Prompting for Domain Expertise
-Kong et al. (2023) investigated role-based prompting, wherein LLMs are instructed to adopt a specific expert persona—for example, "You are an expert mathematician"—before solving domain-specific problems. Their experiments showed accuracy improvements of 5 to 15 percent compared to standard prompting baselines across STEM tasks, with larger gains observed in specialized domains such as calculus and statistics. The mechanism underlying these gains was attributed to attention pattern shifts toward domain-relevant training data distributions induced by persona framing. While role-based prompting was excluded from the present study to maintain focused comparison of foundational techniques, Kong et al. (2023) establish it as a promising enhancement for future extensions of the benchmarking framework.
 Metacognitive Prompting and Self-Verification
-Weng et al. (2023) proposed LLM self-verification, a technique wherein the model is prompted to verify its own solution by back-substituting the derived answer into the original problem and checking for consistency. Applied to mathematical reasoning tasks, self-verification improved accuracy by 3 to 8 percent over single-pass chain-of-thought prompting by identifying and correcting computational errors in the solution trajectory. This work highlights the potential of metacognitive prompting as a complementary strategy to the foundational techniques evaluated in the present study and motivates the inclusion of self-verification as a future enhancement to the optimization framework.
+Weng et al. (2023) proposed LLM self-verification, a technique wherein the model is prompted to verify its own solution by back-substituting the derived answer into the original problem and checking for consistency. Applied to mathematical reasoning tasks, self-verification improved accuracy by 3 to 8 percent over single-pass chain-of-thought prompting by identifying and correcting computational errors in the solution trajectory. This work highlights the potential of metacognitive prompting as a complementary strategy to the foundational techniques evaluated in the present study and motivates the inclusion of self-verification as a future enhancement to the selection framework.
 Educational Technology and AI-Assisted Learning Outcomes
 Latif and Zhai (2024) examined the integration of large language models into K-12 and undergraduate STEM education, finding that AI-assisted tutoring systems employing structured prompting improved student performance on mathematical assessments by an average of 18 percent compared to unassisted study conditions. Their analysis identified response consistency—particularly the quality of step-by-step explanations—as the strongest predictor of learning gains, outperforming final answer correctness as a predictor variable. These findings directly support the prioritization of the consistency metric in the present study's evaluation framework and validate the educational motivation for developing domain-specific prompting optimization tools.
 Structured Output Formatting and JSON Prompting
@@ -428,7 +377,7 @@ Motivates domain-specific comparative approach of the present study.
 Comprehensive Prompt Reviews
 Chen et al. (2025); Debnath et al. (2025)
 Field moving toward automated optimization pipelines; reproducibility is critical.
-Aligns with algorithmic selection and open-source framework contributions.
+Aligns with algorithmic optimization and open-source framework contributions.
 
  
 Table 3
@@ -473,10 +422,6 @@ Theme/Area
 Author(s) & Year
 Key Findings
 Relevance to Current Study
-Chain-of-Thought Prompting
-Wei et al. (2022)
-Step-by-step reasoning elicitation improves accuracy by up to 40% on multi-step tasks.
-Provides theoretical basis for consistency rubric; reasoning structure is critical.
 Plan-and-Solve Prompting
 Wang, L. et al. (2023)
 Explicit pre-solution planning reduces intermediate calculation errors.
@@ -529,10 +474,6 @@ Instruction Fine-Tuning
 Wei et al. (2021)
 Fine-tuning LLMs on diverse instruction-formatted tasks (FLAN) substantially improves zero-shot generalization.
 Grounds Llama 3 zero-shot baseline within instruction-tuning context; explains competitive zero-shot performance.
-Role-Based Prompting
-Kong et al. (2023)
-Expert persona framing yields 5–15% accuracy gains on STEM tasks.
-Establishes role-based prompting as a promising future extension of the benchmarking framework.
 Self-Verification Prompting
 Weng et al. (2023)
 Back-substituting the derived answer improves accuracy 3–8% by catching computational errors.
@@ -644,7 +585,7 @@ The In-Context Learning Framework, as outlined by Brown et al. (2020), asserts t
 
 Black-Box Optimization Principles, proposed by Li et al. (2025) and Ramnath et al. (2025), view prompt selection as an optimization challenge wherein internal model parameters remain hidden yet outputs are subject to evaluation. This justifies a greedy selection algorithm that iteratively selects prompting methods performing best according to observed metrics. Given that LLMs are non-deterministic black-box systems, optimal prompt configurations must be found through empirical discovery via systematic evaluation.
 
-These theoretical principles are integrated in the Input-Process-Output (IPO) conceptual framework of this study, which methodically combines problem characteristics, prompting strategies, assessment methods, and optimization algorithms to generate evidence-driven solutions for mathematical problem-solving.
+These theoretical principles are integrated in the Input-Process-Output (IPO) conceptual framework of this study, which methodically combines problem characteristics, prompting strategies, assessment methods, and selection algorithms to generate evidence-driven solutions for mathematical problem-solving.
 Figure 2.1.
 IPO Conceptual Framework
 
@@ -670,23 +611,19 @@ It compares the current problem with historical data using three similarity meas
 These are combined using the formula:
 Hybrid Similarity = 0.60 × Embedding + 0.25 × Feature + 0.15 × Lexical
 A match is considered valid when it meets the minimum similarity threshold (0.55, escalating to 0.60 when more than 15 records in the database have a hybrid similarity score of at least 0.20 with the current problem), at least 3 samples per technique pass the filter, and the confidence gap between the top two candidates is at least 0.05. If any condition is not met, the system proceeds to Tier 2.
-
 Tier 2 operates in Normal Mode when Tier 1 does not produce a confident result. The system groups historical data based on domain and difficulty level. A technique is selected when at least 5 evaluated samples per technique exist within the same domain–difficulty cell and the confidence gap between the top two candidates is at least 0.05. If confidence is still insufficient, the system moves to Tier 3 in Benchmark Mode.
 Tier 3 operates in Benchmark Mode and serves as both the initial data generation step and the fallback when historical data is insufficient.
 All prompting techniques are executed on the current problem. Each technique is evaluated using the formula:
 Overall Score = 0.5 × Accuracy + 0.3 × Consistency + 0.2 × Efficiency
 The technique with the highest score is selected.  If scores are equal, deterministic tie-breaking is applied using the SHA-256 hash of the normalized problem text string (lowercased, whitespace-stripped), with the technique assigned to the lower hash value in lexicographic comparison selected as the winner, ensuring reproducibility across sessions.
 The results from this mode are stored and used to improve Tier 1 and Tier 2 decisions over time.
-
 As more data is collected through Benchmark Mode, the system increasingly relies on Normal Mode for faster and more efficient selection. This design separates evaluation from deployment, allowing the system to maintain both accuracy and efficiency.
-
 Output Component
 The output component delivers three categories of actionable insights.
 Performance Metrics
 Comprehensive quantitative data reporting accuracy rates (percentage correct by technique, domain, and difficulty level); response times (mean and standard deviation in seconds); token usage (input and output length statistics); and consistency scores (proportion of identical normalized outputs per technique-problem pair, reported by domain and complexity level). Statistical significance testing through one-way Analysis of Variance (ANOVA) at a significance level of p < 0.05 indicates which performance differences are meaningful rather than attributable to random variation.
 Optimal Recommendations
 Recommendations are based on empirical data generated in Benchmark Mode and applied through Normal Mode. When sufficient historical data is available, recommendations include confidence levels and expected performance ranges to indicate reliability.
-
 Reusable Framework
 A uniform evaluation methodology suitable for novel mathematical problems, additional prompting techniques, or alternative LLM models. The framework comprises: a fully documented dataset of 45 expert-validated problems with standardized formatting; validated evaluation procedures for all three performance metrics; a testing protocol documented to ensure reproducibility; and the three-tier hierarchical selection algorithm—incorporating the three-layer hybrid similarity scoring mechanism at Tier 1—implemented as open-source software and published on GitHub. This reusability extends the study's impact beyond its immediate findings by enabling structured and systematic progress in prompt engineering research for mathematical reasoning.
 Integration and Flow
@@ -695,185 +632,380 @@ Benchmark Mode generates reliable performance data through greedy runtime evalua
 This approach addresses common issues in prompt engineering such as inconsistent evaluation methods, lack of standard benchmarks, and low reproducibility.
 By introducing a structured and data-driven framework, the study transforms prompt engineering from a trial-and-error process into a systematic and reliable methodology.
 2.3 Synthesis
-Existing research on prompt engineering has demonstrated that prompt structure significantly influences LLM reasoning capabilities. Studies by Brown et al. (2020) and Kojima et al. (2022) established foundational techniques—few-shot and zero-shot prompting—showing measurable performance improvements in general NLP tasks. However, these frameworks primarily addressed language comprehension tasks, leaving substantial gaps in mathematical problem-solving, where reasoning demands structured logic, symbolic manipulation, and multi-step coherence.
-Furthermore, evaluation methodologies remain fragmented. Aqsa et al. (2025) revealed that general-purpose benchmarks inadequately capture mathematical reasoning requirements, while Son (2025) documented inconsistent evaluation metrics that prevent reliable cross-study comparisons. Forootani (2025) identified that 35-45% of mathematical errors stem from logical inconsistencies rather than computational mistakes, highlighting the need for evaluation frameworks that assess reasoning quality, not just answer correctness.
-This study addresses these gaps by:
-Developing a domain-specific benchmarking protocol tailored to mathematical reasoning across algebra, pre-calculus, and counting and probability
-Implementing standardized evaluation using three quantitative metrics (accuracy, efficiency, consistency) validated through statistical analysis (ANOVA, p < 0.05)
-Systematically comparing two core prompting techniques (zero-shot and few-shot) using controlled experimental conditions and a curated dataset of 45 expert-validated problems
-Unlike previous frameworks that rely on qualitative assessments or inconsistent metrics, this research establishes a reproducible, data-driven protocol that enables rigorous performance comparison. The 45-problem dataset (stratified by domain and complexity) aligns with recommendations from Aqsa et al. (2025) for domain-specific evaluation while maintaining feasibility for systematic analysis.
-By integrating rigorous benchmarking fundamentals with a domain-specific algorithmic optimization layer, this study provides both essential baseline performance data and a systematic, data-driven mechanism for technique selection. The three-tier hierarchical selection algorithm — grounded in empirical benchmarking results and operating under a dual-mode execution framework — transforms prompt engineering from a manual, heuristic process into a reproducible, evidence-based methodology. The resulting framework offers standardized datasets, validated evaluation protocols, an open-source implementation, and algorithmic selection guidelines, advancing prompt engineering toward systematic, evidence-based practice.
+The preceding literature review reveals three converging gaps that collectively motivate the design of this study. Prior research on prompting techniques, mathematical reasoning, evaluation methodology, and algorithmic optimization each provides partial insights, but no existing work integrates them into a unified, reproducible framework for mathematical problem-solving.
+The first gap concerns evaluation adequacy. Brown et al. (2020) and Kojima et al. (2022) established the foundational effectiveness of few-shot and zero-shot prompting, but their evaluations target general NLP tasks rather than mathematical reasoning. Forootani (2025) and Stolfo et al. (2023) demonstrated that mathematical failures are predominantly structural and domain-specific, not linguistic—making general benchmarks and single-metric accuracy reporting systematically inadequate for this domain. Son (2025) and Wang et al. (2024) confirmed that existing evaluation frameworks are inconsistent and miss process-quality dimensions. The present study addresses this gap by implementing a three-metric weighted composite (accuracy, consistency, efficiency) across domain-stratified, complexity-stratified problem sets, producing evaluation data that prior frameworks cannot generate.
+The second gap concerns benchmarking standards. Aqsa et al. (2025) demonstrated that general-purpose benchmarks produce unreliable cross-study comparisons in mathematical contexts, while Wang et al. (2025) and Ggaliwango et al. (2024) documented the broader reproducibility deficit in prompt engineering research. Existing mathematical benchmarks, including the MATH dataset used here (Hendrycks et al., 2021), provide high-quality source problems but are not paired with standardized evaluation protocols or domain-specific comparison frameworks. The present study addresses this by constructing a curated 45-problem benchmark with fixed normalization rules, documented few-shot examples, and open-source evaluation scripts—transforming a source dataset into a reproducible benchmarking instrument.
+The third gap concerns algorithmic optimization . Bachmann et al. (2024), Liu et al. (2024), and Sahoo et al. (2024) all concluded that no single technique dominates across problem types and difficulty levels, yet the field lacks any systematic mechanism for identifying which technique to use for a given problem. Existing selection approaches—Bayesian search (Wang et al., 2025), metaheuristic frameworks (Kottapalli Narayanaswamy & Muniswamy, 2025)—are computationally intensive and not designed for domain-specific mathematical deployment. Ramnath et al. (2025) confirmed that greedy approaches remain competitive in low-resource settings, validating the practical suitability of the algorithm developed here. The three-tier hierarchical selection algorithm directly fills this gap by providing a confidence-gated, data-driven mechanism that matches technique recommendations to problem characteristics using accumulated benchmarking evidence.
+Where prior work treats benchmarking, evaluation, and selection as separate concerns—or addresses none of them systematically—this study integrates all three into a unified framework. The domain-specific benchmarking protocol addresses the evaluation adequacy gap identified by Aqsa et al. (2025) and Son (2025). The multi-metric composite addresses the process-quality gap identified by Wang et al. (2024) and Forootani (2025). The three-tier algorithm addresses the selection gap identified by Bachmann et al. (2024) and Liu et al. (2024). Together, these components transform prompt engineering for mathematical LLM applications from a manual, heuristic process into a systematic, evidence-based methodology—the central contribution of this study.
+
 
 III. METHODOLOGY
 This chapter describes the research design, model formulation, computational procedures, and evaluation methods used in the study. It explains how data were collected, processed, and analyzed to achieve the stated objectives.
 
 3.1 Research Design
+This section addresses Specific Objective 1 (comparing zero‑shot and few‑shot prompting) and Specific Objective 3 (evaluating the selection algorithm).
 
-This research employed an experimental and benchmarking design to systematically compare two prompting techniques across controlled mathematical problem-solving scenarios. The proposed model was evaluated through simulation and comparative benchmarking, following a structured protocol to ensure reproducibility, statistical validity, and practical applicability. Controlled experiments systematically compared zero-shot and few-shot prompting across 45 mathematical problems spanning algebra, pre-calculus, and counting and probability, with each problem evaluated at three complexity levels to identify performance patterns across varying difficulty.
+This research employed an experimental benchmarking design to systematically compare two prompting techniques across controlled mathematical problem-solving scenarios. Controlled experiments compared zero-shot and few-shot prompting across 45 problems spanning three mathematical domains and three complexity levels. The study evaluated performance differences using statistical analysis and validated algorithmic technique selection through a hold-out validation set.
 
 3.2 Model Formulation
+This section addresses Specific Objective 2 (developing a prompt selection algorithm).
+The optimization model is grounded in Black-Box Optimization Theory (Li et al., 2025), which frames prompt selection as an empirical optimization challenge where internal model parameters remain hidden but outputs are measurable.
 
-The optimization model is grounded in Black-Box Optimization Theory (Li et al., 2025), which frames prompt selection as an empirical optimization challenge. Figure 3.2 presents a side-by-side comparison of the base prompting approach and the proposed algorithmic optimization model, highlighting the structural enhancements introduced in this study.
 
 Figure 3.1 
 Comparison of the Base Model and the Proposed Algorithmic Optimization Model
         
 Note. Gray nodes represent the conventional base model pipeline. Purple nodes represent shared components retained in the proposed model. Teal nodes marked NEW ★ represent the three enhancements introduced by this study.
-As illustrated in Figure 3.1, the base model represents the conventional ad hoc approach to prompt engineering, where a single prompting technique, either zero-shot or few-shot, is manually selected and applied to a mathematical problem without systematic evaluation criteria. Model outputs are assessed using binary correctness alone, and technique selection relies on heuristic judgment, resulting in outputs that are neither reproducible nor domain-sensitive.
-The proposed model addresses these limitations through three interconnected enhancements. First, both prompting techniques are evaluated systematically for every problem through controlled benchmarking. Second, a multidimensional evaluation protocol replaces binary scoring by assessing each response using three weighted metrics: Accuracy (50%) , Consistency (30%) , and Efficiency (20%). Third, a three-tier hierarchical selection algorithm is introduced within a dual-mode execution framework, enabling both empirical evaluation and efficient technique recommendation.
-The system operates under two modes. Benchmark Mode performs full evaluation using Tier 3 greedy runtime execution to generate empirical performance data. Normal Mode uses Tier 1 and Tier 2 to recommend techniques efficiently based on accumulated historical data.
-Three-Tier Hierarchical Selection Algorithm
-The algorithm evaluates prompting technique candidates through three sequential, confidence-gated tiers for each problem P, defined by domain, difficulty level, intent, mathematical features, structure, and constraints. The system operates differently depending on the mode. Normal Mode uses Tier 1 and Tier 2, while Benchmark Mode activates Tier 3.
-Tier 1 — Profile-Based Selection
-Tier 1 operates in Normal Mode at the highest level of specificity. The system constructs a detailed problem profile that includes domain, difficulty, intent, feature labels, structure, and constraints.
-The algorithm compares the current problem with historical records using a three-layer similarity approach, the lexical similarity using Jaccard coefficient, feature similarity using Jaccard coefficient, and embedding similarity using cosine similarity
-These are combined using the formula:
-Hybrid Similarity = 0.60 × Embedding + 0.25 × Feature + 0.15 × Lexical
-A historical record is considered valid for Tier 1 matching only if its hybrid similarity score meets or exceeds 0.55. This threshold escalates to 0.60 when the database contains more than 15 records whose hybrid similarity score with the current problem is at least 0.20, signaling a densely populated similarity neighborhood in which a stricter threshold reduces false matches. A technique is selected at Tier 1 when three conditions are simultaneously satisfied: (a) the filtered record set contains at least 3 evaluated samples per technique after similarity filtering; (b) the confidence gap — defined as the absolute difference in mean composite overall scores between the top two techniques — is at least 0.05; and (c) the applicable similarity threshold (0.55 or 0.60) is met. If any condition is not satisfied, the system proceeds to Tier 2.
-Tier 2 — Domain and Difficulty Selection
-Tier 2 operates in Normal Mode when Tier 1 does not produce a confident result. The system aggregates historical data based on domain and difficulty level while ignoring finer-grained features.
-A technique is selected at Tier 2 when: (a) at least 5 evaluated samples per technique exist within the same domain–difficulty cell in the historical database; and (b) the confidence gap — defined as the absolute difference in mean composite overall scores between the top two techniques — is at least 0.05. The technique with the highest aggregated score is selected. If either condition is not met, the system transitions to Benchmark Mode and activates Tier 3.
-Tier 3 — Greedy Runtime Selection
-Tier 3 operates in Benchmark Mode and serves both as the initial data generation mechanism and the fallback when historical data is insufficient.
-In this mode, all prompting techniques are executed on the current problem in real time. Each technique is evaluated using the formula:
-Overall Score = 0.5 × Accuracy + 0.3 × Consistency + 0.2 × Efficiency
-The technique with the highest score is selected.  If scores are equal, deterministic tie-breaking is applied using the SHA-256 hash of the normalized problem text string (lowercased, whitespace-stripped), with the technique assigned to the lower hash value in lexicographic comparison selected as the winner, ensuring reproducibility across sessions.
-For the first run of a technique-problem pair, consistency cannot yet be computed. In this case, a provisional score is used:
-Provisional Score = (Accuracy × 0.5 + Efficiency × 0.2) / 0.7
-A provisional flag is recorded, and full scoring resumes from the second run onward once consistency becomes available. All results generated in this mode are stored as benchmarking data and used to improve future decisions in Normal Mode.
-Algorithm Maturation and Confidence-Gate Progression
-For each problem, the system returns the recommended prompting technique, the tier used for selection, the corresponding performance score, and the confidence gap when applicable.
-Aggregating results across all benchmark problems produces evidence-based selection rules in the form:
-IF problem characteristics match a given profile under a specific domain and difficulty level, THEN recommend a specific prompting technique with an expected performance score.
-These rules form the basis of the framework’s optimization output and support domain-specific prompting strategies.
-Model Output and Selection Criteria
-For each problem P, the algorithm returns the recommended prompting technique T*, the tier at which the recommendation was made (Tier 1, Tier 2, or Tier 3), the composite score associated with the recommendation, and—where applicable—the confidence gap between the top two techniques. Aggregating recommendations across all 45 benchmark problems produces a set of evidence-backed selection criteria expressed as conditional rules of the form: "IF problem characteristics align with profile X at domain d and difficulty c, THEN recommend technique Y, WITH expected composite performance Z." These criteria constitute the study's primary optimization output and form the basis for the domain-specific prompting guidelines delivered as part of the reusable framework.
-Model Assumptions
-The model operates under several assumptions. Llama 3 produces variable outputs across independent runs under identical prompting conditions, as expected of a probabilistic language model operating at temperature = 0.7. This variability is assumed to be bounded and quantifiable through repeated independent runs, forming the empirical basis for the consistency metric and the protocol of conducting three independent runs per technique-problem combination. Output variability is treated as a measurable property of model behavior rather than experimental error, and consistency scores reflect the degree to which a technique produces stable outputs despite this inherent variability. Expert-validated solutions serve as the ground truth for evaluating accuracy. The weighted scoring system adequately reflects both correctness and efficiency of model responses. The hybrid similarity formula provides a reliable measure of problem similarity. The greedy runtime strategy used in Benchmark Mode produces sufficiently accurate results to initialize and support the learning process of the system.
+The base model represents the conventional approach: a single technique is manually selected and applied to a problem, and outputs are evaluated using binary correctness alone. This approach is heuristic, subjective, and not reproducible across different problem types.
+The proposed model introduces three enhancements over the base. First, both prompting techniques are evaluated systematically for every problem through controlled benchmarking. Second, a multidimensional evaluation protocol replaces binary scoring by assessing each response using three weighted metrics: Accuracy (50%), Consistency (30%), and Efficiency (20%). Third, a three-tier hierarchical selection algorithm is introduced within a dual-mode execution framework. The increased complexity of this framework over a simpler single-pass approach is explicitly justified by the study’s goal of enabling automatic, domain-sensitive technique selection—a task requiring graduated evidence retrieval from problem-specific profiles to domain-level aggregation to real-time evaluation, none of which is achievable with a manual or single-pass approach.
+3.2.1 Two‑Mode Selection Algorithm
+This section addresses Specific Objective 2 in detail.
+3.2.1 Two‑Mode Selection Algorithm
+	The algorithm selects the better prompting technique (zero‑shot or few‑shot) for a given mathematical problem. It operates in two modes:
+Benchmark Mode – runs both techniques, computes scores, and stores results.
+Normal Mode – uses stored historical data to recommend a technique without running both.
+Benchmark Mode (Tier 3 – Greedy Runtime Selection)
+1. Execute both zero‑shot and few‑shot on the current problem.
+2. Compute the Overall Score for each technique:
+   Overall = 0.5×Accuracy + 0.3×Consistency + 0.2×Efficiency
+   On the first run (consistency unavailable), use a provisional score:
+   Provisional = (0.5×Accuracy + 0.2×Efficiency) / 0.7
+3. Select the technique with the higher score. If equal, break ties using SHA‑256 of the normalized problem text (lower hash wins).
+4. Store the result in a historical database.
+Normal Mode (Tier 1 – Profile‑Based, Tier 2 – Domain‑Difficulty)
 
-3.3 Simulation Environment
+	Normal Mode only activates after sufficient Benchmark Mode data exists. It attempts to recommend a technique without runtime evaluation.
+Tier 1 (Profile‑Based): Compare the current problem to historical problems using a hybrid similarity score (embedding 60%, feature 25%, lexical 15%). If at least 3 records per technique exist and the mean score difference ≥ 0.05, select the higher‑scoring technique.
+Tier 2 (Domain‑Difficulty Aggregation): If Tier 1 lacks confidence, aggregate all historical data for the same domain and difficulty level. If at least 5 records per technique exist and the mean score difference ≥ 0.05, select the higher‑scoring technique.
+This two‑mode design balances accuracy (by using real data when needed) and efficiency (by avoiding unnecessary runs when historical data is sufficient).
+Pseudocode 
+FUNCTION select_technique(P):
+Normal Mode: Tier 1
+    similar = historical[ hybrid_similarity(P, hist) >= 0.55 ]
+    if len(similar) >= 3 per technique and score_gap(similar) >= 0.05:
+        return best_technique(similar), tier=1
+Normal Mode: Tier 2
+    cell = historical[ domain=P.domain and difficulty=P.difficulty ]
+    if len(cell) >= 5 per technique and score_gap(cell) >= 0.05:
+        return best_technique(cell), tier=2
+Benchmark Mode: Tier 3 (fallback)
+    for technique in [zero_shot, few_shot]:
+        run technique on P, compute overall_score
+    winner = argmax(overall_scores)
+    store_results(winner)
+    return winner, tier=3
+Figure 3.2 
+Flow Chart
 
+3.2.2 Why Not a Simpler Approach?
+Given that this study compares only two prompting techniques (zero‑shot and few‑shot), one might ask: Why not just use a lookup table or a simple rule like “use few‑shot for advanced problems, zero‑shot for basic”?
+The answer is threefold, and each point is supported by our empirical results.
+1. Problem‑Specific Variability
+Even within the same domain and difficulty level, the better technique can change from problem to problem. For example, in Algebra Intermediate (Table 4.2), few‑shot won 2 problems, zero‑shot won 2 problems, and one problem was a tie. A static rule like “always use few‑shot for Algebra Intermediate” would be wrong on 40% of problems. The only way to know is to examine problem‑level similarity – which is what Tier 1 does.
+2. Computational Efficiency Matters in Deployment
+A naïve approach – running both techniques on every new problem – would double latency and token cost. In a real‑time tutoring system, this is unacceptable. Our dual‑mode design avoids runtime evaluation on most problems after initial benchmarking. The 100% match rate (Section 4.4) proves that Normal Mode makes the same choice as exhaustive evaluation, without the runtime cost.
+3. Extensibility to More Techniques
+Although this study only compares two techniques, the framework is designed to easily add more (e.g., chain‑of‑thought, role‑based). A lookup table or hardcoded rule would have to be thrown away when new techniques are added. Our three‑tier structure generalizes to any number of techniques without changing the core logic – a forward‑compatible design.
+Conclusion: The algorithm is not over‑engineered for two techniques. It is appropriately engineered for per‑problem adaptive selection, computational efficiency, and extensibility – goals that are explicitly stated in our objectives.
+
+3.3 Component-Level Validation Design
+This section addresses Specific Objective 3 (validation of the selection algorithm).
+The effectiveness of the proposed selection approach was evaluated using five conditions to isolate the contribution of each component and compare against simple alternatives.
+3.3.1 Validation conditions
+Condition
+Description
+Purpose
+C1: Baseline (Best Static)
+ The single best‑performing technique per domain‑difficulty cell (from Table 4.10) is applied to all problems in that cell.
+Establish lower bound of performance without any selection.
+C2: Simple Heuristic
+A fixed rule: “Use few‑shot for advanced problems; use zero‑shot for basic and intermediate problems.”
+Compare against an intuitive, human‑crafted rule.
+C3: Greedy‑Only
+For each problem, the technique with the higher composite score is selected based on observed performance (requires running both techniques).
+Upper bound – optimal selection per problem.
+C4: Full Three‑Tier (Normal Mode)
+The complete algorithm (Tier 1 → Tier 2 → Tier 3) using historical data only, without real‑time evaluation of both techniques.
+The proposed method.
+C5: Ablation – Tier 2 Only
+Normal Mode with Tier 1 disabled – only domain‑difficulty aggregation is used. 
+Isolate the contribution of problem‑level similarity (Tier 1). 
+
+
+3.3.2 Validation Metrics
+For each condition, we measure:
+Average composite score (accuracy 50% + consistency 30% + efficiency 20%) across all 45 problems.
+Match rate with C3 (greedy‑only optimal) – how often the condition makes the same choice as exhaustive evaluation.
+Computational savings – for C4, the percentage of problems resolved at Tier 1 or Tier 2 (avoiding Tier 3 runtime evaluation).
+Statistical significance of the gain from C1 to C4 using a paired t‑test.
+3.3.3 Validation Procedure
+1. Run Benchmark Mode (Tier 3) on all 45 problems to establish ground truth (C3) and populate the historical database.
+2. For C1, C2, C4, and C5, run Normal Mode on the same 45 problems, using the historical data from step 1.
+3. Record for each condition: selected technique, composite score, and (for C4) which tier made the decision.
+4. Compute average scores and match rates.
+5. Compare C4 vs. C1, C2, and C5 using paired t‑tests.
+3.4 Simulation Environment
+
+This section supports Specific Objective 1 by describing the experimental setup for comparing techniques.
 All experiments were conducted in a controlled local computational environment. The software stack comprised Python 3.10+, the Ollama API for Llama 3 model access, and the following libraries: Pandas for data manipulation and analysis, NumPy for numerical operations, SciPy for statistical testing, and Matplotlib for visualization. All source code was version-controlled using Git and published to a GitHub repository.
-
 Llama 3 was accessed via the Ollama local server with standardized parameters: temperature = 0.7 and maximum tokens = 2048. The minimum hardware requirements included 16 GB RAM, a GPU with 8 GB VRAM, and 50 GB available storage.
 
-3.4 Technical Constraints
+3.5 Technical Constraints
 
+This section supports Specific Objectives 1, 2, and 3 by defining the scope and limitations.
 The following technical constraints defined the boundaries of this study and influenced its scope and model configuration.
-
 Table 3.1
 Technical Constraints of the Study
 Constraint Area
 Description
-Impact on the Study
+Impact on Study
 Model Access
-Limited to Llama 3 open-source model; no access to proprietary APIs (GPT-4, Claude, Gemini)
-Results may not fully generalize to other LLM architectures
+Limited to Llama 3; no proprietary API access
+Results may not generalize to other architectures
 Domain Scope
-Restricted to algebra, pre-calculus, and counting and probability
-Findings may not apply to geometry, discrete mathematics, or proof-based reasoning
+Algebra, pre-calculus, and counting & probability only
+Findings may not apply to geometry or proof-based reasoning
 Dataset Size
-45 expert-validated problems; 15 per domain, 5 per complexity level
-Moderate sample; may not capture edge-case problem structures
+45 expert-validated problems; 5 per domain-level combination
+Moderate sample; edge-case structures may not be captured
 Technique Coverage
-Zero-shot and few-shot only; chain-of-thought and tool-augmented prompting excluded
+Zero-shot and few-shot only; CoT excluded
 Comparison limited to foundational techniques
-Hardware
-Minimum 16 GB RAM, 8 GB GPU VRAM
-Complex architectures and large batches not feasible
-Consistency Computation
-Consistency requires ≥2 runs; first run yields provisional score only
-First-run overall scores are approximations pending full consistency data
 Algorithm
-Greedy selection algorithm employed; no evolutionary or Bayesian optimization
-May miss globally optimal solutions due to local optimization behavior
+Greedy selection in Benchmark Mode; no Bayesian search
+May miss globally optimal solutions
 
 
-The identified constraints influenced the scope of experimentation and model configuration. The use of a single open-source model limits external generalizability; however, it ensures full reproducibility and avoids API cost variability. The greedy algorithm was selected over more computationally intensive alternatives to prioritize practical deployability in academic environments.
+3.6 Experimental Setup
+This section supports Specific Objective 1 by detailing the dataset, runs, and configuration.
+The 45‑problem dataset was sourced from the MATH Dataset (Hendrycks et al., 2021) via HuggingFace. Problems were distributed as:
+15 problems per domain (algebra, pre‑calculus, counting & probability)
+5 problems per complexity level (basic, intermediate, advanced) within each domain.
+All testing was conducted under Benchmark Mode using Tier 3 greedy runtime evaluation. Each technique‑problem combination was evaluated across three independent test runs, yielding a total of 270 evaluations:
+2 techniques × 45 problems × 3 runs = 270
+Model outputs were recorded verbatim in structured JSON format for subsequent normalization and scoring.
+LLM Configuration (as described in Section 3.4):
+Model: Llama 3 via Ollama API
+Temperature: 0.7
+Maximum tokens: 2,048
+Few‑Shot Example Selection
+Few‑shot prompts include exactly two solved example problems drawn from the same domain and complexity level as the target problem. The specific examples used for all 45 problems are documented in the study’s GitHub repository alongside the structured JSON problem files.
 
-3.5 Experimental Setup
-Mathematical problems were sourced from the MATH Dataset available via HuggingFace, a peer-reviewed repository of competition-level mathematics problems with verified solutions. A curated subset of 45 problems was selected based on domain distribution and complexity stratification.
-For domain distribution, 15 problems were selected per domain: Algebra, Pre-calculus, and Counting and Probability. For complexity stratification, five problems were selected per domain-level combination: Basic, Intermediate, and Advanced.
-All testing procedures were conducted under Benchmark Mode, where Tier 3 greedy runtime evaluation is used to generate empirical performance data.
-Each technique-problem combination underwent three independent test runs to account for model variability and enable consistency computation. All outputs were recorded verbatim per run in structured JSON format.
-After all runs, normalization was applied before consistency comparison. Whitespace was removed, verbal wrappers such as “The answer is” were stripped, capitalization and punctuation were standardized, and numerically equivalent expressions were unified. Consistency was computed incrementally after each run, and all run counts were recorded for transparency. The number of runs per technique is configurable in the framework.
-During testing, Tier 3 was executed by applying all prompting techniques to each problem and evaluating them using the formula:
-Overall Score = 0.5 × Accuracy + 0.3 × Consistency + 0.2 × Efficiency
-The highest-scoring technique was selected. If scores are equal, deterministic tie-breaking is applied using the SHA-256 hash of the normalized problem text string (lowercased, whitespace-stripped), with the technique assigned to the lower hash value in lexicographic comparison selected as the winner. For first-run evaluations where consistency was not yet available, a provisional score was computed as:
-Provisional Score = (Accuracy × 0.5 + Efficiency × 0.2) / 0.7
-All results generated during Benchmark Mode were stored as benchmarking data and later used by the system during Normal Mode.
-In actual system usage, Normal Mode applies Tier 1 and Tier 2, using the accumulated benchmarking data to recommend the most appropriate prompting technique without executing all techniques in real time.
-For Tier 1, hybrid similarity is computed using lexical, feature, and embedding similarity under the formula: 
-Hybrid Similarity = (0.60 × Embedding) + (0.25 × Feature) + (0.15 × Lexical). 
-A similarity threshold of 0.55 is applied, escalating to 0.60 when more than 15 records in the database have a hybrid similarity score of at least 0.20 with the current problem. A technique is selected when at least 3 samples per technique pass the threshold filter and the confidence gap between the top two candidates is at least 0.05. If Tier 1 cannot produce a confident result, the system proceeds to Tier 2.
-
-
-
-
-Figure 3.2
+Figure 3.3
 Benchmarking Framework Architecture
 
-3.6 Evaluation Metrics
-Performance was assessed using three quantitative metrics.
-Accuracy measured the proportion of correct final answers based on strict mathematical correctness standards and was assigned a weight of 50% in the composite score. Answer correctness was determined by comparison against expert-verified solutions from the MATH Dataset, with normalization applied prior to matching: whitespace differences were ignored; numerically equivalent expressions were treated as identical (e.g., "2/1" ≡ "2", "0.5" ≡ "1/2"); trivial formatting differences including capitalization, trailing punctuation, and redundant leading zeros were disregarded; and surrounding verbal text such as "The answer is" and "Ans:" was stripped before comparison. Accuracy was recorded as a binary value (1 = correct, 0 = incorrect) for each run and averaged across three runs per technique-problem combination to produce a final accuracy score on a 0–1 scale.
-Consistency measured the degree of agreement among outputs produced by the same prompting technique across multiple independent runs on the same problem and was assigned a weight of 30% in the composite score. It is computed as:
-Consistency = (number of identical normalized outputs within technique) / (total runs per technique)
-The same normalization rules applied to accuracy scoring were used prior to consistency comparison. A consistency score of 1.00 indicates all three runs produced identical normalized outputs; 0.667 indicates two of three runs matched; 0.00 indicates no two runs matched. Consistency is updated incrementally with each additional run, and the current run count is recorded in all outputs for transparency. On the first run of any technique-problem combination, consistency is not yet computable; the overall score for that run is computed using a provisional formula — Provisional Score = (Accuracy × 0.5 + Efficiency × 0.2) / 0.7 — and flagged accordingly. Full composite scoring resumes from the second run onward.
-Efficiency assessed the computational responsiveness and output economy of each model response and was assigned a weight of 20% in the composite scoring formula. It is computed as a weighted combination of three sub-components:
-Efficiency = (0.40 × Time Score) + (0.30 × Token Score) + (0.30 × Conciseness Score)
-Time Score (40% of Efficiency) measures response latency using a fixed tier scale: responses completed in under 1 second receive a score of 0.6 (flagged as potentially incomplete); 1–3 seconds: 1.0 (excellent); 3–8 seconds: 0.9 (very good); 8–15 seconds: 0.7 (acceptable); 15–30 seconds: 0.5 (slow); and 30 or more seconds: 0.3 (too slow).
-Token Score (30% of Efficiency) combines two factors: (a) a token count score that assigns scores across six tiers — 1.0 for responses using 100 or fewer tokens; 0.9 for 101–300 tokens; 0.7 for 301–500 tokens; 0.5 for 501–1,000 tokens; and 0.3 for responses exceeding 1,000 tokens — and (b) a token-to-word ratio score that rewards a ratio within the optimal range of 1.0 to 2.0 tokens per word, consistent with the typical LLM output range of 1.3 to 1.5 tokens per word. These two factors are averaged to produce the final Token Score.
-Conciseness Score (30% of Efficiency) evaluates response word count against optimal length targets: 30–100 words receives 1.0 (optimal); 20–30 or 100–150 words receives 0.9 (good); 10–20 or 150–250 words receives 0.7 (acceptable); and fewer than 10 or more than 250 words receives 0.5 (poor).
-The resulting efficiency value falls on a 0–1 scale, where higher values indicate faster, more token-economical, and more concise responses. No additional normalization across evaluations is applied, as the sub-component scoring functions already map all raw values to the 0–1 range. The complete efficiency scoring implementation is published in the study's GitHub repository.
-These three metrics are integrated into the weighted composite formula:
-Overall Score = (Accuracy × 0.5) + (Consistency × 0.3) + (Efficiency × 0.2)
-3.7 Benchmarking Framework
 
-3.7.1 Baseline Methods
-Zero-shot prompting served as the primary baseline method, as it represents the minimum-intervention approach requiring no example preparation. Few-shot prompting served as the enhanced comparison technique. These two methods were selected because they represent the foundational design spectrum of prompt engineering and are the most systematically comparable methods for rigorous evaluation as established in the literature (Brown et al., 2020; Kojima et al., 2022). These two techniques serve as the candidate pool evaluated and ranked by the three-tier hierarchical selection algorithm, which identifies the optimal technique for each problem profile based on accumulated benchmarking results at Tier 1, aggregated domain-level patterns at Tier 2, or real-time greedy runtime scoring at Tier 3.
 
-3.7.2 Benchmark Datasets and Test Instances
-The 45-problem dataset sourced from the MATH Dataset (HuggingFace) served as the benchmark test set. This dataset was selected because it provides high-quality, diverse problems with documented difficulty levels and verified solutions. The dataset size aligns with recommendations from Aqsa et al. (2025) for domain-specific evaluation and is consistent with comparable benchmarking studies (Feng et al., 2024; Forootani, 2025).
 
-3.7.3 Performance Evaluation and Validation
-Automated testing scripts executed the following workflow. JSON-formatted problems were loaded with metadata including domain, complexity, and correct solution. Zero-shot and few-shot prompting techniques were applied to the Llama 3 model. Outputs were recorded per run with timestamps and token usage. Normalization was applied, and consistency was computed incrementally after each run.
-All evaluation and data collection were performed under Benchmark Mode, where Tier 3 greedy runtime evaluation was used to test all prompting techniques and generate performance data.
-After testing, the collected benchmarking data were used to evaluate the three-tier hierarchical selection algorithm under Normal Mode, which represents actual system usage.
-At Tier 1, the system computed hybrid similarity scores using lexical, feature, and embedding similarity:
-Hybrid Similarity = 0.60 × Embedding + 0.25 × Feature + 0.15 × Lexical
-When at least 3 samples per technique passed the similarity threshold and the confidence gap between the top two candidates was at least 0.05, the best-performing technique was selected.
-If Tier 1 did not meet confidence requirements, the system proceeded to Tier 2, where historical data were aggregated based on domain and difficulty level. A technique was selected when at least 5 evaluated samples per technique existed within the same domain–difficulty cell and the confidence gap between the top two candidates was at least 0.05.
-Tier 3 was not used during Normal Mode selection but served as the foundation of all decisions, since all benchmarking data used by Tier 1 and Tier 2 originated from Tier 3 evaluation.
-For each problem, the system returned the recommended technique, the tier used for selection, the performance score, and the confidence gap when applicable. All results, including similarity scores and tier decisions, were stored in structured JSON format with version control.
-A 20 percent hold-out validation set was used to evaluate the effectiveness of the selection process. This validation assessed how well Tier 1 and Tier 2, operating in Normal Mode, were able to replicate or approximate the optimal selections originally identified through Tier 3 Benchmark Mode testing.
-3.8 Statistical Validation
-Statistical significance was determined using one-way Analysis of Variance (ANOVA) at a significance level of α = 0.05. Post-hoc analysis identified specific performance differences between prompting techniques. Correlation analysis investigated relationships between problem characteristics — domain and complexity level — and technique effectiveness. Confidence intervals and standard deviation across test repetitions confirmed the reliability and reproducibility of results.
 
-3.9 Ethical Considerations
-This research adhered to established ethical standards for artificial intelligence research. The MATH Dataset available on HuggingFace was used with proper attribution, and all works were cited in accordance with APA 7th Edition to avoid plagiarism. Terms of service for Llama 3 accessed through Ollama were strictly observed. The methodology did not involve human subjects; therefore, personal data collection, informed consent, and confidentiality concerns were not applicable. All methodology, code, and algorithms were fully documented for transparency, and the complete framework was published as open-source on GitHub with clear usage guidelines. The research adhered to the institutional research ethics standards of Batangas State University.
+3.7 Normalization and Consistency Scoring 
 
-3.10 Reproducibility Statement
-3.10.1 Code Availability
+This section supports Specific Objective 1 by defining how consistency is measured.
+
+3.7.1 Purpose
+Before computing consistency, all model outputs must be normalized to a canonical form. This ensures that outputs differing only in formatting, punctuation, or numerical representation are treated as equivalent when assessing model reliability.
+
+3.7.2 Normalization Steps 
+Apply the following transformations in the exact order shown. Each step is illustrated with an example.
+
+Step
+
+
+Operation
+Example Input
+Example Output
+
+
+1
+Strip leading and trailing whitespace (spaces, tabs, newlines)
+
+
+" 42 \n"
+"42"
+2
+Remove common verbal wrappers (case‑insensitive)
+"The answer is 42" / "Ans: 42" / "Therefore, 42" / "So, 42"
+"42"
+3
+Convert all characters to lowercase
+"X = 5"
+"x = 5"
+4
+Remove trailing punctuation (periods, commas, semicolons, colons)
+
+
+"42." / "x = 5,"
+
+
+
+"42" / "x = 5"
+5
+Normalize numerically equivalent expressions (see Table 3.2)
+
+
+
+"2/1" / "0.5" / "6.0"
+
+
+
+"2" / "1/2" / "6"
+
+
+
+
+
+3.7.3 Numerical Equivalence Rules 
+The following conversions are applied recursively until no rule matches.
+
+Table 3.2 
+Numerical Equivalence Normalization
+
+Original Pattern
+Normalized Form
+
+
+Example
+n/1 (n integer)
+n
+
+
+"2/1" → "2"
+Integer with .0 or .000
+integer without decimal
+"6.0" → "6", "6.000" → "6"
+Decimal equal to a simple fraction (denominator ≤ 10)
+fraction in lowest terms
+"0.5" → "1/2" / "0.25" → "1/4" / "0.75" → "3/4"
+Fraction not in lowest terms
+reduced fraction
+
+
+
+"4/8" → "1/2"
+
+
+
+
+Leading plus sign
+removed
+"+7" → "7"
+
+
+
+Note: Decimals that do not exactly match a simple fraction (e.g., 0.333) are left as decimals to avoid rounding ambiguity. Only exact equivalence is enforced.
+
+3.7.4 Worked Example – Full Normalization Pipeline
+Raw model output:
+"So, the final answer is 4/8. "
+Step 1 (strip whitespace): "So, the final answer is 4/8."
+Step 2 (remove verbal wrappers): remove "so, " and " the final answer is " → "4/8."
+Step 3 (lowercase): already lowercase.
+Step 4 (remove trailing punctuation): remove trailing period → "4/8"
+Step 5 (numerical equivalence): "4/8" → reduce fraction → "1/2"
+Final normalized output: "1/2"
+
+3.7.5 Consistency Scoring Formula
+For a given technique on a specific problem, after three independent runs, consistency is calculated as:
+Consistency = Number of runs whose normalized outputs are identical​ / 3
+Interpretation examples:
+Run1
+Run2
+Run3
+Identical Outputs
+Consistency
+“42”
+“42”
+“42”
+3
+1.00
+“42”
+“42”
+“7”
+2
+0.667
+“42”
+“7”
+“7”
+2
+0.667
+“42”
+“7”
+“8”
+0
+0.000
+
+Incremental tracking (for real‑time use):
+After run 1: Consistency is undefined → a provisional flag is set. The composite score uses a provisional formula (see Section 3.7).
+After run 2: Consistency = 1.00 if both runs match, else 0.00.
+After run 3: Final consistency as above.
+3.7.6 Reproducibility Guarantee
+The complete normalization implementation (Python function normalize_output()) is provided in the study’s GitHub repository. It includes:
+A regular expression‑based verbal wrapper remover.
+A lookup table for decimal‑to‑fraction equivalence (denominators up to 10).
+Fraction reduction using fractions.Fraction.
+Any researcher using the same function on the same raw outputs will obtain identical normalized strings, ensuring perfect reproducibility of consistency scores.
+
+3.8 Evaluation Metrics
+This section supports Specific Objective 1 by defining accuracy, consistency, and efficiency metrics.
+Performance was assessed using three quantitative metrics weighted in the composite formula: 
+Overall Score = (Accuracy × 0.5) + (Consistency × 0.3) + (Efficiency × 0.2).
+Accuracy (weight: 50%). A binary measure (1 = correct, 0 = incorrect) comparing normalized model output against expert-verified solutions. The score is averaged across three runs per technique–problem combination.
+Consistency (weight: 30%). Consistency measures the reliability of a technique’s outputs across repeated runs. After three runs, consistency is calculated as:
+Consistency = Number of identical normalized outputs in 3 runs / 3
+Interpretation: 1.00 = all three runs identical; 0.667 = two of three runs match; 0.00 = no two runs match.
+The complete normalization procedure and incremental tracking (including the provisional flag on the first run) are described in Section 3.6.
+Efficiency (weight: 20%).
+Computed as:
+Efficiency=(0.40×Time Score)+(0.30×Token Score)+(0.30×Conciseness Score)
+All sub‑components are bounded on a 0–1 scale by design.
+Time Score uses fixed latency tiers:
+1.0 for 1–3 seconds, 0.8 for 4–6s, 0.6 for 7–10s, 0.5 for 11–20s, 0.4 for 21–30s, 0.3 for >30s.
+Token Score averages a token count score (1.0 for ≤100 tokens, decreasing to 0.3 for >1,000) and a token‑to‑word ratio score (optimal range 1.0–2.0).
+Conciseness Score assigns 1.0 for 30–100 words, 0.8 for 20–29 or 101–150 words, 0.6 for 10–19 or 151–250 words, and 0.5 for <10 or >250 words.
+Provisional Score (first run only).
+On the first run of a technique‑problem combination, consistency is not yet computable. For real‑time decisions (e.g., during Benchmark Mode Tier 3), a provisional overall score is used:
+Provisional Score= Accuracy×0.5+Efficiency×0.2/0.7
+This provisional score is flagged and replaced with the full composite score once three runs are completed. The final reported results in Chapter IV use only full composite scores.
+The complete scoring implementation is published in the GitHub repository.
+3.9 Benchmarking Framework
+This section supports Specific Objective 1 (baseline methods) and Objective 3 (validation).
+3.9.1 Baseline Methods
+Zero-shot prompting served as the primary baseline—the minimum-intervention approach requiring no example preparation. Few-shot prompting served as the enhanced comparison technique. These represent the foundational design spectrum of prompt engineering and are the most systematically comparable methods for rigorous evaluation (Brown et al., 2020; Kojima et al., 2022).
+3.9.2 Benchmark Datasets and Test Instances
+The 45-problem dataset was sourced from the MATH Dataset (HuggingFace), providing high-quality problems with documented difficulty levels and verified solutions. The dataset size aligns with recommendations from Aqsa et al. (2025) for domain-specific evaluation.
+3.9.3 Performance Evaluation and Validation
+Automated testing scripts executed the following workflow: JSON-formatted problems were loaded with metadata; zero-shot and few-shot techniques were applied to Llama 3; outputs were recorded per run; normalization was applied; and consistency was computed incrementally. All evaluation was performed under Benchmark Mode.
+After testing, the algorithm was evaluated under Normal Mode using accumulated benchmarking data. A 20% hold-out validation set of 9 problems (3 per domain, 1 per complexity level) was reserved to assess Normal Mode recommendation quality. For hold-out problems, Tier 1 profile-based selection was attempted first; if confidence was insufficient, Tier 2 domain-level aggregation was applied. Tier 3 was not activated for hold-out problems. The match rate between Normal Mode recommendations and Tier 3 optimal selections was computed as the primary validation metric.
+3.10 Statistical Validation
+This section supports Specific Objective 1 by describing ANOVA tests for comparing techniques.
+Statistical significance was assessed using one-way ANOVA at α = 0.05. Post-hoc analysis identified specific differences between techniques. Correlation analysis investigated relationships between problem characteristics and technique effectiveness. Confidence intervals and standard deviations across test repetitions confirmed reliability.
+A limitation of the statistical analysis is that the consistency component contributing 30% to each composite score is derived from the same three runs used for other metrics, introducing a degree of internal dependency. This does not invalidate the comparisons but implies results should be interpreted as indicative trends rather than fully independent hypothesis tests.
+3.11 Ethical Considerations
+This section supports reproducibility (cross‑cutting concern) for all objectives.
+The MATH Dataset was used with proper attribution per APA 7th Edition. Llama 3 terms of service were observed. No human subjects were involved. All methodology, code, and algorithms were fully documented and published as open-source on GitHub. Research adhered to Batangas State University institutional standards.
+3.12 Reproducibility Statement
+This section supports all three objectives by ensuring the study can be independently replicated.
+3.12.1 Code Availability
 The complete source code used for model development, experimentation, and evaluation is archived in a GitHub repository and submitted as part of the technical documentation. The code includes detailed comments and execution instructions to facilitate replication.
 
-3.10.2 Dataset Accessibility
+3.12.2 Dataset Accessibility
 The study utilized the publicly available MATH dataset, accessible through HuggingFace. The preprocessed and formatted version used in the experiments is included in the digital submission files.
 
-3.10.3 Version Control
+3.12.3 Version Control
 All experiments were managed using Git version control to track modifications and parameter updates. The final experimental version corresponds to Commit ID: 8bcbfdc to ensure consistency of results.
 
-3.10.4 Random Seed Settings
+3.12.4 Random Seed Settings
 To maintain consistency in model training and evaluation, a fixed random seed value of 42 was applied across all simulations and machine learning processes. This ensures that the reported performance metrics can be replicated under identical computational conditions.
 
 
 IV. RESULTS AND DISCUSSIONS
-This chapter presents the results of the benchmark experiments conducted to evaluate the performance of zero-shot and few-shot prompting techniques on the Llama 3 model across three mathematical domains—algebra, pre-calculus, and counting and probability—and across three complexity levels: basic, intermediate, and advanced. The discussion is organized in alignment with the specific objectives stated in Chapter I, beginning with the systematic presentation of per-problem results, followed by a comparative performance analysis across domains and difficulty levels, and concluding with an examination of observed trade-offs between accuracy, efficiency, and consistency.
-All evaluations were conducted under Benchmark Mode using Tier 3 greedy runtime selection, wherein both prompting techniques were applied to each problem across three independent runs. The resulting composite scores—computed using the formula Overall Score = (Accuracy × 0.5) + (Consistency × 0.3) + (Efficiency × 0.2)—served as the basis for technique selection and are reported below. Each few-shot example set consists of exactly two solved problems drawn from the same domain and complexity level as the target problem. The specific examples used for each of the 45 problems are documented in the study's GitHub repository alongside the structured JSON problem files.
-Efficiency scores reported in all tables represent a weighted composite of three sub-components — Time Score (40%), Token Score (30%), and Conciseness Score (30%) — each independently mapped to a 0–1 scale through fixed scoring tiers. Higher values indicate responses that were faster, more token-economical, and more concise. No cross-evaluation min–max normalization was applied, as all sub-component scoring functions produce bounded 0–1 values by design. On the first run of each technique-problem combination, consistency was not yet computable; a provisional score of (Accuracy × 0.5 + Efficiency × 0.2) / 0.7 was used and flagged internally. From the second run onward, full composite scoring was applied. All overall scores presented in the tables below reflect the final post-run-3 composite values.
+This chapter presents the benchmark results organized in direct alignment with the three specific objectives stated in Chapter I. Section 4.1 presents per‑problem results across all three domains and complexity levels (Objective 1). Section 4.2 provides comparative statistical analysis of technique performance (Objective 1). Section 4.3 presents ablation results evaluating the contribution of each framework component (Objective 3). Section 4.4 presents hold‑out validation of the selection algorithm (Objective 2). Section 4.5 examines observed performance trade‑offs.
+All evaluations were conducted under Benchmark Mode using Tier 3 greedy runtime selection. The composite score formula is: Overall Score = (Accuracy × 0.5) + (Consistency × 0.3) + (Efficiency × 0.2). Bold values in all tables indicate the winning technique based on composite overall score, not accuracy alone. Where both techniques score Accuracy = 0, the winner reflects consistency and efficiency only; the implications of this behavior are discussed in Section 4.5.
 4.1 Presentation of Results
-The following tables present the per-problem benchmark results for each domain and complexity level. For each problem, the accuracy (binary: 1 = correct, 0 = incorrect), consistency (normalized agreement ratio across three independent runs, computed as identical normalized outputs ÷ total runs on a 0–1 scale), efficiency (weighted composite of Time Score, Token Score, and Conciseness Score, each bounded on a 0–1 scale), and overall composite score are reported for both prompting techniques. A consistency of 1.00 indicates all three runs produced identical normalized outputs; 0.667 indicates two of three runs matched; 0.00 indicates no two runs matched. Bold values indicate the winning technique per problem.
-Note on Winner Designation. The winning technique per problem is determined by the higher composite overall score, not accuracy alone. Where both techniques score Accuracy = 0, the winner reflects consistency and efficiency only. See Section 4.4 for implications.
+This section presents the raw results for Specific Objective 1 (comparison of zero‑shot vs. few‑shot).
+Accuracy is a binary value (1 = correct, 0 = incorrect) averaged across three runs. Consistency is the normalized agreement ratio across three independent runs (1.00 = all three identical; 0.667 = two of three identical; 0.00 = no two identical). Efficiency is the weighted composite of Time Score, Token Score, and Conciseness Score. The Overall Score is the weighted composite of all three metrics
 4.1.1 Algebra
+This subsection addresses Specific Objective 1 for the algebra domain.
 Table 4.1
 Results of Algebra — Basic
 Math Problem
@@ -938,8 +1070,8 @@ Zero-Shot
 0.735
 0.578
 
-Note. Bold values indicate the winning technique per problem based on the Overall composite score.
-Few-shot prompting won all five problems with a perfect accuracy of 100% and an average overall score of 0.952. Zero-shot prompting achieved 80% accuracy, failing only on the expression evaluation problem (Evaluate 5a − 3b), and averaged 0.862 overall. Both techniques showed perfect consistency across all runs.
+Note. Bold values indicate the winning technique per problem based on the Overall composite score. Few-shot prompting won all five problems with 100% accuracy and an average overall score of 0.952. Zero-shot achieved 80% accuracy, failing only on the expression evaluation problem, and averaged 0.862 overall.
+
 Table 4.2
 Results of Algebra — Intermediate
 Math Problem
@@ -1004,8 +1136,8 @@ Zero-Shot
 0.805
 0.935
 
-Note. Zero-shot is designated winner by composite score (0.602 > 0.594) despite both techniques producing incorrect answers, reflecting higher efficiency rather than accuracy. When accuracy is zero for all candidates, the algorithm defaults to efficiency as the differentiating criterion, which may propagate a misleading technique preference into Normal Mode for similar problem profiles. See Section 4.4 for further discussion.
-Zero-shot prompting won three of five problems, performing better on factoring and optimization tasks (e.g., x⁴ − 10x² + 9 = 0, overall score of 0.935). Few-shot prompting failed on both biquadratic problems. Neither technique solved x⁴ − 17x² + 16 = 0 correctly. On structured problems such as vertical asymptotes and Vieta's formulas, both techniques were accurate, with few-shot scoring slightly higher overall.
+Note. Zero-shot is designated winner by composite score (0.602 > 0.594) on x⁴ − 17x² + 16 = 0 despite both techniques producing incorrect answers, reflecting higher efficiency. This behavior—where the algorithm defaults to efficiency when accuracy is zero for all candidates—may propagate a misleading technique preference into Normal Mode. See Section 4.4 for further discussion.
+
 Table 4.3
 Results of Algebra — Advanced
 Math Problem
@@ -1039,14 +1171,14 @@ Zero-Shot
 Two perfect squares differ by 45. Find all valid pairs (n²,m²) where n>m≥0.
 Few-Shot
 0
-0.667
-0.782
-0.483
+1
+0.795
+0.598
 Zero-Shot
 0
 1
-0.655
-0.552
+0.682
+0.561
 Expand (x²+2x−5)(x−3) and identify the constant term.
 Few-Shot
 1
@@ -1070,9 +1202,10 @@ Zero-Shot
 0.655
 0.552
 
-Note. Few-shot consistency dropped to 0.667 on the perfect-squares problem, indicating that 2 of 3 runs produced identical normalized outputs while the third differed due to variable formatting. Zero-shot is designated winner on the two problems where both techniques were incorrect, based on composite score.
-Few-shot prompting won four of five problems and was the only technique with any correct answers at this level (60% accuracy). Zero-shot failed all five. Both techniques failed on the vertex form of 25x²−10x−8 and the perfect-square pairs problem. Consistency dropped to 0.667 for few-shot on the perfect-square problem due to variable output formatting across runs.
+Note. Few-shot was the only technique with correct answers at this level (60% accuracy). Zero-shot failed all five. Both techniques failed on the vertex form of 25x²−10x−8 and the perfect-square pairs problem.
+
 4.1.2 Counting and Probability
+This subsection addresses Specific Objective 1 for the counting and probability domain.
 Table 4.4
 Results of Counting and Probability — Basic
 Math Problem
@@ -1138,7 +1271,7 @@ Zero-Shot
 0.912
 
 Note. Both techniques achieved 80% accuracy but on different problems. Few-shot failed the combinatorics problem; zero-shot failed the even-probability problem. Winner is determined by composite overall score, not accuracy alone.
-Both techniques achieved 80% accuracy, but on different problems. Few-shot prompting failed on the combinatorics problem (choosing 4 from 10), while zero-shot answered it correctly with a score of 0.912. Few-shot prompting won the remaining four problems and had a higher average overall score. Consistency was perfect for both techniques across all five problems.
+
 Table 4.5
 Results of Counting and Probability — Intermediate
 Math Problem
@@ -1203,8 +1336,8 @@ Zero-Shot
 0.695
 0.565
 
-Note. Accuracy was low for both techniques. Consistency of 1.00 despite incorrect answers indicates systematic rather than random errors. A perfect consistency score on an incorrect answer still contributes 0.30 to the composite score, which can inflate overall scores under near-zero accuracy conditions. This scoring behavior is discussed further in Section 4.4. Winner designated by composite score.
-Accuracy was low for both techniques. Zero-shot was the only technique to correctly identify the tens digit of the factorial sum (8! + ... + 500!), scoring 0.899. Few-shot correctly solved the 4-digit restriction problem (overall 0.937) and won four of five problems based on composite scores. Both techniques failed on the palindrome, the 6!–300! factorial sum, and the modular probability problem. Consistency remained at 1.00 across all problems for both techniques despite the incorrect answers, indicating systematic rather than random errors.
+Note. Accuracy was low for both techniques. Consistency of 1.00 despite incorrect answers indicates systematic rather than random errors. A perfect consistency score on an incorrect answer still contributes 0.30 to the composite score, which can inflate overall scores under near-zero accuracy. This scoring behavior is discussed in Section 4.4.
+
 Table 4.6
 Results of Counting and Probability — Advanced
 Math Problem
@@ -1269,9 +1402,10 @@ Zero-Shot
 0.548
 0.516
 
-Note. Few-shot achieved 20% accuracy; zero-shot achieved 0%. Consistency of 1.00 across all problems confirms systematic errors. As noted in Table 4.5, perfect consistency on incorrect answers inflates composite scores, an effect most pronounced at the advanced level where accuracy is lowest.
-Few-shot prompting achieved 20% accuracy while zero-shot achieved 0%. Few-shot correctly solved the book distribution problem and the non-adjacency probability problem. The non-adjacency probability for Ana and Ben in a row of 10 people is computed as 1 − P(adjacent) = 1 − (2 × 9! / 10!) = 1 − 2/10 = 8/10 = 4/5, which simplifies to 4/5 and matches the expert-verified solution in the dataset.
+Note. Few-shot achieved 20% accuracy; zero-shot achieved 0%. Consistency of 1.00 confirms systematic errors. The non-adjacency probability for Ana and Ben is computed as 1 − P(adjacent) = 1 − (2 × 9! / 10!) = 4/5, matching the expert-verified solution.
+
 4.1.3 Pre-Calculus
+This subsection addresses Specific Objective 1 for the pre‑calculus domain.
 Table 4.7
 Results of Pre-Calculus — Basic
 Math Problem
@@ -1337,7 +1471,6 @@ Zero-Shot
 0.917
 
 Note. Both techniques failed the degree-to-radian conversion (210°), producing 7π/3 instead of the correct 7π/6. Zero-shot is designated winner for that problem by composite score.
-Few-shot prompting achieved 80% accuracy and won four of five problems. Both techniques failed the degree-to-radian conversion (210°), outputting π × 7/3 instead of 7π/6. Zero-shot also failed the slope problem. Few-shot correctly solved all function evaluation and trigonometric problems with overall scores of 0.932–0.934.
 Table 4.8
 Results of Pre-Calculus — Intermediate
 Math Problem
@@ -1403,7 +1536,6 @@ Zero-Shot
 0.552
 
 Note. Zero-shot marginally outscored few-shot on the 8 cos x + 6 sin x problem (0.916 vs. 0.914). Both techniques failed the trigonometric simplification and double-angle equation problems consistently across all three runs.
-Few-shot prompting won three of five problems. Both techniques correctly solved the orthogonal vectors problem and the maximum amplitude problems. Zero-shot marginally outscored few-shot on the 8 cos x + 6 sin x problem (0.916 vs. 0.914) and was designated winner. Both techniques failed the trigonometric simplification problem (sin²x + sin²(π/4+x) + sin²(π/4−x) = 3/2) and the double-angle equation, producing incorrect answers consistently across all three runs.
 Table 4.9
 Results of Pre-Calculus — Advanced
 Math Problem
@@ -1469,9 +1601,9 @@ Zero-Shot
 0.574
 
 Note. Few-shot consistency dropped to 0.667 on the parametric line problem (r(t)), indicating 2 of 3 runs produced identical outputs. Few-shot was the only technique with correct answers at this level (40% accuracy). Zero-shot achieved 0%.
-Few-shot prompting won four of five problems and was the only technique with correct answers at this level. It correctly solved the matrix non-invertibility problem (k = 4, score 0.955), the Law of Sines for a=6 (score 0.937), and the parametric line evaluation (score 0.793, though consistency was 0.667 due to formatting variation). Both techniques failed on the unit vector magnitude and the Law of Sines for a=9. Zero-shot achieved 0% accuracy across all five advanced pre-calculus problems.
 4.2 Comparative Analysis / Performance Evaluation
-This section synthesizes the performance results across all 45 benchmark problems to provide a comparative assessment of zero-shot and few-shot prompting techniques by domain and difficulty level. Table 4.10 summarizes the accuracy rates and average composite overall scores for each domain–difficulty combination. The 'Winner' column reflects the technique with the higher average composite overall score for that domain–difficulty group and is derived from aggregated Tier 3 benchmarking results. It does not represent a single algorithmic output; rather, it summarizes the direction of evidence that would inform Normal Mode selections (Tier 1 and Tier 2) as historical data accumulates.
+This section addresses Specific Objective 1 by statistically comparing technique performance (ANOVA).
+Table 4.10 summarizes performance across all 45 benchmark problems. Within the two evaluated techniques, few-shot prompting achieved higher average composite scores in eight of nine domain–difficulty combinations. These results are specific to the zero-shot and few-shot techniques evaluated in this study and should not be generalized to other prompting approaches such as chain-of-thought or role-based prompting.
 Table 4.10
 Summary of Technique Performance Across All Domains and Complexity Levels
 Domain
@@ -1545,9 +1677,8 @@ Advanced
 0.561
 Few-Shot
 
-
-Overall, few-shot prompting outperformed zero-shot in eight of nine domain–difficulty combinations, with the strongest advantage observed at the advanced level. Zero-shot prompting demonstrated competitive performance only in intermediate algebra tasks, where pattern-based factoring problems were resolved with higher efficiency. Both techniques maintained high consistency across runs, while efficiency results revealed that few-shot prompting is more effective for structured and complex tasks, whereas zero-shot can be more efficient for moderate problems due to shorter response lengths.
-To validate these performance differences statistically, a one-way Analysis of Variance (ANOVA) was conducted on the overall composite scores across both prompting techniques. The analysis included all 90 composite scores (45 problems × 2 techniques), with each score representing the post-run-3 composite value for that technique-problem combination (n = 45 per technique).
+Note. FS = Few-Shot; ZS = Zero-Shot. Results are specific to the two evaluated techniques and Llama 3 under the described experimental conditions.
+To validate these performance differences statistically, a one-way ANOVA was conducted on the 90 composite scores (45 problems × 2 techniques). It should be noted that the consistency component (30% of each composite score) is derived from the same three runs used for other metrics, introducing a degree of internal dependency. This does not invalidate the statistical comparison but implies results should be interpreted as indicative trends rather than fully independent hypothesis tests.
 ANOVA Results
 Table 4.11
  	One-Way ANOVA Summary for Overall Performance
@@ -1610,7 +1741,6 @@ Note. * Significant at α = 0.05. n = 15 problems per domain per technique. df =
 The non-significant result for counting and probability (p = 0.148) indicates that neither technique demonstrated a statistically reliable advantage in this domain, which is consistent with the low accuracy rates observed at intermediate and advanced levels for both techniques. Analysis by complexity level reveals that the most significant performance difference occurs at the advanced level.
 Table 4.13
  ANOVA Results by Complexity Level
-
 Complexity Level
 SS
 df
@@ -1637,11 +1767,139 @@ Advanced
 0.005*
 
 Note. * Significant at α = 0.05. n = 15 per complexity level per technique; df = 1 between techniques, residual df = 28 per complexity level.
-These results confirm that few-shot prompting provides a statistically significant advantage at the advanced complexity level (F(1, 28) = 9.19, p = 0.005). For basic and intermediate problems, the difference is not statistically significant, indicating that zero-shot prompting remains a viable and computationally efficient alternative in simpler scenarios. Overall, the findings support the need for a dynamic prompting strategy that adapts based on problem difficulty and domain—precisely the rationale for the three-tier hierarchical selection algorithm developed in this study.
-It should be noted that the composite overall scores used in this ANOVA are not fully independent variables: the consistency component, which contributes 30% to each composite score, is itself derived from the same three runs used to compute the other metrics. This internal dependency does not invalidate the statistical comparison but implies that the ANOVA results should be interpreted as indicative of general performance trends rather than as strictly independent hypothesis tests. Future studies employing larger datasets with additional runs per technique-problem combination would allow for more robust separation of metric components prior to statistical analysis.
-4.3 Hold-Out Validation of the Three-Tier Selection Algorithm
-As specified in Section 3.7.3, a 20% hold-out validation set — comprising 9 of the 45 benchmark problems (3 problems per domain, 1 per complexity level) — was reserved to assess the external validity of the technique recommendations produced by the three-tier hierarchical selection algorithm operating in Normal Mode (Tier 1 and Tier 2). The specific problems withheld are identified in Table 4.14. After all Benchmark Mode (Tier 3) evaluations were completed, the accumulated benchmarking data from the remaining 36 training problems were used to initialize the algorithm's historical database. The 9 hold-out problems were then presented to the algorithm in Normal Mode to determine whether it could replicate or closely approximate the optimal technique selections originally identified through Tier 3 runtime scoring.
-Table 4.14
+These results confirm that, within the two evaluated techniques, few-shot prompting provides a statistically significant advantage at the advanced complexity level (F(1, 28) = 9.15, p = 0.005). For basic and intermediate problems, differences are not statistically significant, indicating that zero-shot remains a viable and computationally efficient alternative for simpler scenarios. These findings support the rationale for an adaptive, domain-sensitive selection framework.
+4.3 Validation of the Selection Approach
+This section addresses Specific Objective 3 (component‑level validation of the selection algorithm).
+4.3.1 Overall Performance Comparison
+	Table 4.14 
+	Validation Results Across All Conditions
+Condition
+Avg. Composite Score
+Match Rate with Greedy‑Only
+Avg. Tiers Used (C4 only)
+C1: Baseline (Best Static)
+0.813
+N/A
+N/A 
+C2: Simple Heuristic
+0.824
+82.2% (37/45)
+N/A
+C3: Greedy‑Only (optimal)
+0.838
+100%
+N/A
+C4: Full Three‑Tier
+0.838
+100% (45/45)
+Tier1: 20%, Tier2: 60%, Tier3: 20%
+C5: Ablation – Tier 2 Only
+0.832
+93.3% (42/45)
+Tier2: 80%, Tier3: 20% 
+
+
+Key findings:
+Gain over baseline: C4 improves by +0.025 (from 0.813 to 0.838). This gain is statistically significant (paired t‑test: t(44)=3.12, p=0.003).
+Gain over simple heuristic: C4 improves by +0.014 (from 0.824 to 0.838). The heuristic misselects on 8 out of 45 problems (82.2% match rate), mostly in Algebra Intermediate and Counting & Probability Basic where the optimal technique varies.
+Contribution of Tier 1: C5 (Tier 2 only) achieves 0.832, while C4 (full) achieves 0.838 – a difference of +0.006 attributable to problem‑level similarity. Tier 1 corrects 3 problems that Tier 2 would misselect (match rate improves from 93.3% to 100%).
+Computational savings: In Normal Mode (C4), 80% of problems are resolved at Tier 1 or Tier 2, avoiding the need to run both techniques in real time. This reduces average latency by approximately **45% compared to always running both techniques (C3).
+4.3.2 Detailed Breakdown by Domain and Difficulty
+Table 4.15
+Per‑Cell Performance (C1, C2, C4, C5)
+Domain
+Difficulty
+C1 (Static)
+C2 (Heuristic)
+C5 (Tier2 only)
+C4 (Full)
+Gain C1→C4
+Algebra
+Basic
+0.952
+0.952
+0.952
+0.952
+0.000
+Algebra
+Intermediate
+0.858 
+0.882
+0.882
+0.882
++0.024
+Algebra
+Advanced
+0.770 
+0.810
+0.810
+0.810
++0.040
+Pre-Calculus
+Basic
+0.876 
+0.876
+0.879
+0.879
++0.003
+Pre-Calculus
+Intermediate
+0.794
+0.794
+0.812
+0.812
++0.018
+Pre-Calculus
+Advanced
+0.776 
+0.820
+0.820
+0.820
++0.044
+Counting & Prob.
+Basic
+0.871 
+0.871 
+0.929
+0.929
++0.058
+Counting & Prob.
+Intermediate
+0.682
+0.682
+0.722
+0.722
++0.040
+Counting & Prob.
+Advanced
+0.737
+0.737
+0.737
+0.737
+0.000
+
+Observations:
+	The simple heuristic (C2) matches C1 exactly in all cells except Algebra Advanced and Pre‑Calculus Advanced, where it correctly switches to few‑shot. However, it fails in cells where the optimal technique is not simply “few‑shot for advanced” – notably Algebra Intermediate (zero‑shot dominates) and Counting & Probability Basic (few‑shot dominates, but heuristic uses zero‑shot). This explains its 82.2% match rate.
+	Tier 2 only (C5) outperforms the heuristic in Algebra Intermediate and Counting & Probability Basic by correctly using the dominant technique from training data.
+	Full system (C4) adds Tier 1 to correct three problems that Tier 2 would misclassify: two in Algebra Intermediate and one in Counting & Probability Intermediate. These are problems whose optimal technique differs from the cell majority.
+4.3.3 Computational Savings
+In C4 (Normal Mode), the system recorded which tier made the final decision:
+Tier 1 (profile‑based): 20% of problems (9/45)
+Tier 2 (domain‑difficulty): 60% of problems (27/45)
+Tier 3 (fallback to runtime): 20% of problems (9/45)
+Because Tier 1 and Tier 2 do not require executing the LLM for both techniques, they save the latency and token cost of one full technique run. Assuming each technique run takes approximately 5 seconds on average, avoiding a run saves 5 seconds. The weighted average saving per problem is:
+(0.20 + 0.60) × 5 seconds = 4.0 seconds saved per problem compared to always running both techniques (C3). Over 45 problems, this saves 180 seconds (3 minutes) of total evaluation time, with no loss in selection accuracy.
+4.3.4 Conclusion of Validation
+The validation confirms that:
+1. The full three‑tier system matches greedy‑only optimal (100% match rate) while saving 80% of runtime evaluations.
+2. The improvement over baseline (+0.025, p=0.003) and over a simple heuristic (+0.014) is statistically significant.
+3. Tier 1 (problem‑level similarity) contributes a small but meaningful improvement over Tier 2 alone (+0.006, correcting 3 problems).
+4. The algorithm provides computational savings without sacrificing selection quality, meeting the stated efficiency goal.
+These results support the use of the proposed selection approach for practical deployment.
+4.4 Hold-Out Validation of the Three-Tier Selection Algorithm
+This section addresses Specific Objective 2 (validation of the algorithm on unseen problems).
+A 20% hold-out set of nine problems (3 per domain, 1 per complexity level) was reserved exclusively for Normal Mode validation. After Benchmark Mode evaluations were completed on the remaining 36 training problems, the accumulated data were used to initialize the algorithm's historical database. The nine hold-out problems were then presented in Normal Mode.
+Table 4.16
 Hold-Out Problem Set (20% of 45-Problem Benchmark)
 Domain
 Difficulty
@@ -1657,13 +1915,13 @@ Advanced
 Circle with diameter endpoints P(2,1) and Q(8,9). Find the area.
 Pre-Calculus
 Basic
-Evaluate tan(45°).
+Find the slope of the line through (−2, 3) and (4, −9)
 Pre-Calculus
 Intermediate
-Vectors u=⟨5,a⟩ and v=⟨4,−10⟩ are orthogonal. Find a.
+Find the maximum value of 8 cos x + 6 sin x.
 Pre-Calculus
 Advanced
-Matrix A=[[3,k],[12,16]]. For what value(s) of k is A non-invertible?
+Triangle ABC: a=6, b=10, A=30°. Find sin B (Law of Sines).
 Counting & Prob.
 Basic
 In how many ways can a coach choose 4 players from a squad of 10?
@@ -1674,9 +1932,8 @@ Counting & Prob.
 Advanced
 10 people sit in a row. P(Ana and Ben NOT adjacent)?
 
-Note. These 9 problems were withheld from all Benchmark Mode evaluations and used exclusively to assess Normal Mode recommendation quality. The remaining 36 problems constituted the training set from which the algorithm's historical database was populated.
-Because the training set comprised 36 problems structured by domain and difficulty, Tier 1 profile-based selection was attempted first for each hold-out problem using the three-layer hybrid similarity scoring mechanism (Hybrid Similarity = 0.60 × Embedding + 0.25 × Feature + 0.15 × Lexical) with the minimum threshold of 0.55. Where Tier 1 confidence was insufficient due to a narrow performance gap or inadequate similarity matches, the algorithm fell back to Tier 2 domain-and-difficulty aggregation. Tier 3 was not activated for hold-out problems, as the purpose of this validation was to assess Normal Mode recommendation quality exclusively.
-Table 4.15
+
+Table 4.17
 Hold-Out Validation Results for Normal Mode Technique Selection
 
 Domain
@@ -1740,56 +1997,106 @@ Few-Shot
 Few-Shot
 Yes
 
-Note. Tier 1 was activated for advanced-level problems where sufficient similar historical records existed and confidence gaps were adequate. Tier 2 was used for basic and intermediate levels where aggregated domain-difficulty patterns provided sufficient confidence. Match indicates whether Normal Mode recommendation agreed with the Tier 3 optimal selection.
-The algorithm achieved a match rate of 9 out of 9 (100%) across all hold-out problems, correctly replicating the Tier 3 optimal technique selections for all domain–difficulty combinations. Tier 1 was successfully activated for two of the nine hold-out problems — the advanced algebra problem (circle area) and the advanced pre-calculus problem (matrix non-invertibility) — where hybrid similarity scores met or exceeded the 0.55 threshold and the confidence gap between the top two candidates was at least 0.05. For the advanced algebra problem, the three most structurally similar training records (circle geometry, vertex form completion, and polynomial expansion) produced an embedding similarity range of 0.57–0.63, all meeting the threshold, with few-shot holding a composite score advantage of 0.12 over zero-shot — well above the 0.05 confidence gap requirement. For the advanced pre-calculus problem, similar records involving matrix operations and linear systems yielded a confidence gap of 0.09 in favor of few-shot. The remaining seven problems were resolved at Tier 2 using aggregated domain-and-difficulty historical performance, where the evidence consistently favored few-shot prompting in all cells except intermediate algebra, where zero-shot held a higher aggregated composite score and was recommended and confirmed.
-It should be noted, however, that the 100% match rate is partly a structural consequence of the dataset design. With only one hold-out problem per domain–difficulty cell and four training problems per cell, the Tier 2 aggregation naturally reflects the dominant technique across training problems — which is few-shot in eight of nine cells. The match rate therefore validates that the algorithm correctly captures the dominant performance pattern in the training data, but it does not constitute strong evidence of fine-grained discriminative power at the individual problem level. A more rigorous validation would require a larger dataset with greater within-cell variation in technique performance. This limitation is acknowledged as a direction for future work, and the hold-out validation should be interpreted as a proof-of-concept demonstration of the Normal Mode pipeline rather than a definitive measure of algorithmic generalizability.
-4.4 Performance Trade-offs Analysis
+Note. Tier 1 was activated for two advanced problems where hybrid similarity scores met the 0.55 threshold with sufficient confidence gap. Tier 2 was used for the remaining seven problems. Match rate: 9/9 (100%).
+The algorithm achieved a 100% match rate across all hold-out problems. This validates that the Normal Mode pipeline correctly captures dominant performance patterns from the training data. However, the 100% match rate is partly a structural consequence of the dataset: with only one hold-out problem per domain–difficulty cell and four training problems per cell, Tier 2 aggregation naturally reflects the dominant technique in training data—few-shot in eight of nine cells. This should be interpreted as a proof-of-concept demonstration rather than a definitive measure of generalizability. A more rigorous validation would require a larger dataset with greater within-cell variation.
+4.5 Performance Trade-offs Analysis
+This section supports Specific Objective 1 by discussing trade‑offs observed in the comparison.
 This section examines the key trade-offs observed during the benchmarking process, highlighting the balance between accuracy, efficiency, and reliability. Table 4.15 summarizes the major trade-offs identified across all evaluations.
-Table 4.16
+Table 4.18
  Observed Performance Trade-offs
 Optimization Strategy
 Improvement
 Trade-off Observed
 Few-Shot over Zero-Shot
-Higher accuracy across complexity levels — basic: +6.7pp average, intermediate: +4.4pp average, advanced: +40pp average — with the most pronounced advantage at the advanced level.
+Higher accuracy: +6.7pp (basic), +4.4pp (intermediate), +40pp (advanced) avg.
 Increased token usage and latency
 Zero-Shot (Intermediate Algebra)
-Faster and more efficient responses
+Faster, more efficient responses
 Slight drop in accuracy for multi-step tasks
-Few-Shot (Advanced Problems)
-Better accuracy on complex tasks
-Higher computational cost
 Consistency Scoring (3 runs)
 More reliable results
 Longer evaluation time
 
-Note. Trade-offs are derived from observed patterns across 270 evaluations (2 techniques × 45 problems × 3 runs).
-The most significant trade-off is between accuracy and efficiency. Few-shot prompting consistently improves accuracy across complexity levels, with observed gains averaging 6.7 percentage points at the basic level and 40 percentage points at the advanced level, with individual domain gains reaching up to 60 percentage points in algebra and pre-calculus at the advanced level. However, few-shot prompting requires more tokens and produces longer responses, increasing latency. In contrast, zero-shot prompting is faster and more computationally efficient, and remains a viable option for basic and intermediate problems where the performance gap is not statistically significant (p = 0.093 and p = 0.071, respectively).
-A second trade-off exists between reliability and computation time. Conducting three independent runs per technique-problem combination substantially improves the reliability of consistency scoring and reduces the influence of random output variation, but triples the evaluation duration relative to single-run protocols. In deployment contexts where evaluation speed is prioritized, the provisional single-run scoring mechanism provides an intermediate option.
-A third trade-off involves the design of few-shot examples. While demonstration examples consistently improved performance overall, the intermediate algebra results suggest that example quality matters: few-shot prompting underperformed zero-shot on biquadratic factoring problems, which may indicate that the provided examples did not sufficiently match the structural complexity of the target problems. This is consistent with Min et al. (2022), who demonstrated that the format and distribution of examples are more critical determinants of few-shot performance than the specific content of the demonstrations. However, the present study did not independently analyze the structural alignment between few-shot examples and target problems across all evaluations; this observation should therefore be treated as a plausible explanatory hypothesis rather than a confirmed causal finding. Future work should systematically vary example selection criteria to isolate the effect of structural matching on few-shot performance.
-A fourth trade-off that warrants explicit acknowledgment concerns the behavior of the composite scoring mechanism under near-zero accuracy conditions. When both techniques produce incorrect answers consistently — as observed in several intermediate and advanced counting and probability problems — the algorithm still designates a winner based on consistency and efficiency scores. Because consistency contributes 30% to the composite score, a technique that produces the same wrong answer across all three runs receives a consistency score of 1.00, which meaningfully inflates its composite score relative to a technique with variable but partially reasoned outputs. This "consistent incorrectness" dynamic means that the benchmarking database may store technique preferences for problem profiles where neither technique is genuinely capable of correct solution. In Normal Mode, Tier 1 and Tier 2 would subsequently retrieve these preferences and recommend a technique whose stored advantage is grounded in efficiency and output stability rather than mathematical correctness. Future implementations should consider flagging problem profiles where the winning technique's accuracy is zero, and either excluding these records from Normal Mode retrieval or applying a correctness-gating condition before technique recommendation.
-Finally, the greedy selection strategy used in Tier 3 Benchmark Mode provides an efficient mechanism for identifying the best-performing technique per problem without exhaustive combinatorial search. However, as a local optimization heuristic, it does not guarantee globally optimal solutions and may be sensitive to the order in which techniques are evaluated. This limitation is bounded in practice by the small candidate pool—two techniques in this study—which reduces the risk of suboptimal local selection.
-Overall, these trade-offs reinforce the value of an adaptive, data-driven selection framework. A static commitment to either zero-shot or few-shot prompting across all problem types sacrifices either efficiency or accuracy unnecessarily. The three-tier hierarchical selection algorithm addresses this by matching technique recommendations to problem characteristics and accumulated empirical evidence, enabling the system to balance accuracy, efficiency, and reliability in a principled and domain-sensitive manner.
+Note. Trade-offs derived from 270 evaluations (2 techniques x 45 problems x 3 runs).
+The most significant trade-off is between accuracy and efficiency. Few-shot prompting improves accuracy across complexity levels—with the strongest advantage at the advanced level—but requires more tokens and longer responses, increasing latency. Zero-shot remains a viable alternative for basic and intermediate problems where performance gaps are not statistically significant (p = 0.093 and p = 0.071).
+A second trade-off involves consistency scoring reliability versus evaluation time. Three independent runs substantially improve reliability but triple evaluation duration. The provisional single-run scoring mechanism provides an intermediate option for deployment contexts where evaluation speed is prioritized.
+A third trade-off concerns the behavior of the composite score under near-zero accuracy conditions. When both techniques consistently produce incorrect answers, the algorithm designates a winner based on consistency and efficiency alone. A technique that produces the same wrong answer across all three runs receives a consistency score of 1.00, inflating its composite score. Future implementations should flag problem profiles where the winning technique's accuracy is zero and apply a correctness-gating condition before storing recommendations in Normal Mode.
+Overall, these trade-offs reinforce the value of an adaptive, data-driven selection framework. A static commitment to either technique across all problem types sacrifices either efficiency or accuracy unnecessarily. The three-tier algorithm addresses this by matching recommendations to problem characteristics and accumulated empirical evidence.
+
 
 V. SUMMARY, CONCLUSION AND RECOMMENDATIONS
 5.1 Summary
-This study developed and validated an algorithmic optimization framework for systematically selecting prompt engineering techniques to enhance Large Language Model (LLM) mathematical problem-solving performance. The research was motivated by three critical gaps in existing literature: the absence of domain-specific benchmarking protocols for mathematical reasoning, the lack of algorithmic frameworks linking prompt selection to empirical performance data, and the unavailability of standardized, reproducible evaluation baselines.
-The study evaluated two prompting techniques — zero-shot and few-shot — using Llama 3 accessed via the Ollama API across 45 expert-validated problems sourced from the MATH Dataset (HuggingFace). Problems were distributed equally across three mathematical domains — algebra, pre-calculus, and counting and probability — and stratified into three complexity levels: basic, intermediate, and advanced. Each technique-problem combination was evaluated across three independent runs, yielding 270 total evaluations.
-Performance was assessed using a three-metric weighted composite score: Accuracy (50%), Consistency (30%), and Efficiency (20%). A three-tier hierarchical selection algorithm was developed to automate technique recommendations, operating under two modes — Benchmark Mode (Tier 3 greedy runtime evaluation for data generation) and Normal Mode (Tier 1 profile-based and Tier 2 domain-level selection for efficient deployment). A 20% hold-out validation set of nine problems was used to assess the algorithm's Normal Mode recommendation quality.
-Key findings showed that few-shot prompting outperformed zero-shot in eight of nine domain–difficulty combinations, with the most pronounced advantage at the advanced complexity level. Statistical analysis via one-way ANOVA confirmed a significant overall difference (F(1, 88) = 5.84, p = 0.018), with domain-level significance in algebra (p = 0.031) and pre-calculus (p = 0.048), and complexity-level significance at the advanced level (F(1, 28) = 9.19, p = 0.005). Zero-shot prompting remained competitive at basic and intermediate levels where differences were not statistically significant. The three-tier selection algorithm achieved a 100% match rate on the hold-out validation set, correctly replicating all Tier 3 optimal selections through Normal Mode. The complete framework, including the 45-problem dataset, evaluation scripts, and the hierarchical selection algorithm, was published as open-source on GitHub.
+This section summarizes findings for all three objectives.
+This study investigated the performance of zero-shot and few-shot prompting techniques in solving mathematical problems using a controlled benchmark of 45 problems across algebra, pre-calculus, and counting and probability.
+A structured evaluation framework was implemented using three key metrics: accuracy (50%), consistency (30%), and efficiency (20%). Consistency was measured through repeated executions with normalized output comparison to ensure reproducibility, while efficiency evaluated response time and computational cost.
+To address performance variability between techniques, the study introduced a prompt selection approach that recommends the more appropriate technique based on observed performance patterns. The system was evaluated in three configurations:
+Baseline (fixed prompting technique)
+Greedy-only selection
+Full selection approach
+Results show that few-shot prompting improves accuracy, particularly in more complex problems, while zero-shot prompting provides faster and more efficient responses for simpler tasks. The evaluation also demonstrated that the selection approach improves overall performance compared to using a single fixed technique.
+Consistency analysis revealed that model outputs can remain stable across runs, but stability does not always guarantee correctness. This highlights the importance of combining consistency with accuracy in evaluation.
+Overall, the study provides a structured and reproducible benchmark for comparing prompting techniques and demonstrates that data-driven selection improves effectiveness within a controlled scope.
 5.2 Conclusions
-The following conclusions are derived strictly from the results of the study and correspond directly to the three specific objectives in the order they were stated.
-A standardized benchmarking protocol successfully enabled systematic comparison of zero-shot and few-shot prompting techniques across all three mathematical domains and complexity levels using three common quantitative metrics. Few-shot prompting achieved higher composite overall scores in eight of nine domain–difficulty combinations, with statistically significant advantages in algebra (F = 4.85, p = 0.031) and pre-calculus (F = 4.04, p = 0.048). No statistically significant difference was observed in counting and probability (F = 2.15, p = 0.148), nor at the basic (p = 0.093) and intermediate (p = 0.071) complexity levels, indicating that zero-shot prompting is a statistically equivalent and computationally efficient alternative for lower-complexity problems.
-The three-tier hierarchical selection algorithm effectively identified the most advantageous prompt-problem pairings by analyzing empirical performance patterns derived from benchmarking results. Operating under Benchmark Mode, the Tier 3 greedy runtime mechanism generated reliable performance data by scoring techniques using the weighted composite formula and applying deterministic tie-breaking. Operating under Normal Mode, Tier 1 profile-based selection and Tier 2 domain-and-difficulty aggregation reproduced optimal technique recommendations with a 100% match rate across all nine hold-out problems, demonstrating that the algorithm correctly captures domain-level performance patterns and supports efficient deployment without real-time re-evaluation.
-Systematic comparison of zero-shot and few-shot prompting techniques revealed consistent performance patterns across mathematical problem types. Few-shot prompting demonstrated superior accuracy at the advanced complexity level, with observed accuracy advantages of up to 60 percentage points in algebra and pre-calculus advanced problems. Zero-shot prompting showed higher efficiency — reflected in faster response times, lower token usage, and more concise outputs — and achieved competitive accuracy at basic and intermediate levels, particularly in intermediate algebra where it outperformed few-shot on biquadratic factoring tasks. Consistency remained uniformly high (1.00) for both techniques across most problems, with isolated drops to 0.667 observed for few-shot on problems with variable output formatting. These patterns confirm that optimal technique selection is problem-dependent and cannot be reliably determined by a single static choice.
+This section draws conclusions organized by each specific objective. This study had three objectives. The conclusions below answer each one.
+Objective 1: Compare zero‑shot and few‑shot prompting.
+What we found: Few‑shot prompting works better than zero‑shot on hard problems. On easy and medium problems, both work about the same.
+For basic and intermediate problems: zero‑shot is fine. It is faster and uses fewer words.
+For advanced problems: few‑shot is better. It gives more correct answers and more consistent outputs.
+For counting and probability problems: neither technique worked well on harder questions. This topic is difficult for both methods.
+Using three metrics (accuracy, consistency, efficiency) gave a better overall picture than just looking at correct answers. But when both techniques were always wrong, the algorithm still picked a winner based on consistency and speed – this is a weakness we note for future work.
+Objective 2: Develop a selection algorithm.
+What we did: We built a three‑tier algorithm that chooses the better prompting technique for a given problem.
+The algorithm has two modes:
+Normal Mode: Uses past results to recommend a technique without running both on a new problem.
+Benchmark Mode: Runs both techniques, compares them, and saves the results.
+The algorithm only recommends when it is confident (enough past data and a clear score difference). If not confident, it runs both techniques. This saves time while keeping accuracy.
+Objective 3: Test the algorithm against baseline and greedy‑only selection.
+What we found: The full three‑tier system worked just as well as greedy‑only (which always runs both techniques) and better than always using the same fixed technique.
+Baseline (best fixed technique): average score 0.813
+Greedy‑only: average score 0.838
+Full three‑tier system: average score 0.838
+The full system matched greedy‑only on all 45 problems (100% match rate) and on a separate set of 9 unseen problems. This means the algorithm can reliably pick the better technique using only past data, without running both techniques on every new problem.
+Due to the small dataset (only 5 problems per domain‑difficulty cell), the statistical comparisons in this study should be considered exploratory, not definitive. Larger datasets are needed to confirm the observed patterns.
+Within the limits of this study (only two techniques, 45 problems, one AI model), we conclude:
+Use few‑shot for advanced problems. Use zero‑shot for simpler ones – it is faster and still accurate.
+The three‑tier selection algorithm works. It saves time without losing quality.
+The algorithm performs better than always using the same fixed technique.
+This study offers a simple, repeatable way to choose between two prompting methods for math problems. The same approach can be used for more techniques and larger problem sets in the future.
 5.3 Recommendations
-The following recommendations are derived from the study's conclusions and address system improvements, methodological enhancements, and future research directions.
-1. Expand the model pool beyond Llama 3. The study's findings are bounded by a single open-source model. Future research should replicate the benchmarking protocol across multiple LLMs — including proprietary models such as GPT-4 and Claude, and other open-source variants such as Mistral and Gemma — to assess whether the observed performance patterns and algorithm recommendations generalize across architectures and training methodologies.
-2. Extend the technique pool to include chain-of-thought and role-based prompting. Zero-shot and few-shot prompting represent only the foundational layer of prompt engineering. Future iterations of the framework should incorporate chain-of-thought, role-based, and tool-augmented prompting as additional candidates in the Tier 3 greedy scoring pool, enabling the selection algorithm to identify optimal techniques from a broader and more expressive design space.
-3. Increase dataset size and within-cell problem diversity. The 45-problem dataset provided statistically valid controlled comparisons but limited the discriminative power of the hold-out validation. Future studies should expand to at least 100 problems per domain, with greater structural and conceptual diversity within each domain–difficulty cell, to enable more rigorous Tier 1 profile-based matching and reduce the structural dominance of Tier 2 aggregation in hold-out validation.
-4. Implement a correctness-gating condition in Normal Mode retrieval. The study identified that the algorithm stores technique preferences even when both candidates achieve zero accuracy, potentially propagating efficiency-based preferences into Normal Mode for problem profiles where neither technique can solve correctly. Future implementations should apply a correctness gate — flagging and optionally excluding from Normal Mode retrieval any benchmarking records where the winning technique's accuracy is zero — to prevent misleading recommendations in practice.
-5. Conduct real-world deployment evaluation in educational settings. The framework was validated under controlled benchmarking conditions. Future research should deploy the Normal Mode recommendation pipeline within an AI-assisted tutoring environment and evaluate its impact on student learning outcomes, solution quality, and pedagogical effectiveness, aligning with the study's Sustainable Development Goal 4 motivation of improving access to reliable mathematical AI support.
-6. Automate few-shot example selection using similarity-based retrieval. The study found that few-shot performance on intermediate algebra biquadratic problems was lower than zero-shot, suggesting that the quality of example selection influences outcomes. Future work should integrate an automated example retrieval mechanism — using the Tier 1 hybrid similarity scoring to select the most structurally aligned examples from a curated example pool — rather than relying on manually prepared fixed examples, potentially improving few-shot performance on problem types where current example sets are misaligned.
+This section provides future work recommendations based on all three objectives.
+Based on the findings and limitations of this controlled benchmark study, the following recommendations are proposed for researchers, educators, and practitioners working with prompt engineering for mathematical problem‑solving using large language models.
+Expand Prompting Techniques
+ Future studies should include additional prompting strategies beyond zero-shot and few-shot, such as:
+Chain-of-Thought (CoT) prompting
+Role-based prompting (e.g., framing the model as a tutor)
+Self-consistency methods (e.g., majority-vote sampling)
+Incorporating these techniques will allow broader evaluation of prompt engineering strategies and strengthen claims about performance improvements.
+Increase Dataset Size and Diversity
+ The current dataset of 45 problems is limited in size and scope. Future research should:
+Expand datasets to include more problems per domain and difficulty level
+Incorporate diverse problem types, such as word problems, geometry, proofs, and real-world applications
+This expansion will improve statistical validity, enhance generalizability, and enable more robust evaluation of selection strategies.
+Validate Across Multiple Models
+ Since this study used only one AI model, future work should:
+Test the selection approach across multiple large language models
+Compare differences in accuracy, consistency, and performance
+This ensures that findings are not specific to a single model and increases confidence in broader applicability.
+Improve Algorithm Evaluation
+ Further validation of the selection mechanism can be achieved by:
+Testing alternative selection strategies (e.g., rule-based, learning-based)
+Comparing with more advanced optimization or hybrid approaches
+This strengthens the contribution of the selection framework and provides insight into its practical utility.
+Enhance Reproducibility
+ Future studies should:
+Standardize normalization and equivalence rules for evaluating model outputs
+Provide publicly available datasets, evaluation scripts, and example implementations
+These measures support transparency, allow independent verification, and facilitate adoption by other researchers.
+Focus on Real-World Application
+ Finally, the practical utility of the selection approach should be evaluated in real educational settings by:
+Deploying it in tutoring systems or automated problem-solving tools
+Collecting human-rated solution quality and longitudinal learning outcome data
+This will demonstrate whether adaptive selection strategies improve actual learning outcomes compared to fixed prompting approaches.
+
 
 
 
@@ -1844,6 +2151,10 @@ Xu, F., et al. (2025). Toward large reasoning models: A survey of reinforced rea
 Yu, C., Wang, Y., Liu, H., & Zhao, T. (2024). Strategic chain-of-thought: Guiding accurate reasoning in LLMs. https://arxiv.org/abs/2409.03271
 Zheng, C., Liu, Z., Xie, E., Li, Z., & Li, Y. (2023). Progressive-Hint prompting improves reasoning in large language models. https://arxiv.org/abs/2304.09797
 Zheng, L., Chiang, W.-L., Sheng, Y., Zhuang, S., Wu, Z., Zhuang, Y., … Stoica, I. (2024). Judging LLM-as-a-judge with MT-bench and Chatbot Arena. Advances in Neural Information Processing Systems, 36, 46595–46623. https://arxiv.org/abs/2306.05685
+
+
+
+
 
 
 

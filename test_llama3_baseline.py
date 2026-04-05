@@ -13,6 +13,8 @@ from typing import Any, Dict
 
 import requests
 
+from framework.efficiency_scorer import EfficiencyScorer
+
 
 def build_payload(model: str, prompt: str, num_predict: int, num_ctx: int, temperature: float) -> Dict[str, Any]:
     return {
@@ -36,6 +38,8 @@ def run_prompt(
     temperature: float,
     timeout_seconds: int,
 ) -> Dict[str, Any]:
+    efficiency_scorer = EfficiencyScorer()
+
     payload = build_payload(
         model=model,
         prompt=prompt,
@@ -54,16 +58,28 @@ def run_prompt(
     response.raise_for_status()
 
     data = response.json()
-    return {
-        "response": data.get("response", ""),
-        "done_reason": data.get("done_reason", "stop"),
-        "prompt_tokens": int(data.get("prompt_eval_count", 0) or 0),
-        "completion_tokens": int(data.get("eval_count", 0) or 0),
-        "total_tokens": int(data.get("prompt_eval_count", 0) or 0) + int(data.get("eval_count", 0) or 0),
+    prompt_tokens = int(data.get("prompt_eval_count", 0) or 0)
+    completion_tokens = int(data.get("eval_count", 0) or 0)
+    total_tokens = prompt_tokens + completion_tokens
+    response_text = data.get("response", "")
+
+    metrics_for_efficiency = {
         "elapsed_time": elapsed,
-        "load_time": float(data.get("load_duration", 0) or 0) / 1e9,
-        "prompt_eval_time": float(data.get("prompt_eval_duration", 0) or 0) / 1e9,
-        "eval_time": float(data.get("eval_duration", 0) or 0) / 1e9,
+        "total_tokens": total_tokens,
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+    }
+
+    efficiency_score = efficiency_scorer.score(response_text, metrics_for_efficiency)
+
+    return {
+        "response": response_text,
+        "done_reason": data.get("done_reason", "stop"),
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "total_tokens": total_tokens,
+        "elapsed_time": elapsed,
+        "efficiency_score": efficiency_score,
     }
 
 
@@ -140,9 +156,7 @@ def main() -> int:
     print(f"Prompt tokens: {result['prompt_tokens']}")
     print(f"Completion tokens: {result['completion_tokens']}")
     print(f"Total tokens: {result['total_tokens']}")
-    print(f"Load time: {result['load_time']:.3f}s")
-    print(f"Prompt eval time: {result['prompt_eval_time']:.3f}s")
-    print(f"Eval time: {result['eval_time']:.3f}s")
+    print(f"Efficiency score: {result['efficiency_score']:.3f}")
     return 0
 
 

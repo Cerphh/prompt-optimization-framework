@@ -79,12 +79,7 @@ class AccuracyScorer:
         for candidate in candidates:
             if self._strong_match(candidate, expected_str):
                 return 1.0
-        
-        # Partial credit for close matches
-        for candidate in candidates:
-            if self._partial_match(candidate, expected_str):
-                return 0.5
-        
+
         return 0.0
 
     def _strong_match(self, candidate: str, expected: str) -> bool:
@@ -494,10 +489,6 @@ class AccuracyScorer:
         cleaned = ' '.join(cleaned.split())
         return cleaned.strip()
     
-    def _partial_match(self, candidate: str, expected: str) -> bool:
-        """Check for partial matches (substring containment)."""
-        return expected.lower() in candidate.lower() or candidate.lower() in expected.lower()
-
     # ------------------------------------------------------------------ #
     #  Multi-value answer matching (e.g. roots of polynomial equations)   #
     # ------------------------------------------------------------------ #
