@@ -291,6 +291,74 @@ def _has_math_scope_signal(problem: str) -> bool:
     return any(keyword in token_set for keyword in _MATH_SCOPE_KEYWORDS)
 
 
+def _detect_supported_intent(problem: str) -> Optional[str]:
+    """Best-effort detect of supported intent labels from prompt_generator."""
+    try:
+        prompt_generator = pipeline.prompt_generator
+        normalized = prompt_generator._normalize_detection_text(problem)
+        intent = str(prompt_generator._detect_primary_intent(normalized) or "").strip().lower()
+        return intent or None
+    except Exception:
+        return None
+
+
+def _is_supported_special_case(problem: str) -> bool:
+    """Allow in-scope edge cases that lightweight keyword guard can miss."""
+    value = str(problem or "").strip().lower()
+    if not value:
+        return False
+
+    supported_intents = {
+        "solve_equation",
+        "real_solutions",
+        "evaluate_substitution",
+        "rewrite_expression",
+        "find_asymptotes",
+        "find_maximum",
+        "vietas_formulas",
+        "expand",
+        "simplify",
+        "ratio_proportion",
+        "variation",
+        "system",
+        "function_evaluation",
+        "slope_formula",
+        "angle_conversion",
+        "trigonometric_values",
+        "trigonometric_identity",
+        "trigonometric_equation",
+        "harmonic_form",
+        "dot_product_orthogonality",
+        "law_of_sines",
+        "parametric_vector_function",
+        "vector_magnitude",
+        "matrix_determinant",
+        "analytic_geometry",
+        "probability",
+        "conditional_probability",
+        "counting_arrangements",
+        "counting_principle",
+        "counting_with_restrictions",
+        "expected_value",
+        "factorial_number_theory",
+        "palindrome_number_theory",
+    }
+
+    detected_intent = _detect_supported_intent(problem)
+    if detected_intent in supported_intents:
+        return True
+
+    # Algebraic perfect-square relation prompts.
+    if re.search(r"\bperfect\s+squares?\b", value):
+        return True
+
+    # Analytic-geometry phrasing used by in-scope set.
+    if "circle" in value and any(marker in value for marker in ["diameter", "endpoint", "radius"]):
+        return True
+
+    return False
+
+
 def _is_problem_in_framework_scope(problem: str) -> bool:
     """Return True only when problem text shows clear in-scope math intent."""
     value = str(problem or "").strip()
@@ -320,6 +388,18 @@ def _looks_like_out_of_domain_math(problem: str) -> bool:
     """Detect common math topics that are currently outside supported domains."""
     value = str(problem or "").strip().lower()
     if not value:
+        return False
+
+    if _is_supported_special_case(problem):
+        return False
+
+    # Keep algebraic number-theory prompts in scope, e.g.
+    # "Two perfect squares differ by 45" or "find n^2 - m^2".
+    if re.search(r"\bperfect\s+squares?\b", value):
+        return False
+    if re.search(r"\b(?:difference\s+of|differ(?:ence)?\s+by)\b", value) and re.search(r"\bsquares?\b", value):
+        return False
+    if len(re.findall(r"\b[a-z]\s*(?:\^2|²)\b", value)) >= 2:
         return False
 
     tokens = set(re.findall(r"[a-zA-Z]+", value))
@@ -354,6 +434,26 @@ def _get_domain_signal_scores(problem: str) -> Dict[str, int]:
     if re.search(r"\b(solve\s+for|factor|simplify|quadratic|polynomial)\b", value):
         scores["algebra"] += 2
 
+    # Algebraic perfect-square relationships (difference of squares style).
+    if re.search(r"\bperfect\s+squares?\b", value):
+        scores["algebra"] += 3
+    if re.search(r"\b(?:difference\s+of|differ(?:ence)?\s+by)\b", value) and re.search(r"\bsquares?\b", value):
+        scores["algebra"] += 2
+    if len(re.findall(r"\b[a-z]\s*(?:\^2|²)\b", value)) >= 2:
+        scores["algebra"] += 2
+
+    # Coordinate/analytic geometry phrasing handled under algebra scope.
+    if "circle" in value and any(marker in value for marker in ["diameter", "endpoint", "radius"]):
+        scores["algebra"] += 2
+    if re.search(r"\(\s*[-+]?\d+\s*,\s*[-+]?\d+\s*\)", value):
+        scores["algebra"] += 1
+
+    # Counting & probability number-theory style prompts.
+    if "!" in value or "factorial" in value:
+        scores["counting-probability"] += 2
+    if any(marker in value for marker in ["tens digit", "ones digit", "units digit", "palindrome"]):
+        scores["counting-probability"] += 2
+
     return scores
 
 
@@ -376,6 +476,10 @@ def _looks_like_pure_geometry_problem(problem: str) -> bool:
     """Detect plane/solid geometry style prompts outside the supported 3-domain boundary."""
     value = str(problem or "").strip().lower()
     if not value:
+        return False
+
+    # Allow supported analytic/trigonometric geometry subtypes to pass.
+    if _is_supported_special_case(problem):
         return False
 
     tokens = set(re.findall(r"[a-zA-Z]+", value))
