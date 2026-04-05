@@ -2,8 +2,52 @@
 
 import { useState, useEffect } from 'react'
 
-type RunMode = 'normal' | 'benchmark'
+type RunMode = 'normal' | 'benchmark' | 'baseline'
 type ScoreDisplayFormat = 'percent' | 'decimal'
+
+interface BaselineResult {
+  problem: string
+  ground_truth_used: boolean
+  runs_requested: number
+  runs_succeeded: number
+  run_mode: 'baseline'
+  model_name: string
+  technique: string
+  prompt_used: string
+  best_response: string
+  scores: {
+    accuracy: number
+    consistency: number | null
+    efficiency: number
+    overall: number
+    consistency_is_provisional: boolean
+    consistency_runs_used: number
+  }
+  metrics: {
+    elapsed_time: number
+    total_tokens: number
+    prompt_tokens: number
+    completion_tokens: number
+  }
+  run_history: Array<{
+    run_index: number
+    success: boolean
+    response?: string
+    error?: string
+    metrics: {
+      elapsed_time: number
+      total_tokens: number
+      prompt_tokens: number
+      completion_tokens: number
+    }
+    scores: {
+      accuracy: number
+      consistency: number | null
+      efficiency: number
+      overall: number
+    }
+  }>
+}
 
 interface Technique {
   technique: string
@@ -541,6 +585,7 @@ export default function Home() {
   const [lastRunUsedGroundTruth, setLastRunUsedGroundTruth] = useState(false)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<BenchmarkResult | null>(null)
+  const [baselineResult, setBaselineResult] = useState<BaselineResult | null>(null)
   const [error, setError] = useState('')
   const [isScopeError, setIsScopeError] = useState(false)
   const [expandedTechnique, setExpandedTechnique] = useState<string | null>(null)
@@ -662,7 +707,7 @@ export default function Home() {
   }, [])
 
   useEffect(() => {
-    if (runMode === 'normal' && validationError === 'Benchmark mode requires an expected answer') {
+    if (runMode !== 'benchmark' && validationError === 'Benchmark mode requires an expected answer') {
       setValidationError('')
     }
   }, [runMode, validationError])
@@ -1153,6 +1198,7 @@ export default function Home() {
     setDidSaveToDb(false)
     setDidExportJson(false)
     setResult(null)
+    setBaselineResult(null)
     setExpandedTechnique(null)
     setStreamingResponse('')
     setStreamingTechnique('')
@@ -1313,10 +1359,69 @@ export default function Home() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (runMode === 'benchmark') {
+    if (runMode === 'baseline') {
+      await runBaselineFlow()
+    } else if (runMode === 'benchmark') {
       await runBenchmarkFlow(benchmarkRuns, benchmarkRuns >= CONSISTENCY_TEST_RUNS_PER_TECHNIQUE ? 'consistency' : 'initial')
     } else {
       await runBenchmarkFlow(INITIAL_RUNS_PER_TECHNIQUE, 'initial')
+    }
+  }
+
+  const runBaselineFlow = async () => {
+    if (problem.length < 10) {
+      setValidationError('Problem must be at least 10 characters')
+      return
+    }
+
+    setLoading(true)
+    setError('')
+    setIsScopeError(false)
+    setSaveStatus('')
+    setResult(null)
+    setBaselineResult(null)
+    setExpandedTechnique(null)
+    setStreamingResponse('')
+    setStreamingTechnique('')
+    setStreamingStatus('Running raw baseline (no prompting technique)...')
+
+    try {
+      if (healthStatus === 'unhealthy') {
+        throw new Error('⚠️ System offline: Make sure Ollama is running (ollama serve) and the backend API is started')
+      }
+
+      const groundTruthValue = groundTruth.trim() || undefined
+
+      const response = await fetch(apiUrl('/baseline'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          problem,
+          runs: benchmarkRuns,
+          ...(groundTruthValue ? { ground_truth: groundTruthValue } : {}),
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        const detail =
+          typeof errorData.detail === 'string'
+            ? errorData.detail
+            : JSON.stringify(errorData.detail || 'Unknown error')
+        throw new Error(`🔴 HTTP ${response.status}: ${detail}`)
+      }
+
+      const data: BaselineResult = await response.json()
+      setBaselineResult(data)
+      setLastRunUsedGroundTruth(data.ground_truth_used)
+    } catch (err) {
+      if (err instanceof TypeError && err.message.includes('fetch')) {
+        setError('🔴 Cannot connect to API. Make sure backend is running on port 8000')
+      } else {
+        setError(err instanceof Error ? err.message : 'An error occurred')
+      }
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -1450,12 +1555,14 @@ export default function Home() {
     return a.technique.localeCompare(b.technique)
   })
 
-  const activeMode: RunMode = result?.run_mode || runMode
-  const runUsedGroundTruth = result?.ground_truth_used ?? lastRunUsedGroundTruth
-  const modeLabel = activeMode === 'benchmark' ? 'Benchmark mode' : 'Normal mode'
+  const activeMode: RunMode = baselineResult ? 'baseline' : (result?.run_mode || runMode) as RunMode
+  const runUsedGroundTruth = baselineResult?.ground_truth_used ?? result?.ground_truth_used ?? lastRunUsedGroundTruth
+  const modeLabel = activeMode === 'benchmark' ? 'Benchmark mode' : activeMode === 'baseline' ? 'Baseline mode' : 'Normal mode'
   const modeHint =
     activeMode === 'benchmark'
       ? 'Live comparison of all techniques with required expected answer.'
+      : activeMode === 'baseline'
+      ? 'Raw LLM — no instruction framing or prompt engineering applied.'
       : 'Uses historical preselection after enough data; otherwise runs all techniques.'
   const attemptedTechniqueCount = techniqueRows.length
   const successfulTechniqueCount = techniqueRows.filter((row) => row.success).length
@@ -1572,7 +1679,7 @@ export default function Home() {
   }
 
   /* Whether we're in "results" mode (sidebar + right panel) */
-  const hasStarted = loading || !!result
+  const hasStarted = loading || !!result || !!baselineResult
 
   return (
     <div className="h-screen flex flex-col" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
@@ -1657,6 +1764,7 @@ export default function Home() {
                   >
                     <option value="normal">Normal mode</option>
                     <option value="benchmark">Benchmark mode</option>
+                    <option value="baseline">Baseline mode</option>
                   </select>
                 </div>
                 <div>
@@ -1727,10 +1835,10 @@ export default function Home() {
                 </div>
               )}
 
-              {runMode === 'benchmark' && (
+              {(runMode === 'benchmark' || runMode === 'baseline') && (
                 <div className="mb-4 p-3 rounded-md" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
                   <label htmlFor="ground-truth-landing" className="block text-sm font-medium mb-1.5">
-                    Expected Answer (required)
+                    Expected Answer {runMode === 'benchmark' ? '(required)' : '(optional)'}
                   </label>
                   <input
                     id="ground-truth-landing"
@@ -1739,13 +1847,15 @@ export default function Home() {
                     placeholder="e.g., x = 4 or x = 5"
                     className="w-full px-3 py-2 rounded-md text-sm font-mono outline-none"
                     style={{
-                      border: `1px solid ${!groundTruth.trim() ? '#ef4444' : 'var(--border)'}`,
+                      border: `1px solid ${runMode === 'benchmark' && !groundTruth.trim() ? '#ef4444' : 'var(--border)'}`,
                       color: 'var(--text)',
                       background: 'var(--surface)',
                     }}
                   />
                   <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
-                    Benchmark mode enforces ground-truth scoring for thesis-grade comparison.
+                    {runMode === 'benchmark'
+                      ? 'Benchmark mode enforces ground-truth scoring for thesis-grade comparison.'
+                      : 'Providing an expected answer enables accurate scoring instead of heuristics.'}
                   </p>
                 </div>
               )}
@@ -1773,19 +1883,19 @@ export default function Home() {
                 <span className="text-xs font-mono" style={{ color: 'var(--text-subtle)' }}>
                   {modeLabel}: {modeHint}
                 </span>
-                {runMode === 'benchmark' ? (
+                {runMode === 'benchmark' || runMode === 'baseline' ? (
                   <button
                     type="submit"
                     disabled={isDisabled}
                     className="flex items-center rounded-md text-sm font-medium transition-colors overflow-hidden"
                     style={{
-                      background: isDisabled ? 'var(--border-strong)' : 'var(--accent)',
+                      background: isDisabled ? 'var(--border-strong)' : runMode === 'baseline' ? '#57534e' : 'var(--accent)',
                       color: isDisabled ? 'var(--text-muted)' : '#fff',
                       cursor: isDisabled ? 'not-allowed' : 'pointer',
                       padding: 0,
                     }}
                   >
-                    <span className="px-5 py-2.5">Run Benchmark</span>
+                    <span className="px-5 py-2.5">{runMode === 'baseline' ? 'Run Baseline' : 'Run Benchmark'}</span>
                     <span
                       role="button"
                       onClick={(e) => { e.preventDefault(); e.stopPropagation(); setBenchmarkRuns(benchmarkRuns === 1 ? 3 : 1); }}
@@ -1848,6 +1958,7 @@ export default function Home() {
                 >
                   <option value="normal">Normal</option>
                   <option value="benchmark">Benchmark</option>
+                  <option value="baseline">Baseline</option>
                 </select>
               </div>
 
@@ -1934,10 +2045,10 @@ export default function Home() {
                 </div>
               )}
 
-              {runMode === 'benchmark' && (
+              {(runMode === 'benchmark' || runMode === 'baseline') && (
                 <div className="p-3 rounded-md" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
                   <label htmlFor="ground-truth" className="block text-sm font-medium mb-1.5">
-                    Expected Answer (required)
+                    Expected Answer {runMode === 'benchmark' ? '(required)' : '(optional)'}
                   </label>
                   <input
                     id="ground-truth"
@@ -1947,13 +2058,15 @@ export default function Home() {
                     placeholder="e.g., x = 4 or x = 5"
                     className="w-full px-3 py-2 rounded-md text-sm font-mono outline-none transition"
                     style={{
-                      border: `1px solid ${!groundTruth.trim() ? '#ef4444' : 'var(--border)'}`,
+                      border: `1px solid ${runMode === 'benchmark' && !groundTruth.trim() ? '#ef4444' : 'var(--border)'}`,
                       color: 'var(--text)',
                       background: loading ? 'var(--bg)' : 'var(--surface)',
                     }}
                   />
                   <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
-                    Required for benchmark mode and thesis-grade scoring.
+                    {runMode === 'benchmark'
+                      ? 'Required for benchmark mode and thesis-grade scoring.'
+                      : 'Providing an expected answer enables accurate scoring.'}
                   </p>
                 </div>
               )}
@@ -1985,19 +2098,19 @@ export default function Home() {
               </div>
 
               {/* Submit */}
-              {runMode === 'benchmark' ? (
+              {runMode === 'benchmark' || runMode === 'baseline' ? (
                 <button
                   type="submit"
                   disabled={isDisabled}
                   className="flex items-center w-full rounded-md text-sm font-medium transition-colors overflow-hidden"
                   style={{
-                    background: isDisabled ? 'var(--border-strong)' : 'var(--accent)',
+                    background: isDisabled ? 'var(--border-strong)' : runMode === 'baseline' ? '#57534e' : 'var(--accent)',
                     color: isDisabled ? 'var(--text-muted)' : '#fff',
                     cursor: isDisabled ? 'not-allowed' : 'pointer',
                     padding: 0,
                   }}
                 >
-                  <span className="flex-1 py-2.5">{loading ? 'Running...' : 'Run Benchmark'}</span>
+                  <span className="flex-1 py-2.5">{loading ? 'Running...' : runMode === 'baseline' ? 'Run Baseline' : 'Run Benchmark'}</span>
                   <span
                     role="button"
                     onClick={(e) => { e.preventDefault(); e.stopPropagation(); setBenchmarkRuns(benchmarkRuns === 1 ? 3 : 1); }}
@@ -2043,6 +2156,266 @@ export default function Home() {
               <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>
                 This may take a few seconds
               </p>
+            </div>
+          )}
+
+          {/* ═══ Baseline Results ═══ */}
+          {baselineResult && (
+            <div className="space-y-6">
+              {/* Header */}
+              <div
+                className="rounded-lg overflow-hidden"
+                style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+              >
+                <div
+                  className="flex items-center justify-between px-6 py-4"
+                  style={{ borderBottom: '1px solid var(--border)' }}
+                >
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-lg font-semibold">Raw Baseline</h2>
+                    <span
+                      className="font-mono text-xs px-2.5 py-1 rounded"
+                      style={{ background: '#57534e', color: '#fff' }}
+                    >
+                      NO TECHNIQUE
+                    </span>
+                    <span
+                      className="font-mono text-xs px-2.5 py-1 rounded"
+                      style={{ background: 'var(--bg)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
+                    >
+                      {baselineResult.model_name}
+                    </span>
+                  </div>
+                  <span className="font-mono text-xs" style={{ color: 'var(--text-muted)' }}>
+                    {baselineResult.runs_succeeded}/{baselineResult.runs_requested} run{baselineResult.runs_requested !== 1 ? 's' : ''} succeeded
+                  </span>
+                </div>
+
+
+
+                <div className="p-6 space-y-6">
+                  {/* Prompt Used */}
+                  <details>
+                    <summary
+                      className="text-[11px] font-mono uppercase tracking-wider cursor-pointer select-none hover:underline"
+                      style={{ color: 'var(--text-subtle)' }}
+                    >
+                      Raw Prompt Sent
+                    </summary>
+                    <div
+                      className="mt-2 p-4 rounded-md overflow-auto max-h-72"
+                      style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}
+                    >
+                      <pre className="text-sm font-mono whitespace-pre-wrap leading-relaxed">
+                        {baselineResult.prompt_used}
+                      </pre>
+                    </div>
+                  </details>
+
+                  {/* Model Response */}
+                  <div>
+                    <p
+                      className="text-[11px] font-mono uppercase tracking-wider mb-2"
+                      style={{ color: 'var(--text-subtle)' }}
+                    >
+                      Model Response
+                    </p>
+                    <div
+                      className="p-4 rounded-md overflow-auto max-h-96"
+                      style={{ background: '#f5f5f4', border: '1px solid #d6d3d1' }}
+                    >
+                      <pre className="text-sm font-mono whitespace-pre-wrap leading-relaxed">
+                        {baselineResult.best_response || 'No response'}
+                      </pre>
+                    </div>
+                  </div>
+
+                  {/* Performance Scores */}
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <p
+                        className="text-[11px] font-mono uppercase tracking-wider"
+                        style={{ color: 'var(--text-subtle)' }}
+                      >
+                        Performance Scores
+                      </p>
+                      <div
+                        className="flex items-center rounded-md overflow-hidden text-[10px] font-mono"
+                        style={{ border: '1px solid var(--border)' }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setPerfScoreFormat('percent')}
+                          className="px-2.5 py-1 transition-colors"
+                          style={{
+                            background: perfScoreFormat === 'percent' ? '#57534e' : 'var(--surface)',
+                            color: perfScoreFormat === 'percent' ? '#fff' : 'var(--text-muted)',
+                          }}
+                        >
+                          %
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPerfScoreFormat('decimal')}
+                          className="px-2.5 py-1 transition-colors"
+                          style={{
+                            background: perfScoreFormat === 'decimal' ? '#57534e' : 'var(--surface)',
+                            color: perfScoreFormat === 'decimal' ? '#fff' : 'var(--text-muted)',
+                          }}
+                        >
+                          0.00
+                        </button>
+                      </div>
+                    </div>
+
+                    {!baselineResult.ground_truth_used && (
+                      <div
+                        className="mb-3 px-3 py-2 rounded-md text-xs"
+                        style={{ background: '#fffbeb', border: '1px solid #fde68a', color: 'var(--amber)' }}
+                      >
+                        Accuracy is heuristic — no expected answer was provided.
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-4 gap-3">
+                      {[
+                        {
+                          label: !baselineResult.ground_truth_used ? 'ACCURACY*' : 'ACCURACY',
+                          value: baselineResult.scores.accuracy,
+                        },
+                        {
+                          label: baselineResult.scores.consistency_is_provisional
+                            ? 'CONSISTENCY*'
+                            : 'CONSISTENCY',
+                          value: baselineResult.scores.consistency,
+                        },
+                      ].map((s) => (
+                        <div
+                          key={s.label}
+                          className="p-3 rounded-md text-center"
+                          style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}
+                        >
+                          <p
+                            className="text-[9px] font-mono uppercase tracking-widest mb-1"
+                            style={{ color: 'var(--text-subtle)' }}
+                          >
+                            {s.label}
+                          </p>
+                          <p
+                            className="text-2xl font-mono font-light"
+                            style={{ color: scoreColor(s.value ?? 0) }}
+                          >
+                            {formatScore(s.value, perfScoreFormat, 'PROV')}
+                          </p>
+                        </div>
+                      ))}
+                      {/* Efficiency card with info button */}
+                      <div
+                        className="p-3 rounded-md text-center"
+                        style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}
+                      >
+                        <p
+                          className="text-[9px] font-mono uppercase tracking-widest mb-1"
+                          style={{ color: 'var(--text-subtle)' }}
+                        >
+                          EFFICIENCY
+                        </p>
+                        <div className="flex items-center justify-center gap-1.5">
+                          <p
+                            className="text-2xl font-mono font-light"
+                            style={{ color: scoreColor(baselineResult.scores.efficiency ?? 0) }}
+                          >
+                            {formatScore(baselineResult.scores.efficiency, perfScoreFormat)}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              if (efficiencyInfo?.technique === 'baseline') {
+                                setEfficiencyInfo(null)
+                              } else {
+                                const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+                                setEfficiencyInfo({ technique: 'baseline', x: rect.right + 8, y: rect.top - 4 })
+                              }
+                            }}
+                            className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-full text-[9px] font-semibold leading-none transition-colors shrink-0"
+                            style={{
+                              background: efficiencyInfo?.technique === 'baseline' ? 'var(--accent)' : 'transparent',
+                              color: efficiencyInfo?.technique === 'baseline' ? '#fff' : 'var(--text-subtle)',
+                              border: efficiencyInfo?.technique === 'baseline' ? '1px solid var(--accent)' : '1px solid var(--border)',
+                            }}
+                            title="Efficiency breakdown"
+                          >
+                            i
+                          </button>
+                        </div>
+                      </div>
+                      {/* Overall (avg) card */}
+                      <div
+                        className="p-3 rounded-md text-center"
+                        style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}
+                      >
+                        <p
+                          className="text-[9px] font-mono uppercase tracking-widest mb-1"
+                          style={{ color: 'var(--text-subtle)' }}
+                        >
+                          AVG
+                        </p>
+                        <p
+                          className="text-2xl font-mono font-light"
+                          style={{ color: scoreColor(baselineResult.scores.overall ?? 0) }}
+                        >
+                          {formatScore(baselineResult.scores.overall, perfScoreFormat)}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Efficiency popover for baseline */}
+                    {efficiencyInfo?.technique === 'baseline' && (
+                      <div className="fixed inset-0 z-50" onClick={() => setEfficiencyInfo(null)}>
+                        <div
+                          className="fixed w-60 rounded-lg p-4 shadow-xl"
+                          style={{
+                            left: Math.min(efficiencyInfo.x, (typeof window !== 'undefined' ? window.innerWidth : 1200) - 252),
+                            top: Math.min(Math.max(efficiencyInfo.y, 8), (typeof window !== 'undefined' ? window.innerHeight : 800) - 222),
+                            background: 'var(--surface)',
+                            border: '1px solid var(--border)',
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <p className="text-[10px] font-mono uppercase tracking-widest mb-3" style={{ color: 'var(--text-subtle)' }}>
+                            Efficiency Breakdown
+                          </p>
+                          <div className="space-y-2 text-xs font-mono">
+                            <div className="flex justify-between"><span style={{ color: 'var(--text-muted)' }}>Time</span><span>{formatElapsedTime(baselineResult.metrics.elapsed_time)}</span></div>
+                            <div className="flex justify-between"><span style={{ color: 'var(--text-muted)' }}>Total tokens</span><span>{formatWholeNumber(baselineResult.metrics.total_tokens)}</span></div>
+                            <div className="flex justify-between"><span style={{ color: 'var(--text-muted)' }}>Prompt tokens</span><span>{formatWholeNumber(baselineResult.metrics.prompt_tokens)}</span></div>
+                            <div className="flex justify-between"><span style={{ color: 'var(--text-muted)' }}>Completion tokens</span><span>{formatWholeNumber(baselineResult.metrics.completion_tokens)}</span></div>
+                            <div className="flex justify-between"><span style={{ color: 'var(--text-muted)' }}>Words</span><span>{countWords(baselineResult.best_response)}</span></div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {!baselineResult.ground_truth_used && (
+                      <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                        * Heuristic accuracy is directionally useful but less reliable than ground-truth scoring.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Individual Runs button (if > 1) */}
+                  {baselineResult.run_history.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowIndividualRuns(true)}
+                      className="text-[11px] font-mono uppercase tracking-wider cursor-pointer select-none hover:underline"
+                      style={{ color: 'var(--text-subtle)', background: 'none', border: 'none', padding: 0 }}
+                    >
+                      &#9660; Individual Runs ({baselineResult.run_history.length})
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 
@@ -2832,6 +3205,114 @@ export default function Home() {
       )}
       {/* ═══ Efficiency Breakdown Popover ═══ */}
       {renderEfficiencyPopover()}
+      {/* ═══ Baseline Individual Runs Modal ═══ */}
+      {showIndividualRuns && baselineResult && baselineResult.run_history.length > 1 && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: 'rgba(0,0,0,0.25)' }}
+          onClick={() => setShowIndividualRuns(false)}
+        >
+          <div
+            className="relative w-full max-w-3xl mx-4 rounded-lg shadow-xl overflow-hidden flex flex-col"
+            style={{ background: 'var(--surface)', maxHeight: '85vh' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal header */}
+            <div
+              className="flex items-center justify-between px-6 py-4 shrink-0"
+              style={{ borderBottom: '1px solid var(--border)' }}
+            >
+              <div className="flex items-center gap-3">
+                <h2 className="text-lg font-semibold">Individual Runs</h2>
+                <span
+                  className="font-mono text-xs px-2 py-1 rounded"
+                  style={{ color: 'var(--text)', border: '1px solid var(--border)' }}
+                >
+                  {baselineResult.run_history.length} RUNS
+                </span>
+              </div>
+              <button
+                onClick={() => setShowIndividualRuns(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-md transition-colors"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                &#x2715;
+              </button>
+            </div>
+
+            {/* Modal body — scrollable */}
+            <div className="overflow-y-auto px-6 py-4 space-y-4">
+              {baselineResult.run_history.map((run) => (
+                <div
+                  key={run.run_index}
+                  className="rounded-lg overflow-hidden"
+                  style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}
+                >
+                  {/* Run header */}
+                  <div
+                    className="px-4 py-2 flex items-center justify-between"
+                    style={{ borderBottom: '1px solid var(--border)' }}
+                  >
+                    <span className="text-xs font-mono font-semibold" style={{ color: 'var(--text)' }}>
+                      Run #{run.run_index + 1}{!run.success && ' — Failed'}
+                    </span>
+                    {run.success && (
+                      <div className="flex gap-4 text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>
+                        <span>ACC <span style={{ color: scoreColor(run.scores.accuracy) }}>{formatScore(run.scores.accuracy, perfScoreFormat)}</span></span>
+                        <span>CON <span>{formatScore(run.scores.consistency, perfScoreFormat, 'N/A')}</span></span>
+                        <span>EFF <span style={{ color: scoreColor(run.scores.efficiency) }}>{formatScore(run.scores.efficiency, perfScoreFormat)}</span></span>
+                        <span>AVG <span style={{ color: scoreColor(run.scores.overall) }}>{formatScore(run.scores.overall, perfScoreFormat)}</span></span>
+                      </div>
+                    )}
+                  </div>
+
+                  {run.success ? (
+                    <div className="px-4 py-3 space-y-3">
+                      {/* Raw Prompt */}
+                      <details>
+                        <summary
+                          className="text-[10px] font-mono uppercase tracking-wider cursor-pointer select-none hover:underline"
+                          style={{ color: 'var(--text-subtle)' }}
+                        >
+                          Raw Prompt Sent
+                        </summary>
+                        <pre
+                          className="mt-2 p-3 rounded text-xs font-mono whitespace-pre-wrap break-words"
+                          style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text)' }}
+                        >
+                          {baselineResult.prompt_used}
+                        </pre>
+                      </details>
+
+                      {/* Model Response */}
+                      <div>
+                        <p
+                          className="text-[10px] font-mono uppercase tracking-wider mb-2"
+                          style={{ color: 'var(--text-subtle)' }}
+                        >
+                          Model Response
+                        </p>
+                        <div
+                          className="p-3 rounded text-sm font-mono whitespace-pre-wrap break-words leading-relaxed"
+                          style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text)' }}
+                        >
+                          {run.response || '(empty)'}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="px-4 py-3">
+                      <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
+                        {run.error || 'Run failed'}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
       {/* ═══ Technique Details Modal ═══ */}
       {expandedTechnique && expandedResult && (
         <div

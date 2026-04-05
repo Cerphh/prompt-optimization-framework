@@ -1705,6 +1705,155 @@ async def run_benchmark_stream(request: BenchmarkRequest):
     return StreamingResponse(event_stream(), media_type="application/x-ndjson")
 
 
+class BaselineRequest(BaseModel):
+    """Request model for raw baseline (no prompting technique)."""
+    problem: str
+    ground_truth: Optional[str] = None
+    runs: Optional[int] = Field(default=1, ge=1, le=10)
+
+
+@app.post("/baseline", tags=["Benchmarking"])
+async def run_baseline(request: BaselineRequest):
+    """
+    Run a raw baseline test: send the problem directly to the LLM
+    with NO instruction framing, prompt engineering, or technique selection.
+
+    Scores the raw response with the same AccuracyScorer and EfficiencyScorer
+    used in benchmark mode so results are directly comparable.
+    """
+    ground_truth = _normalize_ground_truth(request.ground_truth)
+    runs = max(1, min(request.runs or 1, 10))
+    raw_prompt = request.problem.strip()
+
+    if not raw_prompt or len(raw_prompt) < 5:
+        raise HTTPException(status_code=400, detail="Problem text is too short.")
+
+    accuracy_scorer = pipeline.accuracy_scorer
+    efficiency_scorer = pipeline.efficiency_scorer
+    consistency_scorer = pipeline.consistency_scorer
+    runner = pipeline.model_runner
+
+    run_history = []
+    normalized_outputs = []
+    best_run = None
+    best_overall = -1.0
+
+    for run_idx in range(runs):
+        try:
+            result = runner.run(raw_prompt)
+
+            if not result.get("success", False):
+                run_history.append({
+                    "run_index": run_idx,
+                    "success": False,
+                    "error": result.get("error", "Model run failed"),
+                    "response": "",
+                    "metrics": {"elapsed_time": 0, "total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0},
+                    "scores": {"accuracy": 0, "consistency": None, "efficiency": 0, "overall": 0},
+                })
+                continue
+
+            response_text = result.get("response", "")
+            result_metrics = result.get("metrics", {})
+            metrics = {
+                "elapsed_time": result_metrics.get("elapsed_time", 0),
+                "total_tokens": result_metrics.get("total_tokens", 0),
+                "prompt_tokens": result_metrics.get("prompt_tokens", 0),
+                "completion_tokens": result_metrics.get("completion_tokens", 0),
+                "done_reason": result_metrics.get("done_reason", ""),
+                "truncated": result_metrics.get("truncated", False),
+                "continuation_rounds": result_metrics.get("continuation_rounds", 0),
+            }
+
+            acc = accuracy_scorer.score(response_text, ground_truth, raw_prompt)
+            eff = efficiency_scorer.score(response_text, metrics)
+            norm = consistency_scorer.normalize_output(response_text)
+            normalized_outputs.append(norm)
+
+            # Composite without consistency for single-run; updated below
+            overall = acc * pipeline.weights.get("accuracy", 1.0) + eff * pipeline.weights.get("efficiency", 1.0)
+
+            run_entry = {
+                "run_index": run_idx,
+                "success": True,
+                "response": response_text,
+                "metrics": metrics,
+                "scores": {"accuracy": acc, "consistency": None, "efficiency": eff, "overall": overall},
+                "normalized_output": norm,
+            }
+            run_history.append(run_entry)
+
+            if overall > best_overall:
+                best_overall = overall
+                best_run = run_entry
+
+        except Exception as exc:
+            run_history.append({
+                "run_index": run_idx,
+                "success": False,
+                "error": str(exc),
+                "response": "",
+                "metrics": {"elapsed_time": 0, "total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0},
+                "scores": {"accuracy": 0, "consistency": None, "efficiency": 0, "overall": 0},
+            })
+
+    # Compute consistency across runs
+    consistency_info = consistency_scorer.compute_consistency(normalized_outputs) if normalized_outputs else {}
+    consistency_score = consistency_info.get("value") if len(normalized_outputs) >= 2 else None
+    consistency_is_provisional = consistency_info.get("is_provisional", True)
+
+    # Aggregate scores: average across successful runs
+    successful_runs = [r for r in run_history if r.get("success")]
+    if not successful_runs:
+        raise HTTPException(status_code=500, detail="All baseline runs failed.")
+
+    avg_accuracy = sum(r["scores"]["accuracy"] for r in successful_runs) / len(successful_runs)
+    avg_efficiency = sum(r["scores"]["efficiency"] for r in successful_runs) / len(successful_runs)
+
+    # Compute composite with consistency
+    w_acc = pipeline.weights.get("accuracy", 1.0)
+    w_con = pipeline.weights.get("consistency", 1.0)
+    w_eff = pipeline.weights.get("efficiency", 1.0)
+    if consistency_score is not None:
+        composite = avg_accuracy * w_acc + consistency_score * w_con + avg_efficiency * w_eff
+    else:
+        # When no consistency data, renormalize weights
+        w_total = w_acc + w_eff
+        composite = (avg_accuracy * w_acc + avg_efficiency * w_eff) / w_total if w_total > 0 else 0
+
+    avg_elapsed = sum(r["metrics"]["elapsed_time"] for r in successful_runs) / len(successful_runs)
+    avg_tokens = sum(r["metrics"]["total_tokens"] for r in successful_runs) / len(successful_runs)
+    avg_prompt_tokens = sum(r["metrics"]["prompt_tokens"] for r in successful_runs) / len(successful_runs)
+    avg_completion_tokens = sum(r["metrics"]["completion_tokens"] for r in successful_runs) / len(successful_runs)
+
+    return {
+        "problem": request.problem,
+        "ground_truth_used": bool(ground_truth),
+        "runs_requested": runs,
+        "runs_succeeded": len(successful_runs),
+        "run_mode": "baseline",
+        "model_name": runner.model_name,
+        "technique": "raw_baseline",
+        "prompt_used": raw_prompt,
+        "best_response": best_run["response"] if best_run else "",
+        "scores": {
+            "accuracy": round(avg_accuracy, 4),
+            "consistency": round(consistency_score, 4) if consistency_score is not None else None,
+            "efficiency": round(avg_efficiency, 4),
+            "overall": round(composite, 4),
+            "consistency_is_provisional": consistency_is_provisional,
+            "consistency_runs_used": len(normalized_outputs),
+        },
+        "metrics": {
+            "elapsed_time": round(avg_elapsed, 3),
+            "total_tokens": round(avg_tokens),
+            "prompt_tokens": round(avg_prompt_tokens),
+            "completion_tokens": round(avg_completion_tokens),
+        },
+        "run_history": run_history,
+    }
+
+
 @app.get("/techniques", tags=["Info"])
 async def get_techniques():
     """Get list of available prompting techniques."""
