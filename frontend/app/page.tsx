@@ -1151,7 +1151,7 @@ export default function Home() {
           subject,
           difficulty,
           run_mode: runMode,
-          speed_profile: runMode === 'benchmark' ? 'balanced' : 'fast',
+          speed_profile: 'balanced',
           runs_per_technique: runsPerTechnique,
           ...(groundTruthValue ? { ground_truth: groundTruthValue } : {}),
         }),
