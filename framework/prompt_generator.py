@@ -197,8 +197,8 @@ class PromptGenerator:
     
     # Zero-shot prompt instruction
     _ZERO_SHOT_INSTRUCTION = (
-        "Solve the following math problem and end with a concise final answer. "
-        "Do NOT show steps or explanations."
+        "Solve the following math problem. "
+        "Give only the final answer after \"Final Answer:\"."
     )
 
     # ------------------------------------------------------------------ #
@@ -2527,14 +2527,9 @@ class PromptGenerator:
             for ex in selected_examples
         ])
         return (
-            "Solve the following math problems and give the final answer. "
-            "Use the following examples only as style references. "
-            "Do NOT repeat or copy any example answer. "
-            "You must solve ONLY the target problem shown after 'TARGET PROBLEM'. "
-            "Think carefully and use the examples only for internal reasoning. "
-            "Output ONLY the final answer for the TARGET PROBLEM. Do NOT include steps, explanations, or extra text.\n\n"
+            "Solve math problems like the examples below. "
+            "After solving, write your final answer after \"Final Answer:\".\n\n"
             f"{examples_text}\n\n"
-            "TARGET PROBLEM\n"
             f"Q: {target_problem_text}\n"
             "A:"
         )

@@ -1710,6 +1710,8 @@ class BaselineRequest(BaseModel):
     problem: str
     ground_truth: Optional[str] = None
     runs: Optional[int] = Field(default=1, ge=1, le=10)
+    subject: Optional[str] = None
+    difficulty: Optional[str] = None
 
 
 @app.post("/baseline", tags=["Benchmarking"])
@@ -1765,7 +1767,7 @@ async def run_baseline(request: BaselineRequest):
                 "continuation_rounds": result_metrics.get("continuation_rounds", 0),
             }
 
-            acc = accuracy_scorer.score(response_text, ground_truth, raw_prompt)
+            acc = accuracy_scorer.score_final_answer_only(response_text, ground_truth, raw_prompt)
             eff = efficiency_scorer.score(response_text, metrics)
             norm = consistency_scorer.normalize_output(response_text)
             normalized_outputs.append(norm)
@@ -1826,7 +1828,7 @@ async def run_baseline(request: BaselineRequest):
     avg_prompt_tokens = sum(r["metrics"]["prompt_tokens"] for r in successful_runs) / len(successful_runs)
     avg_completion_tokens = sum(r["metrics"]["completion_tokens"] for r in successful_runs) / len(successful_runs)
 
-    return {
+    response_body = {
         "problem": request.problem,
         "ground_truth_used": bool(ground_truth),
         "runs_requested": runs,
@@ -1852,6 +1854,65 @@ async def run_baseline(request: BaselineRequest):
         },
         "run_history": run_history,
     }
+
+    return response_body
+
+
+class SaveBaselineRequest(BaseModel):
+    """Request model for saving a baseline result to Firestore."""
+    result: Dict[str, Any]
+    source: Optional[str] = "frontend_manual_save"
+    metadata: Optional[Dict[str, Any]] = None
+
+
+@app.post("/baseline/save", tags=["Benchmarking"])
+async def save_baseline_result(request: SaveBaselineRequest):
+    """Manually save a baseline result to Firestore (baseline_results collection)."""
+    try:
+        metadata = dict(request.metadata or {})
+        baseline_result = dict(request.result)
+
+        problem = baseline_result.get("problem", "")
+        domain = metadata.get("domain") or metadata.get("subject") or "general"
+        difficulty = metadata.get("difficulty") or "basic"
+
+        # Resolve domain
+        requested_subject = str(domain).strip()
+        detected_domain = _normalize_domain_label(requested_subject) if requested_subject else None
+        if not detected_domain or detected_domain not in SUPPORTED_NORMAL_MODE_DOMAINS:
+            signal_domain, _ = _infer_domain_from_signals(str(problem))
+            if signal_domain:
+                detected_domain = signal_domain
+            else:
+                detected_subject = _normalize_domain_label(
+                    pipeline.prompt_generator.classify_subject(str(problem))
+                )
+                detected_domain = detected_subject if detected_subject in SUPPORTED_NORMAL_MODE_DOMAINS else "general"
+
+        metadata["domain"] = detected_domain
+        metadata["difficulty"] = str(difficulty).strip().lower()
+        metadata["problem"] = problem
+        metadata["has_ground_truth"] = metadata.get("has_ground_truth", baseline_result.get("ground_truth_used", False))
+
+        storage = firestore_store.save_baseline_result(
+            baseline_result=baseline_result,
+            metadata=metadata,
+        )
+
+        if firestore_store.required and not storage.get("success", False):
+            raise HTTPException(
+                status_code=500,
+                detail=f"Firestore write failed: {storage.get('error', 'Unknown error')}",
+            )
+
+        return {
+            "message": "Baseline result saved" if storage.get("success") else "Save failed",
+            "storage": storage,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/techniques", tags=["Info"])

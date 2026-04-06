@@ -82,6 +82,45 @@ class AccuracyScorer:
 
         return 0.0
 
+    def score_final_answer_only(self, response: str, expected: Any, problem: str = None) -> float:
+        """Score accuracy using ONLY the model's final/concluding answer.
+
+        Unlike score(), this does NOT scan all numbers in the response.
+        Only checks explicit answer lines, the last line, and conclusion
+        lines (therefore/thus/so).  This prevents intermediate calculation
+        steps from inflating accuracy.
+        """
+        if not response or len(response.strip()) == 0:
+            return 0.0
+
+        if expected is None and problem:
+            expected = self._auto_solve_simple_problem(problem)
+        if expected is None and problem:
+            expected = self._auto_solve_equation_problem(problem)
+
+        if isinstance(expected, dict) and expected.get("type") == "equation_roots":
+            return self._score_equation_roots(response, expected)
+
+        if expected is None:
+            return self._heuristic_score(response, problem)
+
+        expected_str = str(expected).strip()
+
+        expected_value_set = self._extract_value_set(expected_str)
+        if expected_value_set is not None:
+            return self._score_multi_value_response(response, expected_value_set)
+
+        # Only use priority candidates: explicit answer lines, last line,
+        # and conclusion lines.  Do NOT fall through to _extract_answers()
+        # which scans every number in the entire response.
+        candidates = self._extract_priority_answers(response)
+
+        for candidate in candidates:
+            if self._strong_match(candidate, expected_str):
+                return 1.0
+
+        return 0.0
+
     def _strong_match(self, candidate: str, expected: str) -> bool:
         """Apply strict match strategies in priority order."""
         if self._exact_match(candidate, expected):
@@ -170,6 +209,23 @@ class AccuracyScorer:
                 if inline_expression:
                     candidates.append(inline_expression)
 
+        # Extract individual numeric tokens (including N%, fractions) from
+        # each candidate line so embedded values like "0.4 or 40%" are
+        # tested individually against the expected answer.
+        # Use lookaround to avoid pulling numbers attached to variables (e.g. 15a)
+        # or factorial notation (e.g. 6!).
+        extra_tokens = []
+        for cand in candidates:
+            tokens = re.findall(
+                r'(?<![a-zA-Z])(?:[-+]?\d+(?:\.\d+)?%|[-+]?\d+(?:\.\d+)?\s*/\s*\d+(?:\.\d+)?|[-+]?\d+(?:\.\d+)?)(?![a-zA-Z!])',
+                cand,
+            )
+            for token in tokens:
+                token = token.strip()
+                if token:
+                    extra_tokens.append(token)
+        candidates.extend(extra_tokens)
+
         return self._unique_preserve_order(candidates)
 
     def _has_explicit_answer_signal(self, response: str) -> bool:
@@ -200,6 +256,16 @@ class AccuracyScorer:
         )
         if lead_in_match:
             tail = lead_in_match.group(1).strip().rstrip('.;,')
+            if self._looks_math_like(tail):
+                return tail
+
+        # Match natural language "... is 11" without requiring : or = after "is".
+        plain_is_match = re.search(
+            r'(?i)\b(?:is|equals|becomes|gives)\s+([-+]?\d[^\n]*?)$',
+            value,
+        )
+        if plain_is_match:
+            tail = plain_is_match.group(1).strip().rstrip('.;,')
             if self._looks_math_like(tail):
                 return tail
 
@@ -375,14 +441,28 @@ class AccuracyScorer:
         return value
     
     def _numeric_match(self, candidate: str, expected: str) -> bool:
-        """Check if candidate numerically matches expected."""
+        """Check if candidate numerically matches expected.
+
+        Also handles percentage equivalence: 40% == 0.4 == 2/5.
+        """
         try:
             c_val = self._parse_numeric_value(candidate)
             e_val = self._parse_numeric_value(expected)
 
             if c_val is not None and e_val is not None:
-                # Allow small floating point differences
-                return abs(c_val - e_val) < 0.0001
+                # Direct comparison
+                if abs(c_val - e_val) < 0.0001:
+                    return True
+                # Percentage equivalence: if one looks like a percent,
+                # compare its decimal form against the other.
+                c_is_pct = '%' in str(candidate)
+                e_is_pct = '%' in str(expected)
+                if c_is_pct and not e_is_pct:
+                    if abs(c_val / 100.0 - e_val) < 0.0001:
+                        return True
+                if e_is_pct and not c_is_pct:
+                    if abs(e_val / 100.0 - c_val) < 0.0001:
+                        return True
         except (ValueError, IndexError):
             pass
         return False
@@ -518,8 +598,23 @@ class AccuracyScorer:
 
         # Remove variable assignments like "x = " so "x = 1, x = 2" -> "1, 2"
         value = re.sub(r'[a-zA-Z]\s*=\s*', '', value)
+        # Remove function-call notation like r(6), f(2), g(10) to avoid
+        # the argument being treated as a separate answer value.
+        value = re.sub(r'[a-zA-Z]+\s*\(\s*[-+]?\d+(?:\.\d+)?\s*\)', '', value)
         # Remove connectors
         value = re.sub(r'\b(?:and|or)\b', ',', value, flags=re.IGNORECASE)
+
+        # Expand ± and +/- notation: "±3" or "+/-3" → "+3, -3"
+        value = re.sub(
+            r'[±]\s*(\d+(?:\.\d+)?(?:\s*/\s*\d+(?:\.\d+)?)?)',
+            lambda m: f'+{m.group(1)}, -{m.group(1)}',
+            value,
+        )
+        value = re.sub(
+            r'\+\s*/\s*-\s*(\d+(?:\.\d+)?(?:\s*/\s*\d+(?:\.\d+)?)?)',
+            lambda m: f'+{m.group(1)}, -{m.group(1)}',
+            value,
+        )
 
         numbers = re.findall(r'[-+]?\d+(?:\.\d+)?(?:\s*/\s*\d+(?:\.\d+)?)?', value)
         if len(numbers) < 2:
