@@ -198,7 +198,7 @@ class PromptGenerator:
     # Zero-shot prompt instruction
     _ZERO_SHOT_INSTRUCTION = (
         "Solve the following math problem. "
-        "Give only the final answer after \"Final Answer:\"."
+        
     )
 
     # ------------------------------------------------------------------ #
@@ -2528,7 +2528,7 @@ class PromptGenerator:
         ])
         return (
             "Solve math problems like the examples below. "
-            "After solving, write your final answer after \"Final Answer:\".\n\n"
+            
             f"{examples_text}\n\n"
             f"Q: {target_problem_text}\n"
             "A:"

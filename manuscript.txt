@@ -2005,30 +2005,22 @@ Results show that few‑shot prompting improves accuracy, particularly in more c
 Consistency analysis revealed that model outputs can remain stable across runs, but stability does not always guarantee correctness. This highlights the importance of combining consistency with accuracy in evaluation.
 Overall, the study provides a structured and reproducible benchmark for comparing prompting techniques and demonstrates that data‑driven selection improves effectiveness within a controlled scope.
 5.2 Conclusions
-This section draws conclusions organized by each specific objective. This study had three objectives. The conclusions below answer each one.
-Objective 1: Compare zero‑shot and few‑shot prompting.
-What we found: Few‑shot prompting works better than zero‑shot on hard problems. On easy and medium problems, both work about the same.
-For basic and intermediate problems: zero‑shot is fine. It is faster and uses fewer words.
-For advanced problems: few‑shot is better. It gives more correct answers and more consistent outputs.
-For counting and probability problems: neither technique worked well on harder questions. This topic is difficult for both methods.
-Using three metrics (accuracy, consistency, efficiency) gave a better overall picture than just looking at correct answers. But when both techniques were always wrong, the algorithm still picked a winner based on consistency and speed — this is a weakness we note for future work.
-Objective 2: Develop a selection algorithm.
-What we did: We built a three‑tier selection algorithm that chooses the better prompting technique for a given problem.
-The algorithm has two modes:
-Normal Mode: Uses past results to recommend a technique without running both on a new problem.
-Benchmark Mode: Runs both techniques, compares them, and saves the results.
-The algorithm only recommends when it is confident (enough past data and a clear score difference). If not confident, it runs both techniques. This saves time while keeping accuracy.
-Objective 3: Test the algorithm against baseline selection.
-What we found: The full three‑tier selection system significantly outperformed the best static baseline and matched the upper bound established by exhaustive greedy evaluation.
-Baseline: average composite score 0.7628
-Full selection system: average composite score 0.8262
-Improvement: +0.0634 (+8.31%), statistically significant (p = 0.0156)
-The full system matched the greedy‑only upper bound on all 45 problems (100% match rate). This means the algorithm can reliably pick the better technique using only past data, without running both techniques on every new problem. In Normal Mode, 80% of problems were resolved at Tier 1 or Tier 2, saving approximately 4 seconds per problem compared to exhaustive evaluation.
-Within the limits of this study, we conclude:
-Use few‑shot for advanced problems. Use zero‑shot for simpler ones — it is faster and still accurate.
-The three‑tier selection algorithm works. It saves time without losing quality.
-The algorithm performs better than always using the same fixed technique.
-This study offers a simple, repeatable way to choose between two prompting methods for math problems. The same approach can be used for more techniques and larger problem sets in the future.
+This section presents conclusions in one-to-one alignment with the three specific objectives of the study. All conclusions are limited to the two evaluated prompting techniques and the Llama 3 benchmark conditions used in this research.
+
+Objective 1 - Compare zero-shot and few-shot prompting across domain and difficulty using accuracy, efficiency, and consistency.
+Few-shot prompting achieved higher weighted composite performance in 8 of 9 domain-difficulty cells, with the strongest advantage at advanced complexity. At the domain level, statistically significant differences favored few-shot in algebra (F = 4.85, p = 0.031) and pre-calculus (F = 4.04, p = 0.048), while counting and probability showed no statistically significant difference (p = 0.148). By complexity level, only advanced problems showed a significant difference (F = 9.15, p = 0.005), whereas basic (p = 0.093) and intermediate (p = 0.071) did not.
+Per-metric patterns explain this result: few-shot produced higher accuracy on advanced problems, while zero-shot was generally more efficient (lower latency and token use) on basic and intermediate problems. Consistency was near-ceiling for both techniques in most cases (typically 1.00), with isolated few-shot drops (0.667) on formatting-sensitive outputs. These findings indicate that few-shot is preferred for advanced problems, while zero-shot remains a practical and efficient option for lower-complexity tasks.
+
+Objective 2 - Develop a prompt-selection algorithm using benchmark-derived performance patterns.
+The developed three-tier hierarchical selection algorithm successfully recommends prompting technique from problem features (domain and difficulty) using accumulated benchmark evidence. In Benchmark Mode, Tier 3 performs greedy per-problem evaluation to generate empirical performance records, with deterministic SHA-256 tie-breaking for reproducible winner selection. In Normal Mode, Tier 1 (profile-based) and Tier 2 (domain-difficulty aggregation) retrieve these learned patterns to make recommendations without real-time dual-technique evaluation.
+The confidence-gated design allows fallback to Tier 3 when historical evidence is insufficient, balancing recommendation reliability and computation cost. On the hold-out set, Normal Mode recommendations matched Tier 3 optimal selections in all 9 of 9 problems (100% match rate), confirming that benchmark-derived patterns were learned and applied correctly.
+
+Objective 3 - Evaluate component contribution through ablation (no optimization, greedy-only, full three-tier).
+Ablation results show clear incremental value across the three configurations. In the no-optimization condition (static baseline), selection is fixed and cannot adapt per problem. In the greedy-only condition (Tier 3 on every problem), the empirically best technique is identified per case, but computational cost is highest because both techniques must be executed for each new problem. In the full three-tier condition, the system uses prior benchmark knowledge to reproduce greedy-optimal choices with substantially lower runtime evaluation demand.
+Quantitatively, the full three-tier system outperformed the static baseline in composite score (0.8262 vs 0.7628; +0.0634, +8.31%), with statistical significance (p = 0.0156). Per-metric comparison showed that the composite improvement was driven mainly by accuracy gains (+0.2381), with a small efficiency gain (+0.0082) and no consistency change (both 1.0000). The full system also matched the greedy-only upper bound on all 45 benchmark problems (100% match rate), while resolving 80% of decisions at Tier 1 or Tier 2 and saving approximately 4 seconds per problem relative to exhaustive greedy evaluation.
+
+Overall conclusion.
+Within the scope of this study, the evidence supports a simple deployment rule: use few-shot for advanced problems and zero-shot for basic to intermediate problems when efficiency is prioritized. More importantly, adaptive three-tier selection provides better overall outcomes than fixed-technique use, while preserving near-greedy quality with lower computational cost.
 5.3 Recommendations
 This section provides future work recommendations based on all three objectives.
 Limitation Acknowledgment: Findings are limited to controlled benchmark conditions (45 problems, three domains, Llama 3) and may not generalize to broader mathematical problem distributions.

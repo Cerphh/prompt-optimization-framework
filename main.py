@@ -472,6 +472,41 @@ def _infer_domain_from_signals(problem: str) -> Tuple[Optional[str], int]:
     return None, gap
 
 
+def _has_direct_domain_evidence(problem: str, domain: str) -> bool:
+    """Return True when prompt text contains clear cues for the requested domain."""
+    value = str(problem or "").strip().lower()
+    if not value:
+        return False
+
+    # Accept compact math text forms (e.g., "2sin^2 x", "3cosx", "p(x)")
+    # where strict word boundaries can miss valid tokens adjacent to digits.
+    trig_token_pattern = r"(?:^|[^a-z])(sin|cos|tan|sec|csc|cot|arcsin|arccos|arctan)(?:[^a-z]|$)"
+
+    if domain == "pre-calculus":
+        return bool(
+            re.search(trig_token_pattern, value)
+            or re.search(r"\b(derivative|differentiate|integral|integrate|limit|radian|radians)\b", value)
+            or "d/dx" in value
+            or "dy/dx" in value
+            or "∫" in value
+        )
+
+    if domain == "counting-probability":
+        return bool(
+            re.search(r"\b(probability|chance|odds|expected\s+value|permutation|combination|factorial)\b", value)
+            or "p(" in value
+            or re.search(r"\b(coin|dice|die|card|marble|bag|how\s+many\s+ways)\b", value)
+        )
+
+    if domain == "algebra":
+        return bool(
+            re.search(r"\b(solve\s+for|equation|linear|quadratic|polynomial|factor|expand|simplify|system)\b", value)
+            or "=" in value
+        )
+
+    return False
+
+
 def _looks_like_pure_geometry_problem(problem: str) -> bool:
     """Detect plane/solid geometry style prompts outside the supported 3-domain boundary."""
     value = str(problem or "").strip().lower()
@@ -538,20 +573,32 @@ def _resolve_domain_for_normal_mode(problem: str, requested_subject: Optional[st
         return None, details
 
     if normalized_requested in SUPPORTED_NORMAL_MODE_DOMAINS:
+        requested_has_direct_evidence = _has_direct_domain_evidence(problem, normalized_requested)
+
         if signal_subject and signal_subject != normalized_requested:
-            details["detection_source"] = "subject_mismatch_signal"
-            return None, details
+            high_conflict = (
+                signal_gap >= 2
+                and detected_subject in SUPPORTED_NORMAL_MODE_DOMAINS
+                and detected_subject != normalized_requested
+            )
+            if high_conflict and not requested_has_direct_evidence:
+                details["detection_source"] = "subject_mismatch_signal"
+                return None, details
 
         if detected_subject in SUPPORTED_NORMAL_MODE_DOMAINS and detected_subject != normalized_requested:
-            details["detection_source"] = "subject_mismatch"
-            return None, details
+            # Allow explicit subject when direct evidence supports it,
+            # or when signal inference agrees with the user's selection.
+            signal_agrees_with_request = signal_subject == normalized_requested
+            if not requested_has_direct_evidence and not signal_agrees_with_request:
+                details["detection_source"] = "subject_mismatch"
+                return None, details
 
         if _looks_like_out_of_domain_math(problem):
             details["detection_source"] = "out_of_domain_math"
             return None, details
 
         # Fail closed when subject is explicitly selected but both detectors are uncertain.
-        if detected_subject == "general" and not signal_subject:
+        if detected_subject == "general" and not signal_subject and not requested_has_direct_evidence:
             details["detection_source"] = "ambiguous_requested_subject"
             return None, details
 
