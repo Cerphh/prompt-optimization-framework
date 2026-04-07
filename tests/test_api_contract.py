@@ -1,4 +1,5 @@
 import json
+import asyncio
 
 from fastapi.testclient import TestClient
 
@@ -112,6 +113,61 @@ def test_benchmark_response_does_not_include_storage_until_manual_save(monkeypat
     assert response.status_code == 200
     payload = response.json()
     assert "storage" not in payload
+
+
+def test_startup_loads_existing_user_examples_into_prompt_generator(monkeypatch, tmp_path):
+    curated_path = tmp_path / "example_problems.json"
+    user_path = tmp_path / "user_examples.json"
+
+    curated_path.write_text(
+        json.dumps(
+            {
+                "algebra": {
+                    "basic": [
+                        {
+                            "problem": "Solve for x: x + 1 = 3",
+                            "solution": "x = 2",
+                            "type": "solve_equation",
+                        }
+                    ]
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    user_path.write_text(
+        json.dumps(
+            {
+                "algebra": {
+                    "basic": [
+                        {
+                            "problem": "Solve for y: y + 4 = 9",
+                            "solution": "y = 5",
+                            "type": "solve_equation",
+                            "difficulty": "basic",
+                            "created_at": "2026-04-07T00:00:00+00:00",
+                            "expires_at": 4102444800,
+                        }
+                    ]
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(main, "_EXAMPLE_JSON_PATH", str(curated_path))
+    monkeypatch.setattr(main, "_USER_EXAMPLES_PATH", str(user_path))
+    monkeypatch.setattr(main, "_refresh_model_startup_check", lambda: {"ready": True, "active_model": "test-model"})
+
+    main.pipeline.prompt_generator.example_dataset = {}
+    asyncio.run(main.startup_model_readiness_check())
+
+    problems = [
+        ex.get("problem", "")
+        for ex in main.pipeline.prompt_generator.example_dataset.get("algebra", [])
+    ]
+    assert "Solve for x: x + 1 = 3" in problems
+    assert "Solve for y: y + 4 = 9" in problems
 
 
 def test_stream_complete_event_does_not_include_storage_until_manual_save(monkeypatch):

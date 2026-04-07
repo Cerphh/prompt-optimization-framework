@@ -789,6 +789,11 @@ def _refresh_model_startup_check() -> Dict[str, Any]:
 
 @app.on_event("startup")
 async def startup_model_readiness_check():
+    try:
+        _reload_prompt_generator_examples()
+    except Exception as exc:
+        print(f"[startup] example reload failed: {exc}")
+
     info = _refresh_model_startup_check()
     if info.get("ready"):
         print(f"[startup] model ready: {info.get('active_model')}")
@@ -2323,6 +2328,7 @@ def _reload_prompt_generator_examples():
 
     pg.example_dataset = pg._normalize_example_dataset(merged)
     pg._type_to_subject = pg._build_type_to_subject_map()
+    pg._warm_example_embeddings()
 
 
 class ExampleAnalyzeRequest(BaseModel):

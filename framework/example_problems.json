@@ -109,56 +109,7 @@
         ],
         "anchor_priority": 0.9
       },
-      {
-        "problem": "Solve for x: x³ - 6x² + 11x - 6 = 0",
-        "solution": "Check possible rational roots using factors of 6: ±1, ±2, ±3\nTest x = 1:\n1 - 6 + 11 - 6 = 0 → valid root\nFactor out (x - 1):\n(x - 1)(x² - 5x + 6)\nFactor the quadratic:\n(x - 2)(x - 3)\nFinal:\n(x - 1)(x - 2)(x - 3) = 0\nAnswer: x = 1, 2, 3",
-        "type": "rational_root_theorem_and_polynomial_factoring",
-        "constraints": [],
-        "concept": "factoring_cubic_polynomials",
-        "skills": [
-          "rational_root_theorem_and_polynomial_factoring"
-        ],
-        "format": {
-          "template": "single_equation",
-          "equation_count": 1,
-          "has_assignment": false,
-          "assigned_variable_count": 0,
-          "has_fraction": false,
-          "has_exponent": false,
-          "has_system": false
-        },
-        "difficulty": "basic",
-        "tags": [
-          "algebra",
-          "rational_root_theorem_and_polynomial_factoring"
-        ],
-        "anchor_priority": 0.8
-      },
-      {
-        "problem": "Solve for x: x³ - 4x² - x + 4 = 0",
-        "solution": "Group terms:\n(x³ - 4x²) + (-x + 4)\nFactor each group:\nx²(x - 4) - 1(x - 4)\nFactor common binomial:\n(x - 4)(x² - 1)\nFactor difference of squares:\n(x - 1)(x + 1)\nFinal:\n(x - 4)(x - 1)(x + 1) = 0\nAnswer: x = 4, 1, -1",
-        "type": "polynomial_factoring_with_difference_of_squares",
-        "constraints": [],
-        "concept": "factoring_cubic_polynomials",
-        "skills": [
-          "polynomial_factoring_with_difference_of_squares"
-        ],
-        "format": {
-          "template": "single_equation",
-          "equation_count": 1,
-          "has_assignment": false,
-          "assigned_variable_count": 0,
-          "has_fraction": false,
-          "has_exponent": false,
-          "has_system": false
-        },
-        "difficulty": "basic",
-        "tags": [
-          "algebra",
-          "polynomial_factoring_with_difference_of_squares"
-        ],
-        "anchor_priority": 0.8
-      },
+  
       {
         "problem": "Solve for x: |x + 2| = 9",
         "solution": "Since |x + 2| = 9, we split into two cases:\n\nx + 2 = 9 → x = 7\nx + 2 = -9 → x = -11",

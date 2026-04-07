@@ -207,6 +207,7 @@ class PromptGenerator:
     _HYBRID_W_EMBED = 0.60
     _HYBRID_W_FEATURES = 0.25
     _HYBRID_W_LEXICAL = 0.15
+    _TIER1_SIMILARITY_FLOOR = 0.55
 
     _TYPE_FEATURES = {
         "linear", "quadratic", "cubic", "quartic",
@@ -1992,10 +1993,10 @@ class PromptGenerator:
             if constraint_matches:
                 filtered_examples = constraint_matches
 
-        # Final safety net: if all strict filters eliminated every example,
-        # fall back to the full set so the relevance ranker can still pick
-        # the best available examples instead of raising FewShotUnavailableError.
-        if not filtered_examples and available_examples:
+        # Non-strict domains may still use the broader pool when metadata is
+        # sparse. For strict domains, keep the empty result so generate_few_shot
+        # can raise a no-match error instead of silently selecting an unrelated example.
+        if not filtered_examples and available_examples and not strict_intent_matching:
             filtered_examples = available_examples
 
         return filtered_examples
@@ -2482,6 +2483,11 @@ class PromptGenerator:
         strict_matching = self._requires_strict_type_matching(normalized_problem, subject)
 
         best_relevance = self._top_relevance_score(selected_examples, normalized_problem, problem_keywords)
+
+        if strict_matching and best_relevance < self._TIER1_SIMILARITY_FLOOR:
+            raise FewShotUnavailableError(
+                "No matching few-shot examples found for this problem in example_problems.json"
+            )
 
         # If relevance is weak, try a detected-subject rerank and then a global rerank.
         if not strict_matching and best_relevance < self.few_shot_min_relevance:
