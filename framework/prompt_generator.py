@@ -2543,7 +2543,7 @@ class PromptGenerator:
             for ex in selected_examples
         ])
         return (
-            "Solve math problems like the examples below. "
+            "Solve math problems like the examples below.\n\n"
             
             f"{examples_text}\n\n"
             f"Q: {target_problem_text}\n"

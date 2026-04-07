@@ -1620,6 +1620,7 @@ export default function Home() {
       : 'Uses historical preselection after enough data; otherwise runs all techniques.'
   const attemptedTechniqueCount = techniqueRows.length
   const successfulTechniqueCount = techniqueRows.filter((row) => row.success).length
+  const canManageFewShotExamples = runMode !== 'baseline'
 
   const isDisabled =
     loading ||
@@ -1867,8 +1868,8 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Available Few-Shot Concepts (opens modal) — benchmark only */}
-              {runMode === 'benchmark' && Object.keys(exampleTypes).length > 0 && (
+              {/* Available Few-Shot Concepts (opens modal) — benchmark + normal */}
+              {canManageFewShotExamples && Object.keys(exampleTypes).length > 0 && (
                 <div className="mb-4 flex gap-2">
                   <button
                     type="button"
@@ -2077,8 +2078,8 @@ export default function Home() {
                 </select>
               </div>
 
-              {/* Available Few-Shot Concepts (opens modal) — benchmark only */}
-              {runMode === 'benchmark' && Object.keys(exampleTypes).length > 0 && (
+              {/* Available Few-Shot Concepts (opens modal) — benchmark + normal */}
+              {canManageFewShotExamples && Object.keys(exampleTypes).length > 0 && (
                 <div className="flex gap-2">
                   <button
                     type="button"
