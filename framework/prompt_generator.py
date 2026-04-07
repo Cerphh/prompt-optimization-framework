@@ -219,7 +219,7 @@ class PromptGenerator:
         "trigonometric", "logarithm", "exponential",
         "sequence_series", "conic_section",
         "coordinate_geometry", "polynomial", "rational",
-        "matrix",
+        "matrix", "factorial_number_theory", "palindrome_number_theory",
     }
 
     _MATH_FEATURE_PATTERNS_HYBRID = [
@@ -244,6 +244,9 @@ class PromptGenerator:
         (r"\b(sin|cos|tan|sec|csc|cot|arcsin|arccos|arctan)\b", "trigonometric"),
         (r"\b(logarithm|log|ln)\b|\\log", "logarithm"),
         (r"\b(exponential|e\^|exp\()\b|\d+\^\s*\(?\s*\d*\s*[a-z]", "exponential"),
+        (r"\d+\s*!", "factorial_number_theory"),
+        (r"\b(tens|ones|units)\s+digit\b|\bdigit\b", "digit_extraction"),
+        (r"\bpalindrome\b", "palindrome_number_theory"),
         (r"\b(polynomial)\b", "polynomial"),
         (r"\b(rational\s+expression|rational\s+function)\b", "rational"),
         (r"\b(sequence|series|arithmetic\s+sequence|geometric\s+sequence|nth\s+term)\b", "sequence_series"),
@@ -2522,6 +2525,13 @@ class PromptGenerator:
         if not selected_examples:
             raise FewShotUnavailableError(
                 f"No matching few-shot examples found for this problem in example_problems.json"
+            )
+
+        if len(selected_examples) < self.few_shot_min_examples:
+            raise FewShotUnavailableError(
+                f"Only {len(selected_examples)} example(s) available but "
+                f"{self.few_shot_min_examples} required for subject '{subject}'. "
+                f"Add more examples via the example bank."
             )
         
         # Format examples (concise format for speed)
