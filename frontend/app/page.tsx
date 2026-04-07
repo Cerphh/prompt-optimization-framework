@@ -1256,7 +1256,7 @@ export default function Home() {
         }
 
         if (response.status === 500) {
-          throw new Error(`🔴 Server Error: ${detail}`)
+          throw new Error(detail)
         } else if (response.status === 404) {
           throw new Error('🔴 API endpoint not found. Is the backend running?')
         } else {
@@ -1308,7 +1308,7 @@ export default function Home() {
           } else if (event.type === 'complete') {
             finalResult = event.result
           } else if (event.type === 'error') {
-            throw new Error(`🔴 Server Error: ${event.error || 'Unknown streaming error'}`)
+            throw new Error(event.error || 'Unknown streaming error')
           }
         }
       }
@@ -1355,7 +1355,11 @@ export default function Home() {
         setError(err.message.replace('SCOPE_ERROR:', '').trim())
       } else {
         setIsScopeError(false)
-        setError(err instanceof Error ? err.message : 'An error occurred')
+        if (err instanceof Error && err.message.includes('No prompting techniques available')) {
+          setError('No matching few-shot examples found for this problem')
+        } else {
+          setError(err instanceof Error ? err.message : 'An error occurred')
+        }
       }
     } finally {
       setLoading(false)

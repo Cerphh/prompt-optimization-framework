@@ -304,6 +304,34 @@ def test_few_shot_prefers_same_structure_probability_with_value_change():
     assert "probability of at least 2 heads" not in prompt.lower()
 
 
+def test_few_shot_retrieves_factorial_digit_example_for_similar_problem():
+    generator = PromptGenerator()
+    generator.example_dataset = {
+        "counting-probability": [
+            {
+                "problem": "What is the tens digit of 7! + 8! + 9! + ... + 400!?",
+                "solution": "Only 7!, 8!, and 9! matter for the tens digit.",
+                "type": "factorial_number_theory",
+            },
+            {
+                "problem": "What is the smallest power of 7 that is NOT a palindrome?",
+                "solution": "7^2 = 49 is the first non-palindrome.",
+                "type": "palindrome_number_theory",
+            },
+        ],
+        "general": [],
+    }
+
+    prompt = generator.generate_few_shot(
+        "What is the tens digit of 6! + 7! + 8! + ... + 200!?",
+        subject="counting-probability",
+        num_examples=1,
+    )
+
+    assert "Q: What is the tens digit of 7! + 8! + 9! + ... + 400!?" in prompt
+    assert "smallest power of 7" not in prompt.lower()
+
+
 def test_few_shot_prefers_same_structure_precalculus_with_variable_change():
     generator = PromptGenerator()
     generator.example_dataset = {
