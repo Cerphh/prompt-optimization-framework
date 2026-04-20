@@ -266,34 +266,15 @@ class BenchmarkPipeline:
             return
 
         techniques = sorted(prompts.keys())
-        preview_technique = techniques[0]
-        remaining_techniques = [t for t in techniques if t != preview_technique]
-
-        yield {
-            "type": "status",
-            "message": (
-                f"Streaming run 1/{resolved_runs} for {preview_technique}; "
-                "remaining runs and techniques will finalize in background."
-            ),
-            "technique": preview_technique,
-        }
-
         results: Dict[str, Dict[str, Any]] = {}
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        import threading
 
-        with ThreadPoolExecutor(max_workers=max(1, len(remaining_techniques))) as executor:
-            future_to_technique = {
-                executor.submit(
-                    self._evaluate_technique_runs,
-                    technique_name=technique_name,
-                    prompt=prompts[technique_name],
-                    problem=problem,
-                    ground_truth=ground_truth,
-                    runs_per_technique=resolved_runs,
-                ): technique_name
-                for technique_name in remaining_techniques
-            }
 
-            model_result = None
+        preview_technique = techniques[0]
+        # Stream preview technique (with tokens if supported)
+        model_result = None
+        if hasattr(self.model_runner, 'run_stream'):
             for event in self.model_runner.run_stream(prompts[preview_technique]):
                 event_type = event.get("type")
                 if event_type == "token":
@@ -319,7 +300,6 @@ class BenchmarkPipeline:
                             "total_tokens": 0,
                         },
                     }
-
             if not model_result or not model_result.get("success", False):
                 model_result = {
                     "response": "",
@@ -335,10 +315,7 @@ class BenchmarkPipeline:
                         "total_tokens": 0,
                     },
                 }
-
-            # The streaming path skips the verifier retry.  Apply it now
-            # so that run 1 has the same quality-check opportunity as the
-            # non-streamed runs 2–N, preventing a systematic run-1 miss.
+            # Verifier retry logic
             if model_result.get("success", False):
                 preview_prompt = prompts[preview_technique]
                 generation_for_verify = {
@@ -363,7 +340,6 @@ class BenchmarkPipeline:
                 model_result["metrics"]["verifier_heuristic_weak"] = vstate.get("heuristic_weak", False)
                 model_result["metrics"]["verifier_error"] = vstate.get("verifier_error")
                 model_result["metrics"]["verifier_retry_error"] = vstate.get("retry_error")
-
             results[preview_technique] = self._evaluate_technique_runs(
                 technique_name=preview_technique,
                 prompt=prompts[preview_technique],
@@ -372,23 +348,55 @@ class BenchmarkPipeline:
                 runs_per_technique=resolved_runs,
                 first_run_model_result=model_result,
             )
+        else:
+            # Fallback: no streaming, just run and return
+            results[preview_technique] = self._evaluate_technique_runs(
+                technique_name=preview_technique,
+                prompt=prompts[preview_technique],
+                problem=problem,
+                ground_truth=ground_truth,
+                runs_per_technique=resolved_runs,
+            )
+        yield {
+            "type": "technique_result",
+            "technique": preview_technique,
+            "result": results[preview_technique],
+        }
 
-            yield {
-                "type": "status",
-                "message": "Finalizing remaining runs and techniques...",
+        # Run remaining techniques in parallel and yield as they finish
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        remaining_techniques = [t for t in techniques if t != preview_technique]
+        def run_and_return(technique_name):
+            try:
+                result = self._evaluate_technique_runs(
+                    technique_name=technique_name,
+                    prompt=prompts[technique_name],
+                    problem=problem,
+                    ground_truth=ground_truth,
+                    runs_per_technique=resolved_runs,
+                )
+                return (technique_name, result)
+            except Exception as e:
+                return (technique_name, self._build_failed_result(
+                    technique_name=technique_name,
+                    prompt=prompts[technique_name],
+                    error=str(e),
+                    runs_configured=resolved_runs,
+                ))
+
+        with ThreadPoolExecutor(max_workers=max(1, len(remaining_techniques))) as executor:
+            future_to_technique = {
+                executor.submit(run_and_return, technique_name): technique_name
+                for technique_name in remaining_techniques
             }
-
             for future in as_completed(future_to_technique):
-                technique_name = future_to_technique[future]
-                try:
-                    results[technique_name] = future.result()
-                except Exception as e:
-                    results[technique_name] = self._build_failed_result(
-                        technique_name=technique_name,
-                        prompt=prompts[technique_name],
-                        error=str(e),
-                        runs_configured=resolved_runs,
-                    )
+                technique_name, result = future.result()
+                results[technique_name] = result
+                yield {
+                    "type": "technique_result",
+                    "technique": technique_name,
+                    "result": result,
+                }
 
         best_technique = self._greedy_select(results, problem)
         final_result = {

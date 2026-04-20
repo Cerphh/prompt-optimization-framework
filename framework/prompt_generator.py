@@ -185,6 +185,39 @@ class PromptGenerator:
     1. Zero-shot: Direct question without examples
     2. Few-shot: Includes examples before the question
     """
+
+    def generate_role_based(self, problem: str, subject: str = "general") -> str:
+        """
+        Generate a role-based prompt, e.g., instructing the model to act as a math teacher.
+        Args:
+            problem: The math problem
+            subject: Subject category (optional, for future extensibility)
+        Returns:
+            Role-based prompt
+        """
+        role_instruction = (
+            "You are a highly experienced math teacher. "
+            "Explain your reasoning step by step and solve the following problem as you would for a student."
+        )
+        return (
+            f"{role_instruction}\n\nQ: {problem}\nA:"
+        )
+
+    def generate_chain_of_thought(self, problem: str, subject: str = "general") -> str:
+        """
+        Generate a chain-of-thought (CoT) prompt, encouraging step-by-step reasoning.
+        Args:
+            problem: The math problem
+            subject: Subject category (optional, for future extensibility)
+        Returns:
+            Chain-of-thought prompt
+        """
+        cot_instruction = (
+            "Solve the following problem. Think step by step and show all your reasoning before giving the final answer."
+        )
+        return (
+            f"{cot_instruction}\n\nQ: {problem}\nA:"
+        )
     
     # Subject aliases for consistent mapping
     _SUBJECT_ALIASES = {
@@ -207,7 +240,6 @@ class PromptGenerator:
     _HYBRID_W_EMBED = 0.60
     _HYBRID_W_FEATURES = 0.25
     _HYBRID_W_LEXICAL = 0.15
-    _TIER1_SIMILARITY_FLOOR = 0.55
 
     _TYPE_FEATURES = {
         "linear", "quadratic", "cubic", "quartic",
@@ -219,7 +251,7 @@ class PromptGenerator:
         "trigonometric", "logarithm", "exponential",
         "sequence_series", "conic_section",
         "coordinate_geometry", "polynomial", "rational",
-        "matrix", "factorial_number_theory", "palindrome_number_theory",
+        "matrix",
     }
 
     _MATH_FEATURE_PATTERNS_HYBRID = [
@@ -244,9 +276,6 @@ class PromptGenerator:
         (r"\b(sin|cos|tan|sec|csc|cot|arcsin|arccos|arctan)\b", "trigonometric"),
         (r"\b(logarithm|log|ln)\b|\\log", "logarithm"),
         (r"\b(exponential|e\^|exp\()\b|\d+\^\s*\(?\s*\d*\s*[a-z]", "exponential"),
-        (r"\d+\s*!", "factorial_number_theory"),
-        (r"\b(tens|ones|units)\s+digit\b|\bdigit\b", "digit_extraction"),
-        (r"\bpalindrome\b", "palindrome_number_theory"),
         (r"\b(polynomial)\b", "polynomial"),
         (r"\b(rational\s+expression|rational\s+function)\b", "rational"),
         (r"\b(sequence|series|arithmetic\s+sequence|geometric\s+sequence|nth\s+term)\b", "sequence_series"),
@@ -1996,10 +2025,10 @@ class PromptGenerator:
             if constraint_matches:
                 filtered_examples = constraint_matches
 
-        # Non-strict domains may still use the broader pool when metadata is
-        # sparse. For strict domains, keep the empty result so generate_few_shot
-        # can raise a no-match error instead of silently selecting an unrelated example.
-        if not filtered_examples and available_examples and not strict_intent_matching:
+        # Final safety net: if all strict filters eliminated every example,
+        # fall back to the full set so the relevance ranker can still pick
+        # the best available examples instead of raising FewShotUnavailableError.
+        if not filtered_examples and available_examples:
             filtered_examples = available_examples
 
         return filtered_examples
@@ -2487,11 +2516,6 @@ class PromptGenerator:
 
         best_relevance = self._top_relevance_score(selected_examples, normalized_problem, problem_keywords)
 
-        if strict_matching and best_relevance < self._TIER1_SIMILARITY_FLOOR:
-            raise FewShotUnavailableError(
-                "No matching few-shot examples found for this problem in example_problems.json"
-            )
-
         # If relevance is weak, try a detected-subject rerank and then a global rerank.
         if not strict_matching and best_relevance < self.few_shot_min_relevance:
             detected_subject = self._normalize_subject(self.classify_subject(normalized_problem))
@@ -2526,13 +2550,6 @@ class PromptGenerator:
             raise FewShotUnavailableError(
                 f"No matching few-shot examples found for this problem in example_problems.json"
             )
-
-        if len(selected_examples) < self.few_shot_min_examples:
-            raise FewShotUnavailableError(
-                f"Only {len(selected_examples)} example(s) available but "
-                f"{self.few_shot_min_examples} required for subject '{subject}'. "
-                f"Add more examples via the example bank."
-            )
         
         # Format examples (concise format for speed)
         examples_text = "\n\n".join([
@@ -2543,74 +2560,24 @@ class PromptGenerator:
             for ex in selected_examples
         ])
         return (
-            "Solve math problems like the examples below.\n\n"
-            
+            "Solve math problems like the examples below. "
             f"{examples_text}\n\n"
             f"Q: {target_problem_text}\n"
             "A:"
         )
-
-    def generate_cot(self, problem: str, subject: str = "general") -> str:
-        """
-        Generate a Chain-of-Thought (CoT) prompt that instructs the model to show reasoning steps.
-        
-        Args:
-            problem: The math problem
-            subject: Subject category (reserved for API compatibility)
-            
-        Returns:
-            CoT prompt with step-by-step reasoning instruction
-        """
-        _ = subject
-        target_problem_text = str(problem)
-        cot_instruction = (
-            "Let's solve this step-by-step, showing your reasoning and work at each stage. "
-            "Break down the problem into logical steps before arriving at the final answer."
-        )
-        return (
-            f"{cot_instruction}\n\n"
-            f"Q: {target_problem_text}\n"
-            "A:"
-        )
-
-    def generate_role_based(self, problem: str, subject: str = "general") -> str:
-        """
-        Generate a role-based prompt that assigns the model an expert persona.
-        
-        Args:
-            problem: The math problem
-            subject: Subject category (reserved for API compatibility)
-            
-        Returns:
-            Role-based prompt with expert tutor persona
-        """
-        _ = subject
-        target_problem_text = str(problem)
-        role_instruction = (
-            "You are an expert mathematics tutor with deep expertise in problem-solving. "
-            "Solve this problem clearly and pedagogically, explaining your approach and reasoning as if teaching a student."
-        )
-        return (
-            f"{role_instruction}\n\n"
-            f"Q: {target_problem_text}\n"
-            "A:"
-        )
-
     def generate_all_techniques(self, problem: str, subject: str = "general") -> Dict[str, str]:
         """
         Generate prompts using all techniques.
-        
         Args:
             problem: The math problem
             subject: Subject category for few-shot examples
-            
         Returns:
             Dictionary mapping technique name to prompt
         """
         techniques = {
             "zero_shot": self.generate_zero_shot(problem, subject=subject),
-            "cot": self.generate_cot(problem, subject=subject),
             "role_based": self.generate_role_based(problem, subject=subject),
+            "cot": self.generate_chain_of_thought(problem, subject=subject),
         }
         try:
             techniques["few_shot"] = self.generate_few_shot(problem, subject=subject)
@@ -2622,7 +2589,7 @@ class PromptGenerator:
     
     def get_technique_names(self) -> List[str]:
         """Get list of all available prompting techniques."""
-        return ["zero_shot", "few_shot", "cot", "role_based"]
+        return ["zero_shot", "few_shot", "role_based", "cot"]
     
     def get_available_subjects(self) -> List[str]:
         """Get list of available subject categories."""
