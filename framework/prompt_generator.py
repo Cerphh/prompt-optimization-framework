@@ -2549,6 +2549,53 @@ class PromptGenerator:
             f"Q: {target_problem_text}\n"
             "A:"
         )
+
+    def generate_cot(self, problem: str, subject: str = "general") -> str:
+        """
+        Generate a Chain-of-Thought (CoT) prompt that instructs the model to show reasoning steps.
+        
+        Args:
+            problem: The math problem
+            subject: Subject category (reserved for API compatibility)
+            
+        Returns:
+            CoT prompt with step-by-step reasoning instruction
+        """
+        _ = subject
+        target_problem_text = str(problem)
+        cot_instruction = (
+            "Let's solve this step-by-step, showing your reasoning and work at each stage. "
+            "Break down the problem into logical steps before arriving at the final answer."
+        )
+        return (
+            f"{cot_instruction}\n\n"
+            f"Q: {target_problem_text}\n"
+            "A:"
+        )
+
+    def generate_role_based(self, problem: str, subject: str = "general") -> str:
+        """
+        Generate a role-based prompt that assigns the model an expert persona.
+        
+        Args:
+            problem: The math problem
+            subject: Subject category (reserved for API compatibility)
+            
+        Returns:
+            Role-based prompt with expert tutor persona
+        """
+        _ = subject
+        target_problem_text = str(problem)
+        role_instruction = (
+            "You are an expert mathematics tutor with deep expertise in problem-solving. "
+            "Solve this problem clearly and pedagogically, explaining your approach and reasoning as if teaching a student."
+        )
+        return (
+            f"{role_instruction}\n\n"
+            f"Q: {target_problem_text}\n"
+            "A:"
+        )
+
     def generate_all_techniques(self, problem: str, subject: str = "general") -> Dict[str, str]:
         """
         Generate prompts using all techniques.
@@ -2562,6 +2609,8 @@ class PromptGenerator:
         """
         techniques = {
             "zero_shot": self.generate_zero_shot(problem, subject=subject),
+            "cot": self.generate_cot(problem, subject=subject),
+            "role_based": self.generate_role_based(problem, subject=subject),
         }
         try:
             techniques["few_shot"] = self.generate_few_shot(problem, subject=subject)
@@ -2573,7 +2622,7 @@ class PromptGenerator:
     
     def get_technique_names(self) -> List[str]:
         """Get list of all available prompting techniques."""
-        return ["zero_shot", "few_shot"]
+        return ["zero_shot", "few_shot", "cot", "role_based"]
     
     def get_available_subjects(self) -> List[str]:
         """Get list of available subject categories."""
