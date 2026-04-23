@@ -635,6 +635,8 @@ export default function Home() {
   const [addExConcept2, setAddExConcept2] = useState('')
   const [addExAnalyzed2, setAddExAnalyzed2] = useState(false)
   const [addExDetectionMethod2, setAddExDetectionMethod2] = useState('')
+  const [showSymbolPicker, setShowSymbolPicker] = useState(false)
+  const [symbolPickerRef, setSymbolPickerRef] = useState<HTMLTextAreaElement | null>(null)
   // Fetch available difficulties per subject from example_problems.json
   useEffect(() => {
     const fetchDifficulties = async () => {
@@ -1736,6 +1738,84 @@ export default function Home() {
   /* Whether we're in "results" mode (sidebar + right panel) */
   const hasStarted = loading || !!result || !!baselineResult
 
+  // Symbol insertion handler
+  const insertSymbol = (symbol: string) => {
+    if (!symbolPickerRef) return
+
+    const textarea = symbolPickerRef
+    const start = textarea.selectionStart || 0
+    const end = textarea.selectionEnd || 0
+    const before = problem.substring(0, start)
+    const after = problem.substring(end)
+
+    const newProblem = before + symbol + after
+    setProblem(newProblem)
+
+    // Reset cursor position
+    setTimeout(() => {
+      textarea.selectionStart = textarea.selectionEnd = start + symbol.length
+      textarea.focus()
+    }, 0)
+
+    setShowSymbolPicker(false)
+  }
+
+  // Symbol Picker Component
+  const SymbolPicker = () => {
+    const symbols = [
+      { category: 'Greek Letters', items: ['α', 'β', 'γ', 'δ', 'ε', 'ζ', 'η', 'θ', 'λ', 'μ', 'π', 'ρ', 'σ', 'φ', 'ω', 'Α', 'Β', 'Γ', 'Δ', 'Λ', 'Π', 'Σ', 'Φ', 'Ω'] },
+      { category: 'Math Operators', items: ['±', '×', '÷', '∓', '∗', '∙', '√', '∛', '∜', '∫', '∂', '∆', '∇', '≈', '≠', '≤', '≥', '≪', '≫', '≡', '∝', '∞', '∑', '∏'] },
+      { category: 'Set Symbols', items: ['∅', '∈', '∉', '∋', '∌', '⊂', '⊃', '⊆', '⊇', '∩', '∪', '∖', '⊕', '⊗', '⊙'] },
+      { category: 'Logic Symbols', items: ['∧', '∨', '¬', '⇒', '⇐', '⇔', '∀', '∃', '⊢', '⊨', '⟹', '⟺', '⟵'] },
+      { category: 'Arrows', items: ['→', '←', '↑', '↓', '↔', '↕', '⟹', '⟸', '⟺', '↗', '↘', '↙', '↖', '⇄', '⇋'] },
+      { category: 'Common Symbols', items: ['°', '′', '″', 'ⁿ', '¹', '²', '³', '⁺', '⁻', '⁼', '₀', '₁', '₂', '₃', '₊', '₋', '∣'] },
+    ]
+
+    return (
+      <div
+        className="fixed top-16 right-4 bg-white rounded-lg shadow-2xl p-4 z-50 border"
+        style={{ border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', maxHeight: '400px', overflowY: 'auto', width: '300px' }}
+      >
+        <div className="flex items-center justify-between mb-3 pb-2" style={{ borderBottom: '1px solid var(--border)' }}>
+          <h3 className="text-sm font-semibold">Insert Symbol</h3>
+          <button
+            onClick={() => setShowSymbolPicker(false)}
+            className="text-xs"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 0 }}
+          >
+            ✕
+          </button>
+        </div>
+
+        {symbols.map((group) => (
+          <div key={group.category} className="mb-3">
+            <p className="text-xs font-mono font-semibold mb-2" style={{ color: 'var(--text-subtle)' }}>
+              {group.category}
+            </p>
+            <div className="grid grid-cols-6 gap-1">
+              {group.items.map((symbol) => (
+                <button
+                  key={symbol}
+                  onClick={() => insertSymbol(symbol)}
+                  className="h-8 rounded text-center text-sm hover:bg-opacity-80 transition-colors"
+                  style={{
+                    background: 'var(--bg)',
+                    border: '1px solid var(--border)',
+                    cursor: 'pointer',
+                    color: 'var(--text)',
+                  }}
+                  title={`Insert ${symbol}`}
+                >
+                  {symbol}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
   return (
     <div className="h-screen flex flex-col" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
       {/* ═══ Header ═══ */}
@@ -1915,20 +1995,44 @@ export default function Home() {
                 </div>
               )}
 
-              {/* Textarea */}
-              <textarea
-                value={problem}
-                onChange={(e) => handleProblemChange(e.target.value)}
-                rows={5}
-                placeholder="Enter your problem here (e.g., Solve for x: 2x + 5 = 15)"
-                className="w-full px-3 py-2 rounded-md text-sm font-mono outline-none resize-y"
-                style={{
-                  border: `1px solid ${validationError ? '#ef4444' : 'var(--border)'}`,
-                  color: 'var(--text)',
-                  background: 'var(--surface)',
-                }}
-                required
-              />
+              {/* Textarea with Symbol Picker Button */}
+              <div className="relative">
+                <textarea
+                  ref={(el) => setSymbolPickerRef(el)}
+                  value={problem}
+                  onChange={(e) => handleProblemChange(e.target.value)}
+                  rows={5}
+                  placeholder="Enter your problem here (e.g., Solve for x: 2x + 5 = 15)"
+                  className="w-full px-3 py-2 rounded-md text-sm font-mono outline-none resize-y pr-10"
+                  style={{
+                    border: `1px solid ${validationError ? '#ef4444' : 'var(--border)'}`,
+                    color: 'var(--text)',
+                    background: 'var(--surface)',
+                  }}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowSymbolPicker(!showSymbolPicker)}
+                  className="absolute top-2 right-2 p-1 rounded hover:bg-opacity-80 transition-colors"
+                  style={{
+                    background: 'var(--border)',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: 'var(--text)',
+                    width: '32px',
+                    height: '32px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '18px',
+                  }}
+                  title="Insert mathematical symbol"
+                >
+                  Ω
+                </button>
+                {showSymbolPicker && <SymbolPicker />}
+              </div>
               {validationError && (
                 <p className="mt-1 text-xs" style={{ color: '#ef4444' }}>{validationError}</p>
               )}
@@ -2130,21 +2234,47 @@ export default function Home() {
                 <label htmlFor="problem" className="block text-sm font-medium mb-1.5">
                   Math Problem
                 </label>
-                <textarea
-                  id="problem"
-                  value={problem}
-                  onChange={(e) => handleProblemChange(e.target.value)}
-                  disabled={loading}
-                  rows={6}
-                  placeholder="Enter your problem here (e.g., Solve for x: 2x + 5 = 15)"
-                  className="w-full px-3 py-2 rounded-md text-sm font-mono outline-none resize-y transition"
-                  style={{
-                    border: `1px solid ${validationError ? '#ef4444' : 'var(--border)'}`,
-                    color: 'var(--text)',
-                    background: 'var(--surface)',
-                  }}
-                  required
-                />
+                <div className="relative">
+                  <textarea
+                    id="problem"
+                    ref={(el) => setSymbolPickerRef(el)}
+                    value={problem}
+                    onChange={(e) => handleProblemChange(e.target.value)}
+                    disabled={loading}
+                    rows={6}
+                    placeholder="Enter your problem here (e.g., Solve for x: 2x + 5 = 15)"
+                    className="w-full px-3 py-2 rounded-md text-sm font-mono outline-none resize-y transition pr-10"
+                    style={{
+                      border: `1px solid ${validationError ? '#ef4444' : 'var(--border)'}`,
+                      color: 'var(--text)',
+                      background: 'var(--surface)',
+                    }}
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSymbolPicker(!showSymbolPicker)}
+                    disabled={loading}
+                    className="absolute top-2 right-2 p-1 rounded hover:bg-opacity-80 transition-colors"
+                    style={{
+                      background: 'var(--border)',
+                      border: 'none',
+                      cursor: loading ? 'not-allowed' : 'pointer',
+                      color: 'var(--text)',
+                      width: '32px',
+                      height: '32px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '18px',
+                      opacity: loading ? 0.5 : 1,
+                    }}
+                    title="Insert mathematical symbol"
+                  >
+                    Ω
+                  </button>
+                  {showSymbolPicker && <SymbolPicker />}
+                </div>
                 {validationError && (
                   <p className="mt-1 text-xs" style={{ color: '#ef4444' }}>
                     {validationError}
