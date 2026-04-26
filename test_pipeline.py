@@ -65,6 +65,10 @@ print("=" * 70)
 
 # Select a test problem - algebra problem
 test_problem = dataset.get_problem(3)  # Algebra problem
+if test_problem is None:
+    print("✗ Could not load sample problem with index 3")
+    exit(1)
+
 print(f"\nProblem: {test_problem['problem']}")
 print(f"Expected Answer: {test_problem['answer']}")
 print(f"Category: {test_problem['category']}")

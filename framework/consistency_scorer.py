@@ -24,6 +24,8 @@ class ConsistencyScorer:
 
         candidate = self._strip_verbal_wrappers(candidate)
         candidate = self._normalize_math_symbols(candidate)
+        candidate = self._unwrap_latex_wrappers(candidate)
+        candidate = self._strip_trailing_units_from_numeric(candidate)
         candidate = candidate.strip().rstrip(".,;:!?")
 
         if "=" in candidate:
@@ -135,6 +137,44 @@ class ConsistencyScorer:
         for source, target in replacements.items():
             normalized = normalized.replace(source, target)
         return normalized
+
+    def _unwrap_latex_wrappers(self, text: str) -> str:
+        """Strip common LaTeX wrappers around a final answer."""
+        value = str(text or "").strip()
+        if not value:
+            return value
+
+        # Remove inline math delimiters, e.g., $7$, \(7\), or \[7\].
+        value = re.sub(r"^\$\s*(.*?)\s*\$$", r"\1", value)
+        value = re.sub(r"^\\\(\s*(.*?)\s*\\\)$", r"\1", value)
+        value = re.sub(r"^\\\[\s*(.*?)\s*\\\]$", r"\1", value)
+
+        # Iteratively unwrap \boxed{...} and \text{...} if the whole candidate is wrapped.
+        changed = True
+        while changed:
+            changed = False
+            for pattern in (r"^\\boxed\{(.+)\}$", r"^\\text\{(.+)\}$"):
+                unwrapped = re.sub(pattern, r"\1", value).strip()
+                if unwrapped != value:
+                    value = unwrapped
+                    changed = True
+
+        return value
+
+    def _strip_trailing_units_from_numeric(self, text: str) -> str:
+        """Convert forms like '7 units' to '7' while preserving non-numeric expressions."""
+        value = str(text or "").strip()
+        if not value:
+            return value
+
+        match = re.fullmatch(
+            r"([+\-]?(?:\d+(?:\.\d+)?|\.\d+)(?:\s*/\s*[+\-]?(?:\d+(?:\.\d+)?|\.\d+))?)\s+[A-Za-z][A-Za-z0-9_^\-]*(?:\s+[A-Za-z][A-Za-z0-9_^\-]*)*",
+            value,
+        )
+        if match:
+            return match.group(1)
+
+        return value
 
     def _canonicalize_math(self, text: str) -> Optional[str]:
         """Return canonical key for numeric/symbolic expressions when possible."""

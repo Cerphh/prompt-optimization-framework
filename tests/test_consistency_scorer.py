@@ -64,3 +64,31 @@ def test_consistency_uses_majority_match_ratio():
 
     assert state["value"] == 2 / 3
     assert state["matching_runs"] == 2
+
+
+def test_consistency_treats_boxed_numeric_answer_as_identical():
+    scorer = ConsistencyScorer()
+    outputs = [
+        scorer.normalize_output("Final answer: 7"),
+        scorer.normalize_output("The final answer is \\boxed{7}"),
+        scorer.normalize_output("Therefore, 7."),
+    ]
+
+    state = scorer.compute_consistency(outputs)
+
+    assert state["value"] == 1.0
+    assert state["matching_runs"] == 3
+
+
+def test_consistency_treats_numeric_answer_with_units_as_identical():
+    scorer = ConsistencyScorer()
+    outputs = [
+        scorer.normalize_output("Answer: 7 units"),
+        scorer.normalize_output("7"),
+        scorer.normalize_output("7.0"),
+    ]
+
+    state = scorer.compute_consistency(outputs)
+
+    assert state["value"] == 1.0
+    assert state["matching_runs"] == 3
