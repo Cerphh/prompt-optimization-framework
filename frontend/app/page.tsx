@@ -638,6 +638,8 @@ export default function Home() {
   const [addExAnalyzed2, setAddExAnalyzed2] = useState(false)
   const [addExDetectionMethod2, setAddExDetectionMethod2] = useState('')
   const [showSymbolPicker, setShowSymbolPicker] = useState(false)
+  const [pickerButtonRect, setPickerButtonRect] = useState<DOMRect | null>(null)
+  const [pickerFieldName, setPickerFieldName] = useState<'problem' | 'groundTruth' | 'addExProblem' | 'addExSolution' | 'addExProblem2' | 'addExSolution2'>('problem')
   const [symbolPickerRef, setSymbolPickerRef] = useState<HTMLTextAreaElement | null>(null)
 
   // Auto-open the help guide on the user's first visit
@@ -672,6 +674,21 @@ export default function Home() {
       setDifficulty('basic')
     }
   }, [subject, availableDifficulties])
+
+  // Close symbol picker on outside click
+  useEffect(() => {
+    if (!showSymbolPicker) return
+    const handler = (e: MouseEvent) => {
+      const target = e.target as Element
+      // Ignore clicks on any Ω button (they handle their own toggle)
+      if (target.closest('[data-symbol-btn]')) return
+      // Ignore clicks inside the picker itself
+      if (target.closest('[data-symbol-picker]')) return
+      setShowSymbolPicker(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showSymbolPicker])
 
   // Check API health
   useEffect(() => {
@@ -1752,23 +1769,86 @@ export default function Home() {
   /* Whether we're in "results" mode (sidebar + right panel) */
   const hasStarted = loading || !!result || !!baselineResult
 
+  // Open symbol picker for a specific field — finds sibling input/textarea via DOM
+  const handleOpenPickerFor = (
+    e: React.MouseEvent<HTMLButtonElement>,
+    field: 'problem' | 'groundTruth' | 'addExProblem' | 'addExSolution' | 'addExProblem2' | 'addExSolution2'
+  ) => {
+    const container = e.currentTarget.parentElement
+    const el = container?.querySelector('input, textarea') as HTMLTextAreaElement | null
+    setSymbolPickerRef(el)
+    setPickerFieldName(field)
+    if (showSymbolPicker && pickerFieldName === field) {
+      setShowSymbolPicker(false)
+    } else {
+      setPickerButtonRect(e.currentTarget.getBoundingClientRect())
+      setShowSymbolPicker(true)
+    }
+  }
+
+  // Returns the current value for the active picker field
+  const getFieldValue = () => {
+    switch (pickerFieldName) {
+      case 'groundTruth': return groundTruth
+      case 'addExProblem': return addExProblem
+      case 'addExSolution': return addExSolution
+      case 'addExProblem2': return addExProblem2
+      case 'addExSolution2': return addExSolution2
+      default: return problem
+    }
+  }
+
+  // Updates the active picker field's state
+  const setFieldValue = (value: string) => {
+    switch (pickerFieldName) {
+      case 'groundTruth': setGroundTruth(value); break
+      case 'addExProblem': setAddExProblem(value); setAddExAnalyzed(false); break
+      case 'addExSolution': setAddExSolution(value); break
+      case 'addExProblem2': setAddExProblem2(value); setAddExAnalyzed2(false); break
+      case 'addExSolution2': setAddExSolution2(value); break
+      default: setProblem(value)
+    }
+  }
+
   // Symbol insertion handler
   const insertSymbol = (symbol: string) => {
     if (!symbolPickerRef) return
 
-    const textarea = symbolPickerRef
-    const start = textarea.selectionStart || 0
-    const end = textarea.selectionEnd || 0
-    const before = problem.substring(0, start)
-    const after = problem.substring(end)
+    const el = symbolPickerRef
+    const start = el.selectionStart || 0
+    const end = el.selectionEnd || 0
+    const current = getFieldValue()
+    const before = current.substring(0, start)
+    const after = current.substring(end)
 
-    const newProblem = before + symbol + after
-    setProblem(newProblem)
+    setFieldValue(before + symbol + after)
 
     // Reset cursor position
     setTimeout(() => {
-      textarea.selectionStart = textarea.selectionEnd = start + symbol.length
-      textarea.focus()
+      el.selectionStart = el.selectionEnd = start + symbol.length
+      el.focus()
+    }, 0)
+
+    setShowSymbolPicker(false)
+  }
+
+  // Template insertion handler — inserts a structured expression and selects the first placeholder
+  const insertTemplate = (template: string, selStart: number, selEnd: number) => {
+    if (!symbolPickerRef) return
+
+    const el = symbolPickerRef
+    const start = el.selectionStart || 0
+    const end = el.selectionEnd || 0
+    const current = getFieldValue()
+    const before = current.substring(0, start)
+    const after = current.substring(end)
+
+    setFieldValue(before + template + after)
+
+    setTimeout(() => {
+      el.selectionStart = start + selStart
+      el.selectionEnd = start + selEnd
+      el.focus()
     }, 0)
 
     setShowSymbolPicker(false)
@@ -1776,6 +1856,8 @@ export default function Home() {
 
   // Symbol Picker Component
   const SymbolPicker = () => {
+    const [activeTab, setActiveTab] = useState<'symbols' | 'templates'>('symbols')
+
     const symbols = [
       { category: 'Greek Letters', items: ['α', 'β', 'γ', 'δ', 'ε', 'ζ', 'η', 'θ', 'λ', 'μ', 'π', 'ρ', 'σ', 'φ', 'ω', 'Α', 'Β', 'Γ', 'Δ', 'Λ', 'Π', 'Σ', 'Φ', 'Ω'] },
       { category: 'Math Operators', items: ['±', '×', '÷', '∓', '∗', '∙', '√', '∛', '∜', '∫', '∂', '∆', '∇', '≈', '≠', '≤', '≥', '≪', '≫', '≡', '∝', '∞', '∑', '∏'] },
@@ -1785,21 +1867,98 @@ export default function Home() {
       { category: 'Common Symbols', items: ['°', '′', '″', 'ⁿ', '¹', '²', '³', '⁺', '⁻', '⁼', '₀', '₁', '₂', '₃', '₊', '₋', '∣'] },
     ]
 
+    const templates = [
+      {
+        category: 'Fractions & Radicals',
+        items: [
+          { label: '(a)/(b)', title: 'Fraction', insert: '(a)/(b)', sel: [1, 2] },
+          { label: '√(x)', title: 'Square root', insert: '√(x)', sel: [2, 3] },
+          { label: '∛(x)', title: 'Cube root', insert: '∛(x)', sel: [2, 3] },
+          { label: '∜(x)', title: 'Fourth root', insert: '∜(x)', sel: [2, 3] },
+          { label: 'n√(x)', title: 'nth root — replace n with the index', insert: 'n√(x)', sel: [0, 1] },
+        ],
+      },
+      {
+        category: 'Exponents & Scripts',
+        items: [
+          { label: 'x^(n)', title: 'Power / Superscript', insert: 'x^(n)', sel: [3, 4] },
+          { label: 'x_(n)', title: 'Subscript', insert: 'x_(n)', sel: [3, 4] },
+          { label: 'x^(a)_(b)', title: 'Superscript and subscript', insert: 'x^(a)_(b)', sel: [3, 4] },
+        ],
+      },
+      {
+        category: 'Groupings',
+        items: [
+          { label: '|x|', title: 'Absolute value', insert: '|x|', sel: [1, 2] },
+          { label: '⌊x⌋', title: 'Floor function', insert: '⌊x⌋', sel: [1, 2] },
+          { label: '⌈x⌉', title: 'Ceiling function', insert: '⌈x⌉', sel: [1, 2] },
+          { label: '‖x‖', title: 'Norm', insert: '‖x‖', sel: [1, 2] },
+        ],
+      },
+      {
+        category: 'Calculus',
+        items: [
+          { label: '∫(f)dx', title: 'Indefinite integral', insert: '∫(f) dx', sel: [2, 3] },
+          { label: '∫_a^b(f)dx', title: 'Definite integral', insert: '∫_(a)^(b) (f) dx', sel: [3, 4] },
+          { label: 'd/dx(f)', title: 'Derivative', insert: 'd/dx (f)', sel: [6, 7] },
+          { label: '∂(f)/∂x', title: 'Partial derivative', insert: '∂(f)/∂x', sel: [2, 3] },
+        ],
+      },
+      {
+        category: 'Limits & Series',
+        items: [
+          { label: 'lim_{x→a}', title: 'Limit', insert: 'lim_{x→a}', sel: [5, 6] },
+          { label: 'Σ_{i=1}^{n}', title: 'Summation', insert: 'Σ_{i=1}^{n}', sel: [3, 4] },
+          { label: '∏_{i=1}^{n}', title: 'Product (Pi notation)', insert: '∏_{i=1}^{n}', sel: [3, 4] },
+        ],
+      },
+      {
+        category: 'Functions',
+        items: [
+          { label: 'log_a(x)', title: 'Logarithm with base', insert: 'log_{a}(x)', sel: [5, 6] },
+          { label: 'sin(x)', title: 'Sine', insert: 'sin(x)', sel: [4, 5] },
+          { label: 'cos(x)', title: 'Cosine', insert: 'cos(x)', sel: [4, 5] },
+          { label: 'tan(x)', title: 'Tangent', insert: 'tan(x)', sel: [4, 5] },
+          { label: 'sin⁻¹(x)', title: 'Arcsine (inverse sine)', insert: 'sin^(-1)(x)', sel: [9, 10] },
+        ],
+      },
+    ]
+
+    const tabStyle = (tab: 'symbols' | 'templates') => ({
+      background: activeTab === tab ? 'var(--accent)' : 'var(--bg)',
+      color: activeTab === tab ? '#fff' : 'var(--text-muted)',
+      border: `1px solid ${activeTab === tab ? 'var(--accent)' : 'var(--border)'}`,
+      borderRadius: '4px',
+      padding: '2px 10px',
+      fontSize: '11px',
+      fontWeight: 600,
+      cursor: 'pointer',
+    })
+
+    const spaceAbove = pickerButtonRect ? pickerButtonRect.top - 16 : 440
+
     return (
       <div
-        className="absolute right-0 bg-white rounded-lg shadow-2xl p-4 z-50 border"
+        className="rounded-lg shadow-2xl p-4 z-[9999]"
+        data-symbol-picker=""
         style={{
-          bottom: 'calc(100% + 8px)',
+          position: 'fixed',
+          bottom: pickerButtonRect ? window.innerHeight - pickerButtonRect.top + 8 : 0,
+          left: pickerButtonRect ? pickerButtonRect.left : 0,
           border: '1px solid var(--border)',
           background: 'var(--surface)',
           color: 'var(--text)',
-          maxHeight: '400px',
+          maxHeight: `${Math.min(440, spaceAbove)}px`,
           overflowY: 'auto',
-          width: '300px',
+          width: '340px',
         }}
       >
+        {/* Header */}
         <div className="flex items-center justify-between mb-3 pb-2" style={{ borderBottom: '1px solid var(--border)' }}>
-          <h3 className="text-sm font-semibold">Insert Symbol</h3>
+          <div className="flex gap-1">
+            <button type="button" onClick={() => setActiveTab('symbols')} style={tabStyle('symbols')}>Symbols</button>
+            <button type="button" onClick={() => setActiveTab('templates')} style={tabStyle('templates')}>Templates</button>
+          </div>
           <button
             onClick={() => setShowSymbolPicker(false)}
             className="text-xs"
@@ -1809,7 +1968,8 @@ export default function Home() {
           </button>
         </div>
 
-        {symbols.map((group) => (
+        {/* Symbols tab */}
+        {activeTab === 'symbols' && symbols.map((group) => (
           <div key={group.category} className="mb-3">
             <p className="text-xs font-mono font-semibold mb-2" style={{ color: 'var(--text-subtle)' }}>
               {group.category}
@@ -1834,6 +1994,40 @@ export default function Home() {
             </div>
           </div>
         ))}
+
+        {/* Templates tab */}
+        {activeTab === 'templates' && (
+          <>
+            <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>
+              Click a template to insert it. The first placeholder is automatically selected — type to replace it.
+            </p>
+            {templates.map((group) => (
+              <div key={group.category} className="mb-3">
+                <p className="text-xs font-mono font-semibold mb-2" style={{ color: 'var(--text-subtle)' }}>
+                  {group.category}
+                </p>
+                <div className="grid grid-cols-2 gap-1">
+                  {group.items.map((item) => (
+                    <button
+                      key={item.label}
+                      onClick={() => insertTemplate(item.insert, item.sel[0], item.sel[1])}
+                      className="h-9 px-2 rounded text-center text-xs font-mono hover:bg-opacity-80 transition-colors truncate"
+                      style={{
+                        background: 'var(--bg)',
+                        border: '1px solid var(--border)',
+                        cursor: 'pointer',
+                        color: 'var(--text)',
+                      }}
+                      title={item.title}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </>
+        )}
       </div>
     )
   }
@@ -2036,18 +2230,41 @@ export default function Home() {
                   <label htmlFor="ground-truth-landing" className="block text-sm font-medium mb-1.5">
                     Expected Answer {runMode === 'benchmark' ? '(required)' : '(optional)'}
                   </label>
-                  <input
-                    id="ground-truth-landing"
-                    value={groundTruth}
-                    onChange={(e) => setGroundTruth(e.target.value)}
-                    placeholder="e.g., x = 4 or x = 5"
-                    className="w-full px-3 py-2 rounded-md text-sm font-mono outline-none"
-                    style={{
-                      border: `1px solid ${runMode === 'benchmark' && !groundTruth.trim() ? '#ef4444' : 'var(--border)'}`,
-                      color: 'var(--text)',
-                      background: 'var(--surface)',
-                    }}
-                  />
+                  <div className="relative">
+                    <input
+                      id="ground-truth-landing"
+                      value={groundTruth}
+                      onChange={(e) => setGroundTruth(e.target.value)}
+                      placeholder="e.g., x = 4 or x = 5"
+                      className="w-full px-3 py-2 rounded-md text-sm font-mono outline-none pr-10"
+                      style={{
+                        border: `1px solid ${runMode === 'benchmark' && !groundTruth.trim() ? '#ef4444' : 'var(--border)'}`,
+                        color: 'var(--text)',
+                        background: 'var(--surface)',
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={(e) => handleOpenPickerFor(e, 'groundTruth')}
+                      data-symbol-btn=""
+                      className="absolute top-1/2 -translate-y-1/2 right-2 p-1 rounded hover:bg-opacity-80 transition-colors"
+                      style={{
+                        background: 'var(--border)',
+                        border: 'none',
+                        cursor: 'pointer',
+                        color: 'var(--text)',
+                        width: '26px',
+                        height: '26px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '14px',
+                      }}
+                      title="Insert mathematical symbol"
+                    >
+                      Ω
+                    </button>
+                  </div>
                   <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
                     {runMode === 'benchmark'
                       ? 'Benchmark mode enforces ground-truth scoring for thesis-grade comparison.'
@@ -2074,7 +2291,8 @@ export default function Home() {
                 />
                 <button
                   type="button"
-                  onClick={() => setShowSymbolPicker(!showSymbolPicker)}
+                  onClick={(e) => handleOpenPickerFor(e, 'problem')}
+                  data-symbol-btn=""
                   className="absolute top-2 right-2 p-1 rounded hover:bg-opacity-80 transition-colors"
                   style={{
                     background: 'var(--border)',
@@ -2270,19 +2488,44 @@ export default function Home() {
                   <label htmlFor="ground-truth" className="block text-sm font-medium mb-1.5">
                     Expected Answer {runMode === 'benchmark' ? '(required)' : '(optional)'}
                   </label>
-                  <input
-                    id="ground-truth"
-                    value={groundTruth}
-                    onChange={(e) => setGroundTruth(e.target.value)}
-                    disabled={loading}
-                    placeholder="e.g., x = 4 or x = 5"
-                    className="w-full px-3 py-2 rounded-md text-sm font-mono outline-none transition"
-                    style={{
-                      border: `1px solid ${runMode === 'benchmark' && !groundTruth.trim() ? '#ef4444' : 'var(--border)'}`,
-                      color: 'var(--text)',
-                      background: loading ? 'var(--bg)' : 'var(--surface)',
-                    }}
-                  />
+                  <div className="relative">
+                    <input
+                      id="ground-truth"
+                      value={groundTruth}
+                      onChange={(e) => setGroundTruth(e.target.value)}
+                      disabled={loading}
+                      placeholder="e.g., x = 4 or x = 5"
+                      className="w-full px-3 py-2 rounded-md text-sm font-mono outline-none transition pr-10"
+                      style={{
+                        border: `1px solid ${runMode === 'benchmark' && !groundTruth.trim() ? '#ef4444' : 'var(--border)'}`,
+                        color: 'var(--text)',
+                        background: loading ? 'var(--bg)' : 'var(--surface)',
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={(e) => handleOpenPickerFor(e, 'groundTruth')}
+                      disabled={loading}
+                      data-symbol-btn=""
+                      className="absolute top-1/2 -translate-y-1/2 right-2 p-1 rounded hover:bg-opacity-80 transition-colors"
+                      style={{
+                        background: 'var(--border)',
+                        border: 'none',
+                        cursor: loading ? 'not-allowed' : 'pointer',
+                        color: 'var(--text)',
+                        width: '26px',
+                        height: '26px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '14px',
+                        opacity: loading ? 0.5 : 1,
+                      }}
+                      title="Insert mathematical symbol"
+                    >
+                      Ω
+                    </button>
+                  </div>
                   <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
                     {runMode === 'benchmark'
                       ? 'Required for benchmark mode and thesis-grade scoring.'
@@ -2314,8 +2557,9 @@ export default function Home() {
                   />
                   <button
                     type="button"
-                    onClick={() => setShowSymbolPicker(!showSymbolPicker)}
+                    onClick={(e) => handleOpenPickerFor(e, 'problem')}
                     disabled={loading}
+                    data-symbol-btn=""
                     className="absolute top-2 right-2 p-1 rounded hover:bg-opacity-80 transition-colors"
                     style={{
                       background: 'var(--border)',
@@ -3952,25 +4196,45 @@ export default function Home() {
                 <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-subtle)' }}>Example 1</p>
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text)' }}>Problem</label>
-                  <textarea
-                    value={addExProblem}
-                    onChange={(e) => { setAddExProblem(e.target.value); setAddExAnalyzed(false) }}
-                    rows={3}
-                    placeholder="e.g., Solve for x: 3x - 7 = 20"
-                    className="w-full px-3 py-2 rounded-md text-sm font-mono outline-none resize-y"
-                    style={{ border: '1px solid var(--border)', color: 'var(--text)', background: 'var(--bg)' }}
-                  />
+                  <div className="relative">
+                    <textarea
+                      value={addExProblem}
+                      onChange={(e) => { setAddExProblem(e.target.value); setAddExAnalyzed(false) }}
+                      rows={3}
+                      placeholder="e.g., Solve for x: 3x - 7 = 20"
+                      className="w-full px-3 py-2 rounded-md text-sm font-mono outline-none resize-y pr-10"
+                      style={{ border: '1px solid var(--border)', color: 'var(--text)', background: 'var(--bg)' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={(e) => handleOpenPickerFor(e, 'addExProblem')}
+                      data-symbol-btn=""
+                      className="absolute top-2 right-2 p-1 rounded hover:bg-opacity-80 transition-colors"
+                      style={{ background: 'var(--border)', border: 'none', cursor: 'pointer', color: 'var(--text)', width: '26px', height: '26px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}
+                      title="Insert mathematical symbol"
+                    >Ω</button>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text)' }}>Solution</label>
-                  <textarea
-                    value={addExSolution}
-                    onChange={(e) => setAddExSolution(e.target.value)}
-                    rows={3}
-                    placeholder="e.g., Add 7 to both sides: 3x = 27. Divide by 3: x = 9."
-                    className="w-full px-3 py-2 rounded-md text-sm font-mono outline-none resize-y"
-                    style={{ border: '1px solid var(--border)', color: 'var(--text)', background: 'var(--bg)' }}
-                  />
+                  <div className="relative">
+                    <textarea
+                      value={addExSolution}
+                      onChange={(e) => setAddExSolution(e.target.value)}
+                      rows={3}
+                      placeholder="e.g., Add 7 to both sides: 3x = 27. Divide by 3: x = 9."
+                      className="w-full px-3 py-2 rounded-md text-sm font-mono outline-none resize-y pr-10"
+                      style={{ border: '1px solid var(--border)', color: 'var(--text)', background: 'var(--bg)' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={(e) => handleOpenPickerFor(e, 'addExSolution')}
+                      data-symbol-btn=""
+                      className="absolute top-2 right-2 p-1 rounded hover:bg-opacity-80 transition-colors"
+                      style={{ background: 'var(--border)', border: 'none', cursor: 'pointer', color: 'var(--text)', width: '26px', height: '26px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}
+                      title="Insert mathematical symbol"
+                    >Ω</button>
+                  </div>
                 </div>
               </div>
 
@@ -3982,25 +4246,45 @@ export default function Home() {
                 <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-subtle)' }}>Example 2 <span className="font-normal normal-case">(optional)</span></p>
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text)' }}>Problem</label>
-                  <textarea
-                    value={addExProblem2}
-                    onChange={(e) => { setAddExProblem2(e.target.value); setAddExAnalyzed2(false) }}
-                    rows={3}
-                    placeholder="e.g., Solve for y: 5y + 3 = 28"
-                    className="w-full px-3 py-2 rounded-md text-sm font-mono outline-none resize-y"
-                    style={{ border: '1px solid var(--border)', color: 'var(--text)', background: 'var(--bg)' }}
-                  />
+                  <div className="relative">
+                    <textarea
+                      value={addExProblem2}
+                      onChange={(e) => { setAddExProblem2(e.target.value); setAddExAnalyzed2(false) }}
+                      rows={3}
+                      placeholder="e.g., Solve for y: 5y + 3 = 28"
+                      className="w-full px-3 py-2 rounded-md text-sm font-mono outline-none resize-y pr-10"
+                      style={{ border: '1px solid var(--border)', color: 'var(--text)', background: 'var(--bg)' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={(e) => handleOpenPickerFor(e, 'addExProblem2')}
+                      data-symbol-btn=""
+                      className="absolute top-2 right-2 p-1 rounded hover:bg-opacity-80 transition-colors"
+                      style={{ background: 'var(--border)', border: 'none', cursor: 'pointer', color: 'var(--text)', width: '26px', height: '26px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}
+                      title="Insert mathematical symbol"
+                    >Ω</button>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text)' }}>Solution</label>
-                  <textarea
-                    value={addExSolution2}
-                    onChange={(e) => setAddExSolution2(e.target.value)}
-                    rows={3}
-                    placeholder="e.g., Subtract 3 from both sides: 5y = 25. Divide by 5: y = 5."
-                    className="w-full px-3 py-2 rounded-md text-sm font-mono outline-none resize-y"
-                    style={{ border: '1px solid var(--border)', color: 'var(--text)', background: 'var(--bg)' }}
-                  />
+                  <div className="relative">
+                    <textarea
+                      value={addExSolution2}
+                      onChange={(e) => setAddExSolution2(e.target.value)}
+                      rows={3}
+                      placeholder="e.g., Subtract 3 from both sides: 5y = 25. Divide by 5: y = 5."
+                      className="w-full px-3 py-2 rounded-md text-sm font-mono outline-none resize-y pr-10"
+                      style={{ border: '1px solid var(--border)', color: 'var(--text)', background: 'var(--bg)' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={(e) => handleOpenPickerFor(e, 'addExSolution2')}
+                      data-symbol-btn=""
+                      className="absolute top-2 right-2 p-1 rounded hover:bg-opacity-80 transition-colors"
+                      style={{ background: 'var(--border)', border: 'none', cursor: 'pointer', color: 'var(--text)', width: '26px', height: '26px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}
+                      title="Insert mathematical symbol"
+                    >Ω</button>
+                  </div>
                 </div>
               </div>
 
