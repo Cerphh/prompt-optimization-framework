@@ -4,9 +4,71 @@ Evaluates the accuracy of model responses using exact and symbolic matching.
 """
 
 import re
-from typing import Any, Optional
-from sympy import sympify, simplify, parse_expr, symbols, solve
+from typing import Any, Callable, Optional
+from sympy import sympify, simplify, nsimplify, Rational, symbols, solve
 from sympy.core.sympify import SympifyError
+from sympy import parse_expr  # noqa: F401  (kept for backward compatibility)
+
+
+# ---------------------------------------------------------------------------
+# Pre-normalization helpers (LaTeX / markdown stripping).
+# Applied uniformly to both responses and expected answers so equivalent
+# textual forms collapse before any matcher runs.
+# ---------------------------------------------------------------------------
+
+_BOXED_RE = re.compile(r'\\boxed\s*\{([^{}]*)\}')
+_FRAC_RE = re.compile(r'\\(?:d|t)?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}')
+_SQRT_RE = re.compile(r'\\sqrt\s*\{([^{}]*)\}')
+_POW_RE = re.compile(r'\^\s*\{([^{}]*)\}')
+_TEXT_RE = re.compile(r'\\(?:text|mathrm|mathbf|operatorname)\s*\{([^{}]*)\}')
+_DOLLAR_RE = re.compile(r'\$+([^$]+)\$+')
+_PAREN_MATH_RE = re.compile(r'\\\((.*?)\\\)', re.DOTALL)
+_BRACKET_MATH_RE = re.compile(r'\\\[(.*?)\\\]', re.DOTALL)
+_MARKDOWN_BOLD_RE = re.compile(r'\*\*([^*]+)\*\*')
+_MARKDOWN_ITALIC_RE = re.compile(r'(?<!\*)\*([^*\n]+)\*(?!\*)')
+_BACKTICK_RE = re.compile(r'`([^`]+)`')
+
+
+def _strip_latex_and_markdown(text: str) -> str:
+    """Convert common LaTeX/markdown formatting into plain math text."""
+    if not text:
+        return text
+    s = str(text)
+
+    # Unwrap math delimiters (keep inner content).
+    s = _PAREN_MATH_RE.sub(lambda m: ' ' + m.group(1) + ' ', s)
+    s = _BRACKET_MATH_RE.sub(lambda m: ' ' + m.group(1) + ' ', s)
+    s = _DOLLAR_RE.sub(lambda m: ' ' + m.group(1) + ' ', s)
+
+    # Unwrap markdown emphasis / inline code.
+    s = _MARKDOWN_BOLD_RE.sub(lambda m: m.group(1), s)
+    s = _MARKDOWN_ITALIC_RE.sub(lambda m: m.group(1), s)
+    s = _BACKTICK_RE.sub(lambda m: m.group(1), s)
+
+    # \boxed{X}, \text{X}, \mathrm{X} -> X
+    # Apply repeatedly to handle simple nesting like \boxed{\frac{1}{2}}.
+    for _ in range(3):
+        new = _BOXED_RE.sub(lambda m: ' ' + m.group(1) + ' ', s)
+        new = _TEXT_RE.sub(lambda m: ' ' + m.group(1) + ' ', new)
+        new = _FRAC_RE.sub(lambda m: f'({m.group(1)})/({m.group(2)})', new)
+        new = _SQRT_RE.sub(lambda m: f'sqrt({m.group(1)})', new)
+        new = _POW_RE.sub(lambda m: f'^({m.group(1)})', new)
+        if new == s:
+            break
+        s = new
+
+    # Common LaTeX operators -> plain.
+    s = s.replace('\\cdot', '*').replace('\\times', '*').replace('\\div', '/')
+    s = s.replace('\\pm', '\u00b1').replace('\\mp', '\u00b1')
+    s = s.replace('\\approx', '~').replace('\\neq', '!=')
+    s = s.replace('\\le', '<=').replace('\\ge', '>=')
+    s = s.replace('\\left', '').replace('\\right', '')
+    # Drop leftover backslash-commands (e.g. \quad, \,, \!).
+    s = re.sub(r'\\[a-zA-Z]+', ' ', s)
+    s = s.replace('\\,', ' ').replace('\\;', ' ').replace('\\!', '')
+
+    return s
+
 
 class AccuracyScorer:
     """
@@ -18,9 +80,20 @@ class AccuracyScorer:
     3. Symbolic math evaluation (using SymPy)
     4. Fraction and expression matching
     5. Auto-solving simple arithmetic problems
+    6. LaTeX / markdown normalization (\boxed, \frac, $...$, **bold**)
+    7. Optional LLM verifier as last-resort fallback
     """
-    
-    def score(self, response: str, expected: Any, problem: str = None) -> float:
+
+    def __init__(self, llm_verifier: Optional[Callable[[str, str, str], bool]] = None):
+        """Optionally accept an LLM verifier callable used as a last-resort judge.
+
+        The callable receives (response, expected, problem) and must return True
+        if it considers the response equivalent to the expected answer.  When
+        omitted, accuracy scoring relies purely on rule-based matchers.
+        """
+        self._llm_verifier = llm_verifier
+
+    def score(self, response: str, expected: Any, problem: Optional[str] = None) -> float:
         """
         Score the accuracy of a response against ground truth.
         
@@ -34,7 +107,11 @@ class AccuracyScorer:
         """
         if not response or len(response.strip()) == 0:
             return 0.0
-        
+
+        original_response = response
+        # Pre-normalize LaTeX/markdown so downstream extractors see plain math.
+        response = _strip_latex_and_markdown(response)
+
         # If no ground truth provided, try to auto-solve simple problems
         if expected is None and problem:
             expected = self._auto_solve_simple_problem(problem)
@@ -46,12 +123,17 @@ class AccuracyScorer:
         # Special handling for solved root sets
         if isinstance(expected, dict) and expected.get("type") == "equation_roots":
             return self._score_equation_roots(response, expected)
-        
+
         if expected is None:
             # Heuristic scoring when no ground truth
             return self._heuristic_score(response, problem)
 
-        expected_str = str(expected).strip()
+        expected_str = _strip_latex_and_markdown(str(expected)).strip()
+
+        # Yes/no/true-false short answers handled before numeric paths.
+        yn = self._yes_no_match(response, expected_str)
+        if yn is not None:
+            return 1.0 if yn else 0.0
 
         # When expected answer is a set of values, enforce set-level matching
         # and skip scalar matching paths to avoid false positives.
@@ -70,19 +152,25 @@ class AccuracyScorer:
 
             # Explicit final-answer signaling exists but none matched strongly.
             # Do not award partial credit from intermediate overlaps.
+            if self._llm_verifier and self._llm_verifier(original_response, str(expected), problem or ""):
+                return 1.0
             return 0.0
-        
+
         # Extract candidate answers from response
         candidates = self._extract_answers(response)
-        
+
         # Try multiple matching strategies
         for candidate in candidates:
             if self._strong_match(candidate, expected_str):
                 return 1.0
 
+        # Last resort: optional LLM judge.
+        if self._llm_verifier and self._llm_verifier(original_response, str(expected), problem or ""):
+            return 1.0
+
         return 0.0
 
-    def score_final_answer_only(self, response: str, expected: Any, problem: str = None) -> float:
+    def score_final_answer_only(self, response: str, expected: Any, problem: Optional[str] = None) -> float:
         """Score accuracy using ONLY the model's final/concluding answer.
 
         Unlike score(), this does NOT scan all numbers in the response.
@@ -92,6 +180,9 @@ class AccuracyScorer:
         """
         if not response or len(response.strip()) == 0:
             return 0.0
+
+        original_response = response
+        response = _strip_latex_and_markdown(response)
 
         if expected is None and problem:
             expected = self._auto_solve_simple_problem(problem)
@@ -104,7 +195,11 @@ class AccuracyScorer:
         if expected is None:
             return self._heuristic_score(response, problem)
 
-        expected_str = str(expected).strip()
+        expected_str = _strip_latex_and_markdown(str(expected)).strip()
+
+        yn = self._yes_no_match(response, expected_str)
+        if yn is not None:
+            return 1.0 if yn else 0.0
 
         expected_value_set = self._extract_value_set(expected_str)
         if expected_value_set is not None:
@@ -118,6 +213,9 @@ class AccuracyScorer:
         for candidate in candidates:
             if self._strong_match(candidate, expected_str):
                 return 1.0
+
+        if self._llm_verifier and self._llm_verifier(original_response, str(expected), problem or ""):
+            return 1.0
 
         return 0.0
 
@@ -172,8 +270,17 @@ class AccuracyScorer:
         """Extract high-confidence final-answer candidates from response text."""
         candidates = []
 
+        # \boxed{X} carries the strongest signal in math responses.
+        for boxed in _BOXED_RE.findall(response):
+            value = boxed.strip()
+            if value:
+                candidates.append(value)
+
         # Explicit answer lines have highest confidence.
-        answer_pattern = r'(?im)^\s*(?:final\s+answer|answer|result|solution)\s*[:\-=]\s*([^\n]+)'
+        answer_pattern = (
+            r'(?im)^\s*(?:final\s+answer|answer|result|solution|the\s+answer\s+is)'
+            r'\s*[:\-=]?\s*([^\n]+)'
+        )
         matches = re.findall(answer_pattern, response, re.IGNORECASE)
         for match in matches:
             value = str(match).strip()
@@ -230,9 +337,11 @@ class AccuracyScorer:
 
     def _has_explicit_answer_signal(self, response: str) -> bool:
         """Determine whether response provides an explicit final-answer target."""
+        if _BOXED_RE.search(response):
+            return True
         return bool(
             re.search(
-                r'(?i)\b(?:final\s+answer|answer|result|solution)\s*[:\-=]',
+                r'(?i)\b(?:final\s+answer|answer|result|solution|the\s+answer\s+is)\s*[:\-=]?',
                 response,
             )
         )
@@ -251,7 +360,7 @@ class AccuracyScorer:
                 return right
 
         lead_in_match = re.search(
-            r'(?i)\b(?:is|equals|becomes|gives)\s*[:=]\s*([^\n]+)$',
+            r'(?i)\b(?:is|equals|becomes|gives|yields|evaluates\s+to|results?\s+in|comes\s+out\s+to|approximately|approx\.?|about|~|\u2248)\s*[:=]?\s*([^\n]+)$',
             value,
         )
         if lead_in_match:
@@ -261,11 +370,18 @@ class AccuracyScorer:
 
         # Match natural language "... is 11" without requiring : or = after "is".
         plain_is_match = re.search(
-            r'(?i)\b(?:is|equals|becomes|gives)\s+([-+]?\d[^\n]*?)$',
+            r'(?i)\b(?:is|equals|becomes|gives|yields|approximately|approx\.?|about|~|\u2248)\s+([-+]?\d[^\n]*?)$',
             value,
         )
         if plain_is_match:
             tail = plain_is_match.group(1).strip().rstrip('.;,')
+            if self._looks_math_like(tail):
+                return tail
+
+        # Trailing "= X" anywhere on the line counts as an answer payload.
+        trailing_eq = re.search(r'=\s*([-+]?[\d./()A-Za-z\s*+\-^]+)$', value)
+        if trailing_eq:
+            tail = trailing_eq.group(1).strip().rstrip('.;,')
             if self._looks_math_like(tail):
                 return tail
 
@@ -443,29 +559,44 @@ class AccuracyScorer:
     def _numeric_match(self, candidate: str, expected: str) -> bool:
         """Check if candidate numerically matches expected.
 
-        Also handles percentage equivalence: 40% == 0.4 == 2/5.
+        Handles:
+          - direct equality with relative + absolute tolerance
+          - percentage equivalence (40% == 0.4)
+          - truncated/rounded decimals (0.333 \u2248 1/3, 0.667 \u2248 2/3)
         """
         try:
             c_val = self._parse_numeric_value(candidate)
             e_val = self._parse_numeric_value(expected)
 
             if c_val is not None and e_val is not None:
-                # Direct comparison
-                if abs(c_val - e_val) < 0.0001:
+                if self._numbers_close(c_val, e_val):
                     return True
-                # Percentage equivalence: if one looks like a percent,
-                # compare its decimal form against the other.
                 c_is_pct = '%' in str(candidate)
                 e_is_pct = '%' in str(expected)
                 if c_is_pct and not e_is_pct:
-                    if abs(c_val / 100.0 - e_val) < 0.0001:
+                    if self._numbers_close(c_val / 100.0, e_val):
                         return True
                 if e_is_pct and not c_is_pct:
-                    if abs(e_val / 100.0 - c_val) < 0.0001:
+                    if self._numbers_close(e_val / 100.0, c_val):
                         return True
         except (ValueError, IndexError):
             pass
         return False
+
+    @staticmethod
+    def _numbers_close(a: float, b: float, rel: float = 1e-3, abs_tol: float = 1e-4) -> bool:
+        """Tolerant float comparison with both relative and absolute slack.
+
+        Accepts truncated decimals like 0.333 vs 1/3 (rel diff ~1e-3).
+        """
+        try:
+            diff = abs(a - b)
+            if diff <= abs_tol:
+                return True
+            scale = max(abs(a), abs(b), 1.0)
+            return diff / scale <= rel
+        except Exception:
+            return False
 
     def _parse_numeric_value(self, text: str) -> Optional[float]:
         """Parse a likely numeric answer (integer/decimal/fraction) from text."""
@@ -522,24 +653,58 @@ class AccuracyScorer:
     def _symbolic_match(self, candidate: str, expected: str) -> bool:
         """
         Check if candidate symbolically matches expected using SymPy.
-        
+
         Handles:
         - Algebraic expressions
-        - Fractions (3/4 == 0.75)
+        - Fractions in non-simplest form (2/4 == 1/2, 4/2 == 2)
         - Equations in different forms
+        - Truncated decimals against irrationals (1.4142 \u2248 sqrt(2))
         """
         try:
-            # Clean the strings
             candidate_clean = self._clean_for_sympy(candidate)
             expected_clean = self._clean_for_sympy(expected)
-            
-            # Parse as symbolic expressions
+            if not candidate_clean or not expected_clean:
+                return False
+
             candidate_expr = sympify(candidate_clean)
             expected_expr = sympify(expected_clean)
-            
-            # Check if they simplify to the same thing
-            diff = simplify(candidate_expr - expected_expr)
-            return diff == 0
+
+            # Direct simplification (handles 2/4 vs 1/2, 4/2 vs 2, etc.).
+            try:
+                if simplify(candidate_expr - expected_expr) == 0:
+                    return True
+            except Exception:
+                pass
+
+            # Reduce to canonical Rational form when both are rational.
+            try:
+                if Rational(candidate_expr) == Rational(expected_expr):
+                    return True
+            except Exception:
+                pass
+
+            # Match irrationals against truncated decimal approximations
+            # (e.g. "1.4142" vs sqrt(2), "0.333" vs 1/3).
+            try:
+                c_num = float(candidate_expr.evalf())
+                e_num = float(expected_expr.evalf())
+                if self._numbers_close(c_num, e_num):
+                    return True
+            except Exception:
+                pass
+
+            try:
+                approx = nsimplify(candidate_expr, rational=False, tolerance=1e-3)
+                if simplify(approx - expected_expr) == 0:
+                    return True
+            except Exception:
+                pass
+            try:
+                approx = nsimplify(expected_expr, rational=False, tolerance=1e-3)
+                if simplify(approx - candidate_expr) == 0:
+                    return True
+            except Exception:
+                pass
         except (SympifyError, TypeError, ValueError, AttributeError):
             pass
         return False
@@ -570,6 +735,48 @@ class AccuracyScorer:
         return cleaned.strip()
     
     # ------------------------------------------------------------------ #
+    #  Yes/No / True/False short-answer matching                          #
+    # ------------------------------------------------------------------ #
+
+    _YES_TOKENS = {"yes", "y", "true", "t", "correct", "right", "affirmative"}
+    _NO_TOKENS = {"no", "n", "false", "f", "incorrect", "wrong", "negative"}
+
+    def _yes_no_match(self, response: str, expected: str) -> Optional[bool]:
+        """Return True/False when expected is a yes/no/true/false answer.
+
+        Returns None when the expected answer is not a yes/no answer, so the
+        caller can fall through to numeric / symbolic matchers.
+        """
+        exp = re.sub(r'[^a-zA-Z]', '', str(expected or '')).lower()
+        if exp not in self._YES_TOKENS and exp not in self._NO_TOKENS:
+            return None
+
+        expected_yes = exp in self._YES_TOKENS
+
+        # Look for an explicit "Answer: yes/no" first.
+        explicit = re.search(
+            r'(?im)^\s*(?:final\s+answer|answer|result|conclusion|the\s+answer\s+is)'
+            r'\s*[:\-=]?\s*(yes|no|true|false|correct|incorrect|wrong)\b',
+            response,
+        )
+        if explicit:
+            token = explicit.group(1).lower()
+            return (token in self._YES_TOKENS) == expected_yes
+
+        # Otherwise check the last non-empty line.
+        lines = [l.strip() for l in response.splitlines() if l.strip()]
+        if lines:
+            tail_tokens = re.findall(r'[a-zA-Z]+', lines[-1].lower())
+            for token in tail_tokens:
+                if token in self._YES_TOKENS:
+                    return expected_yes
+                if token in self._NO_TOKENS:
+                    return not expected_yes
+
+        # No clear yes/no signal - let other matchers try (return None).
+        return None
+
+    # ------------------------------------------------------------------ #
     #  Multi-value answer matching (e.g. roots of polynomial equations)   #
     # ------------------------------------------------------------------ #
 
@@ -598,6 +805,23 @@ class AccuracyScorer:
 
         # Remove variable assignments like "x = " so "x = 1, x = 2" -> "1, 2"
         value = re.sub(r'[a-zA-Z]\s*=\s*', '', value)
+
+        # If the text still contains a rational expression with variable-factor
+        # parentheses (e.g. "(x-1)/((x+2)(x-5))"), the embedded coefficients
+        # (-1, +2, -5) would pollute the number extraction.  Narrow the window
+        # to only the conclusion fragment that follows "are / is / at / occur /
+        # equal" so we capture just the answer values.
+        if re.search(r'\([^)]*[a-zA-Z][^)]*\)\s*/\s*\(', value):
+            tail = re.search(
+                r'\b(?:are|is|at|occur[s]?(?:\s+at)?|equal[s]?)\b\s*(.+)',
+                value,
+                re.IGNORECASE,
+            )
+            if tail:
+                value = tail.group(1).strip()
+            else:
+                return None
+
         # Remove function-call notation like r(6), f(2), g(10) to avoid
         # the argument being treated as a separate answer value.
         value = re.sub(r'[a-zA-Z]+\s*\(\s*[-+]?\d+(?:\.\d+)?\s*\)', '', value)
@@ -646,7 +870,7 @@ class AccuracyScorer:
             return False
         return expected_set == candidate_set
     
-    def _heuristic_score(self, response: str, problem: str = None) -> float:
+    def _heuristic_score(self, response: str, problem: Optional[str] = None) -> float:
         """
         Calculate heuristic accuracy score when no ground truth available.
         
