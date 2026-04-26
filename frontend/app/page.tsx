@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import HelpGuide from './HelpGuide'
 
 type RunMode = 'normal' | 'benchmark' | 'baseline'
 type ScoreDisplayFormat = 'percent' | 'decimal'
@@ -593,6 +594,7 @@ export default function Home() {
   const [showIndividualRuns, setShowIndividualRuns] = useState(false)
   const [healthStatus, setHealthStatus] = useState<'checking' | 'healthy' | 'unhealthy'>('checking')
   const [validationError, setValidationError] = useState('')
+  const [showHelpGuide, setShowHelpGuide] = useState(false)
   const [savingToDb, setSavingToDb] = useState(false)
   const [saveStatus, setSaveStatus] = useState('')
   const [didSaveToDb, setDidSaveToDb] = useState(false)
@@ -637,6 +639,18 @@ export default function Home() {
   const [addExDetectionMethod2, setAddExDetectionMethod2] = useState('')
   const [showSymbolPicker, setShowSymbolPicker] = useState(false)
   const [symbolPickerRef, setSymbolPickerRef] = useState<HTMLTextAreaElement | null>(null)
+
+  // Auto-open the help guide on the user's first visit
+  useEffect(() => {
+    try {
+      if (typeof window === 'undefined') return
+      const seen = window.localStorage.getItem('pof_seen_guide_v1')
+      if (!seen) {
+        setShowHelpGuide(true)
+      }
+    } catch { /* ignore storage errors */ }
+  }, [])
+
   // Fetch available difficulties per subject from example_problems.json
   useEffect(() => {
     const fetchDifficulties = async () => {
@@ -1773,8 +1787,16 @@ export default function Home() {
 
     return (
       <div
-        className="fixed top-16 right-4 bg-white rounded-lg shadow-2xl p-4 z-50 border"
-        style={{ border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', maxHeight: '400px', overflowY: 'auto', width: '300px' }}
+        className="absolute right-0 bg-white rounded-lg shadow-2xl p-4 z-50 border"
+        style={{
+          bottom: 'calc(100% + 8px)',
+          border: '1px solid var(--border)',
+          background: 'var(--surface)',
+          color: 'var(--text)',
+          maxHeight: '400px',
+          overflowY: 'auto',
+          width: '300px',
+        }}
       >
         <div className="flex items-center justify-between mb-3 pb-2" style={{ borderBottom: '1px solid var(--border)' }}>
           <h3 className="text-sm font-semibold">Insert Symbol</h3>
@@ -1825,6 +1847,26 @@ export default function Home() {
       >
         <h1 className="text-base font-semibold tracking-tight">Prompt Optimization Framework</h1>
         <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={() => setShowHelpGuide(true)}
+            className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-md transition-colors"
+            style={{
+              border: '1px solid var(--border)',
+              color: 'var(--text)',
+              background: 'var(--surface)',
+              cursor: 'pointer',
+            }}
+            title="Open the quick guide"
+          >
+            <span
+              className="inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold"
+              style={{ background: 'var(--accent)', color: '#fff' }}
+            >
+              ?
+            </span>
+            Help
+          </button>
           {result && (
             <span className="text-sm font-mono" style={{ color: 'var(--text-muted)' }}>
               Best:{' '}
@@ -1875,9 +1917,28 @@ export default function Home() {
       {!hasStarted && (
         <div className="flex-1 flex flex-col items-center justify-center px-4">
           <h2 className="text-3xl font-semibold mb-2 text-center">What would you like to benchmark?</h2>
-          <p className="text-sm mb-8 text-center" style={{ color: 'var(--text-muted)' }}>
+          <p className="text-sm mb-3 text-center" style={{ color: 'var(--text-muted)' }}>
             Enter a problem below and compare how different prompting techniques perform.
           </p>
+          <button
+            type="button"
+            onClick={() => setShowHelpGuide(true)}
+            className="text-xs mb-8 inline-flex items-center gap-1.5 px-3 py-1 rounded-full transition-colors"
+            style={{
+              border: '1px solid var(--border)',
+              background: 'var(--surface)',
+              color: 'var(--text-muted)',
+              cursor: 'pointer',
+            }}
+          >
+            <span
+              className="inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold"
+              style={{ background: 'var(--accent)', color: '#fff' }}
+            >
+              ?
+            </span>
+            New here? Take the 60-second tour
+          </button>
 
           <div
             className="w-full max-w-[920px] rounded-xl p-6"
@@ -4142,6 +4203,19 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      {/* ═══ Interactive Help Guide ═══ */}
+      <HelpGuide
+        open={showHelpGuide}
+        onClose={() => {
+          setShowHelpGuide(false)
+          try {
+            if (typeof window !== 'undefined') {
+              window.localStorage.setItem('pof_seen_guide_v1', '1')
+            }
+          } catch { /* ignore */ }
+        }}
+      />
     </div>
   )
 }
