@@ -103,11 +103,19 @@ def test_benchmark_response_does_not_include_storage_until_manual_save(monkeypat
     monkeypatch.setattr(main.pipeline, "benchmark", fake_benchmark)
     monkeypatch.setattr(main.firestore_store, "get_best_technique_by_profile", _mock_no_history)
     monkeypatch.setattr(main.firestore_store, "get_best_technique_by_domain", _mock_no_history)
+    monkeypatch.setattr(
+        main,
+        "_resolve_domain_for_normal_mode",
+        lambda problem, requested_subject: (
+            (requested_subject or "algebra"),
+            {"requested_subject": requested_subject, "resolved_domain": requested_subject or "algebra"},
+        ),
+    )
 
     client = TestClient(main.app)
     response = client.post(
         "/benchmark",
-        json={"problem": "What is 2 + 2?", "subject": "algebra", "difficulty": "basic"},
+        json={"problem": "Solve for x: 2x + 3 = 7", "subject": "algebra", "difficulty": "basic"},
     )
 
     assert response.status_code == 200

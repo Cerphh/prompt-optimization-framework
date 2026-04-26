@@ -1732,8 +1732,10 @@ async def run_benchmark_stream(request: BenchmarkRequest):
                 stream_kwargs["runs_per_technique"] = request.runs_per_technique
 
             for event in request_pipeline.benchmark_stream_events(**stream_kwargs):
-                if event.get("type") == "complete":
-                    result = event.get("result", {})
+                event_any: Dict[str, Any] = event  # type: ignore[assignment]
+                if event_any.get("type") == "complete":
+                    raw_result = event_any.get("result") or {}
+                    result: Dict[str, Any] = raw_result if isinstance(raw_result, dict) else {}
                     result = _finalize_benchmark_result(
                         result=result,
                         domain=resolved_domain,
@@ -1742,14 +1744,14 @@ async def run_benchmark_stream(request: BenchmarkRequest):
                     )
                     result["ground_truth_used"] = bool(ground_truth)
                     result["pre_execution_policy"] = pre_execution_policy
-                    event["result"] = result
-                elif event.get("type") == "error":
+                    event_any["result"] = result
+                elif event_any.get("type") == "error":
                     # Ensure error messages are never empty
-                    error_msg = event.get("error", "").strip()
+                    error_msg = event_any.get("error", "").strip()
                     if not error_msg:
                         error_msg = "Unknown error during benchmark streaming"
-                    event["error"] = error_msg
-                yield json.dumps(event) + "\n"
+                    event_any["error"] = error_msg
+                yield json.dumps(event_any) + "\n"
         except Exception as e:
             error_msg = str(e).strip() if str(e) else "Unknown error during benchmark"
             yield json.dumps({"type": "error", "error": error_msg}) + "\n"

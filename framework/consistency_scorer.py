@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from sympy import nsimplify, simplify, sympify
 from sympy.core.sympify import SympifyError
@@ -45,7 +45,7 @@ class ConsistencyScorer:
 
         return f"text:{cleaned or '__empty__'}"
 
-    def compute_consistency(self, normalized_outputs: List[str]) -> Dict[str, object]:
+    def compute_consistency(self, normalized_outputs: List[str]) -> Dict[str, Any]:
         """Compute consistency from normalized outputs collected so far."""
         runs_used = len(normalized_outputs)
         if runs_used == 0:

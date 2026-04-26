@@ -140,7 +140,7 @@ class BenchmarkPipeline:
     def benchmark(
         self,
         problem: str,
-        ground_truth: str = None,
+        ground_truth: Optional[str] = None,
         subject: str = "general",
         techniques_to_run: Optional[List[str]] = None,
         runs_per_technique: Optional[int] = None,
@@ -230,7 +230,7 @@ class BenchmarkPipeline:
     def benchmark_stream_events(
         self,
         problem: str,
-        ground_truth: str = None,
+        ground_truth: Optional[str] = None,
         subject: str = "general",
         techniques_to_run: Optional[List[str]] = None,
         runs_per_technique: Optional[int] = None,
@@ -414,7 +414,7 @@ class BenchmarkPipeline:
         yield {"type": "complete", "result": final_result}
     
     def _evaluate_single_prompt(self, technique_name: str, prompt: str,
-                                problem: str, ground_truth: str = None) -> Dict[str, Any]:
+                                problem: str, ground_truth: Optional[str] = None) -> Dict[str, Any]:
         """
         Evaluate one run for a technique through the complete pipeline.
         
@@ -443,7 +443,7 @@ class BenchmarkPipeline:
         technique_name: str,
         prompt: str,
         problem: str,
-        ground_truth: str = None,
+        ground_truth: Optional[str] = None,
         runs_per_technique: Optional[int] = None,
         first_run_model_result: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
@@ -520,6 +520,7 @@ class BenchmarkPipeline:
 
         if successful_runs:
             success = True
+            assert last_successful_run is not None
             response = str(last_successful_run.get("response", ""))
             error = None
         else:
@@ -569,7 +570,7 @@ class BenchmarkPipeline:
         prompt: str,
         model_result: Dict[str, Any],
         problem: str,
-        ground_truth: str,
+        ground_truth: Optional[str],
         run_index: int,
         runs_per_technique: int,
     ) -> Dict[str, Any]:
@@ -767,9 +768,9 @@ class BenchmarkPipeline:
         """Test if the model is accessible."""
         return self.model_runner.test_connection()
     
-    def set_weights(self, accuracy: float = None, 
-                   consistency: float = None, 
-                   efficiency: float = None):
+    def set_weights(self, accuracy: Optional[float] = None,
+                   consistency: Optional[float] = None,
+                   efficiency: Optional[float] = None):
         """
         Update metric weights.
         
@@ -802,7 +803,7 @@ class OptimizationPipeline(BenchmarkPipeline):
     Provides the old interface while using the new benchmark pipeline.
     """
     
-    def run(self, query: str, task_type: str = "general", expected: any = None) -> dict:
+    def run(self, query: str, task_type: str = "general", expected: Any = None) -> dict:
         """
         Legacy run method for backward compatibility.
         
