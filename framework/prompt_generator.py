@@ -657,13 +657,13 @@ class PromptGenerator:
             return None
         return DIFFICULTY_ALIASES.get(normalized, normalized)
 
-    def _coerce_anchor_priority(self, value: object) -> Optional[float]:
+    def _coerce_anchor_priority(self, value: Any) -> Optional[float]:
         """Coerce anchor priority to a normalized [0, 1] score."""
         if value is None:
             return None
 
         try:
-            numeric = float(value)
+            numeric = float(value)  # type: ignore[arg-type]
         except (TypeError, ValueError):
             return None
 
@@ -2452,7 +2452,7 @@ class PromptGenerator:
         else:
             return 'algebra'
     
-    def generate_few_shot(self, problem: str, subject: str = "general", num_examples: int = None) -> str:
+    def generate_few_shot(self, problem: str, subject: str = "general", num_examples: Optional[int] = None) -> str:
         """
         Generate few-shot prompt: includes examples from the specified subject.
         Uses semantic matching to select the most relevant examples.
@@ -2552,15 +2552,20 @@ class PromptGenerator:
             )
         
         # Format examples (concise format for speed)
-        examples_text = "\n\n".join([
-            (
+        # Include "Final Answer: X" on each example so the model learns the expected output format
+        # and the verifier/accuracy scorer can reliably find the answer.
+        def _format_example(ex: dict) -> str:
+            solution_text = self._prepare_example_text_for_prompt(ex.get("solution", ""), is_solution=True)
+            boxed_match = re.search(r"\\boxed\{([^{}]+)\}", ex.get("solution", ""))
+            final_answer_line = f"\nFinal Answer: {boxed_match.group(1).strip()}" if boxed_match else ""
+            return (
                 f"Q: {self._prepare_example_text_for_prompt(ex.get('problem', ''), is_solution=False)}\n"
-                f"A: {self._prepare_example_text_for_prompt(ex.get('solution', ''), is_solution=True)}"
+                f"A: {solution_text}{final_answer_line}"
             )
-            for ex in selected_examples
-        ])
+
+        examples_text = "\n\n".join([_format_example(ex) for ex in selected_examples])
         return (
-            "Solve math problems like the examples below. "
+            "Solve math problems like the examples below.\n\n"
             f"{examples_text}\n\n"
             f"Q: {target_problem_text}\n"
             "A:"
@@ -2574,7 +2579,7 @@ class PromptGenerator:
         Returns:
             Dictionary mapping technique name to prompt
         """
-        techniques = {
+        techniques: Dict[str, Any] = {
             "zero_shot": self.generate_zero_shot(problem, subject=subject),
             "role_based": self.generate_role_based(problem, subject=subject),
             "cot": self.generate_chain_of_thought(problem, subject=subject),
