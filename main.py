@@ -486,6 +486,17 @@ def _has_direct_domain_evidence(problem: str, domain: str) -> bool:
         return bool(
             re.search(trig_token_pattern, value)
             or re.search(r"\b(derivative|differentiate|integral|integrate|limit|radian|radians)\b", value)
+            or re.search(r"\bpartial\s+fractions?\b", value)
+            or re.search(r"\b(dot\s+product|vector|vectors?)\b", value)
+            or re.search(
+                r"(?:\\log|log(?:[_^]?\s*\d+|[₀₁₂₃₄₅₆₇₈₉]+)?\s*\(|\bln\s*\(|\bln\b|natural\s+log)",
+                value,
+            )
+            or re.search(
+                r"(?:\binverse\b.*\bf\s*\(|\bf\s*\([^)]*\)\s*=.*(?:e\^|e[⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁽⁾ˣʸ]))",
+                value,
+            )
+            or re.search(r"\b(exponential|inverse\s+function)\b", value)
             or "d/dx" in value
             or "dy/dx" in value
             or "∫" in value

@@ -582,6 +582,98 @@ def test_normal_mode_allows_supported_subject_when_classifier_is_general_but_sig
     assert payload["best_technique"] in {"few_shot", "zero_shot"}
 
 
+def test_normal_mode_allows_precalculus_log_problem_when_classifier_reports_algebra(monkeypatch):
+    monkeypatch.setattr(main.pipeline.prompt_generator, "classify_subject", lambda _: "algebra")
+    monkeypatch.setattr(main.pipeline, "benchmark", lambda **kwargs: _mock_benchmark_result(problem=kwargs["problem"], ground_truth=kwargs.get("ground_truth")))
+    monkeypatch.setattr(main.firestore_store, "get_best_technique_by_profile", _mock_no_history)
+    monkeypatch.setattr(main.firestore_store, "get_best_technique_by_domain", _mock_no_history)
+
+    client = TestClient(main.app)
+    response = client.post(
+        "/benchmark",
+        json={
+            "problem": "Solve: log₃(x+2) + log₃(x) = 1.",
+            "subject": "pre-calculus",
+            "difficulty": "basic",
+            "run_mode": "normal",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["run_mode"] == "normal"
+    assert payload["best_technique"] in {"few_shot", "zero_shot"}
+
+
+def test_normal_mode_allows_precalculus_exponential_inverse_when_classifier_reports_algebra(monkeypatch):
+    monkeypatch.setattr(main.pipeline.prompt_generator, "classify_subject", lambda _: "algebra")
+    monkeypatch.setattr(main.pipeline, "benchmark", lambda **kwargs: _mock_benchmark_result(problem=kwargs["problem"], ground_truth=kwargs.get("ground_truth")))
+    monkeypatch.setattr(main.firestore_store, "get_best_technique_by_profile", _mock_no_history)
+    monkeypatch.setattr(main.firestore_store, "get_best_technique_by_domain", _mock_no_history)
+
+    client = TestClient(main.app)
+    response = client.post(
+        "/benchmark",
+        json={
+            "problem": "Find the inverse of f(x) = 2eˣ − 1.",
+            "subject": "pre-calculus",
+            "difficulty": "basic",
+            "run_mode": "normal",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["run_mode"] == "normal"
+    assert payload["best_technique"] in {"few_shot", "zero_shot"}
+
+
+def test_normal_mode_allows_precalculus_partial_fractions_when_classifier_is_general(monkeypatch):
+    monkeypatch.setattr(main.pipeline.prompt_generator, "classify_subject", lambda _: "general")
+    monkeypatch.setattr(main.pipeline, "benchmark", lambda **kwargs: _mock_benchmark_result(problem=kwargs["problem"], ground_truth=kwargs.get("ground_truth")))
+    monkeypatch.setattr(main.firestore_store, "get_best_technique_by_profile", _mock_no_history)
+    monkeypatch.setattr(main.firestore_store, "get_best_technique_by_domain", _mock_no_history)
+
+    client = TestClient(main.app)
+    response = client.post(
+        "/benchmark",
+        json={
+            "problem": "Decompose into partial fractions: (3x+5)/((x+1)(x+2)).",
+            "subject": "pre-calculus",
+            "difficulty": "basic",
+            "run_mode": "normal",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["run_mode"] == "normal"
+    assert payload["best_technique"] in {"few_shot", "zero_shot"}
+
+
+def test_normal_mode_allows_precalculus_dot_product_when_classifier_reports_algebra(monkeypatch):
+    monkeypatch.setattr(main.pipeline.prompt_generator, "classify_subject", lambda _: "algebra")
+    monkeypatch.setattr(main.pipeline, "benchmark", lambda **kwargs: _mock_benchmark_result(problem=kwargs["problem"], ground_truth=kwargs.get("ground_truth")))
+    monkeypatch.setattr(main.firestore_store, "get_best_technique_by_profile", _mock_no_history)
+    monkeypatch.setattr(main.firestore_store, "get_best_technique_by_domain", _mock_no_history)
+
+    client = TestClient(main.app)
+    response = client.post(
+        "/benchmark",
+        json={
+            "problem": "Find the dot product of u=⟨2,−3,1⟩ and v=⟨4,0,−5⟩.",
+            "subject": "pre-calculus",
+            "difficulty": "basic",
+            "run_mode": "normal",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["run_mode"] == "normal"
+    assert payload["best_technique"] in {"few_shot", "zero_shot"}
+
+
 def test_normal_mode_rejects_out_of_scope_problem_when_subject_is_general(monkeypatch):
     monkeypatch.setattr(main.pipeline.prompt_generator, "classify_subject", lambda _: "general")
 
